@@ -2,11 +2,24 @@ const express = require('express');
 const mongoose = require('mongoose');
 const Session = require('../models/Session');
 const { buildStepPrompt, STEP_KEYS, STEP_LABELS } = require('../services/promptBuilder');
-const { generateAnthropic } = require('../services/anthropic');
+const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
+const { generateDeepseek } = require('../services/deepseek');
 const { buildPptx } = require('../services/pptx');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
+
+// Routage des providers selon l'étape :
+//  - étapes 1 à 5  → DeepSeek (deepseek-v4-flash, non-thinking)
+//  - étape 6       → Anthropic Claude (inchangée)
+const DEEPSEEK_STEPS = ['analyse', 'probleme', 'recherche', 'glossaire', 'plan'];
+const CLAUDE_STEPS = ['support'];
+
+function getProviderForStep(step) {
+  if (DEEPSEEK_STEPS.includes(step)) return 'deepseek';
+  if (CLAUDE_STEPS.includes(step)) return 'claude';
+  throw httpError(400, `Étape inconnue : ${step}`);
+}
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -171,7 +184,16 @@ router.post(
     }
 
     const { system, user } = await buildStepPrompt(session, stepKey);
-    const parsed = await generateAnthropic(system, user);
+
+    // Sélection du provider : DeepSeek pour les étapes 1-5, Claude pour le support.
+    const provider = getProviderForStep(stepKey);
+    let parsed;
+    if (provider === 'deepseek') {
+      const raw = await generateDeepseek(system, user);
+      parsed = parseJsonStrict(raw);
+    } else {
+      parsed = await generateAnthropic(system, user);
+    }
     validateStepOutput(stepKey, parsed);
 
     if (stepKey === 'probleme') {

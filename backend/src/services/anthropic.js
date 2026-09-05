@@ -114,4 +114,4 @@ async function generateAnthropic(promptSystem, promptUser) {
   return parsed;
 }
 
-module.exports = { generateAnthropic };
+module.exports = { generateAnthropic, parseJsonStrict };

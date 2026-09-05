@@ -70,13 +70,25 @@ Deux règles produit sont appliquées de bout en bout (backend et interface) :
 - le **glossaire est obligatoire avant le plan et l'export .pptx** : les routes refusent
   explicitement (400) une génération `plan`/`support` ou un export sans glossaire validé.
 
+### Routage des modèles d'IA
+
+Le provider est sélectionné selon l'étape (la construction du prompt est
+strictement identique, seul l'appel change) :
+
+- **Étapes 1 à 5** (`analyse`, `probleme`, `recherche`, `glossaire`, `plan`) →
+  **API DeepSeek**, modèle `deepseek-v4-flash` en mode non-thinking ;
+- **Étape 6** (`support`) → **API Anthropic Claude** (inchangée, alimente l'export .pptx).
+
+`ANTHROPIC_API_KEY` reste donc nécessaire, et `DEEPSEEK_API_KEY` est requise pour
+les étapes 1 à 5. Un solde DeepSeek insuffisant renvoie une erreur explicite (402).
+
 ---
 
 ## Prérequis
 
 - Node.js ≥ 18
 - Une base MongoDB (locale, Docker, ou le plugin Railway)
-- Une clé API Anthropic pour les générations
+- Une clé API **DeepSeek** (étapes 1 à 5) et une clé API **Anthropic** (étape 6 / support)
 
 ---
 
@@ -87,8 +99,10 @@ Deux règles produit sont appliquées de bout en bout (backend et interface) :
 | Variable | Description |
 | --- | --- |
 | `MONGO_URL` | URI MongoDB (auto-fournie par Railway via le plugin ; renseignée en local) |
-| `ANTHROPIC_API_KEY` | Clé API Anthropic (jamais exposée au frontend) |
-| `ANTHROPIC_MODEL` | Modèle (défaut : `claude-sonnet-4-6`) |
+| `ANTHROPIC_API_KEY` | Clé API Anthropic — **étape 6 (support)** uniquement (jamais exposée au frontend) |
+| `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes 1 à 5** |
+| `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
+| `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
 | `JWT_SECRET` | Secret de signature des JWT admin |
 | `ADMIN_PASSWORD` | Mot de passe admin unique du panneau `/admin` |
 | `PORT` | Port d'écoute (Railway la fournit automatiquement ; défaut local : 4000) |
@@ -119,7 +133,7 @@ Ou toute instance MongoDB accessible ; la seule exigence est la variable `MONGO_
 ```bash
 cd backend
 npm install
-cp .env.example .env        # puis renseignez MONGO_URL, ANTHROPIC_API_KEY, JWT_SECRET, ADMIN_PASSWORD
+cp .env.example .env        # puis renseignez MONGO_URL, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, JWT_SECRET, ADMIN_PASSWORD
 npm run seed                # insère méthodologie (copie du .md), schémas, thèmes — idempotent
 npm run dev                 # http://localhost:4000  (health : /health)
 ```
@@ -155,7 +169,9 @@ descriptions des JSON de sortie (`StepSchema`) et les thèmes.
    `/backend`**, nommez le service **`tension-backend`**.
    - Onglet **Variables** :
      - `MONGO_URL` → référence auto `${{MongoDB.MONGO_URL}}` (proposée par Railway)
-     - `ANTHROPIC_API_KEY`, `JWT_SECRET`, `ADMIN_PASSWORD`
+     - `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` (défaut `deepseek-v4-flash`)
+     - `ANTHROPIC_API_KEY` (ne pas supprimer — étape support)
+     - `JWT_SECRET`, `ADMIN_PASSWORD`
      - `FRONTEND_URL` → l'URL publique du frontend (générée à l'étape 4)
    - Onglet **Settings → Networking → Generate Domain** : notez l'URL
      (ex. `https://tension-backend.up.railway.app`).
@@ -204,10 +220,12 @@ Les routes `/api/admin/*` (hors login) sont protégées par un JWT émis par
 - **Aucun secret en dur** : tout passe par les variables d'environnement.
 - **CORS** limité aux origines de `FRONTEND_URL` (les origines Vite locales sont
   tolérées par défaut en dev si la variable est absente).
-- **Appels Anthropic** exclusivement côté backend (`/api/sessions/:id/generate/:step`) ;
-  la réponse doit être un JSON strict — les balises ```json``` résiduelles sont
-  nettoyées, les réponses invalides renvoient une erreur explicite (jamais d'échec
-  silencieux), avec gestion des timeouts.
+- **Appels d'IA** exclusivement côté backend (`/api/sessions/:id/generate/:step`) :
+  DeepSeek (`deepseek-v4-flash`, non-thinking, `temperature: 1.0`, `top_p: 1.0`)
+  pour les étapes 1 à 5, Anthropic Claude pour le support. Les réponses doivent
+  être du JSON strict — les balises ```json``` résiduelles sont nettoyées, les
+  réponses invalides renvoient une erreur explicite (jamais d'échec silencieux),
+  avec gestion des timeouts et du solde DeepSeek insuffisant (402).
 - **Génération .pptx** (`pptxgenjs`) : layout `LAYOUT_WIDE` défini avant l'ajout des
   slides, couleurs hex sans `#`, puces via l'option `bullet` (jamais de « • » littéral),
   objet d'options neuf à chaque `addText`.
