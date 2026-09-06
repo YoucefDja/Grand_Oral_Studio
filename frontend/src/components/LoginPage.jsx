@@ -62,8 +62,6 @@ export default function LoginPage() {
           </button>
         </form>
         <p className="muted" style={{ marginTop: 16 }}>
-          {t('login.adminHint1')} <code>ADMIN_EMAIL</code> {t('login.adminHint2')}{' '}
-          <code>ADMIN_PASSWORD</code> {t('login.adminHint3')}{' '}
           <Link to="/">← {t('login.backHome')}</Link>
         </p>
       </div>

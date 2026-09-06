@@ -58,9 +58,6 @@ export const FR = {
   'login.passwordLabel': 'Mot de passe',
   'login.signingIn': 'Connexion…',
   'login.submit': 'Se connecter',
-  'login.adminHint1': 'Compte administrateur initial : l’e-mail défini par',
-  'login.adminHint2': 'et le mot de passe',
-  'login.adminHint3': '(configurés sur le backend).',
   'login.backHome': 'Retour à l’accueil',
 
   // ---- Acceptation d’invitation (AcceptInvitePage) ----
@@ -388,9 +385,6 @@ export const EN = {
   'login.passwordLabel': 'Password',
   'login.signingIn': 'Signing in…',
   'login.submit': 'Sign in',
-  'login.adminHint1': 'Initial admin account: the e-mail set by',
-  'login.adminHint2': 'and the password',
-  'login.adminHint3': '(configured on the backend).',
   'login.backHome': 'Back to home',
 
   'invite.invalidTitle': 'Invalid invitation link',
