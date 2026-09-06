@@ -227,10 +227,30 @@ export const FR = {
   'steps.jv.notes_globales': 'Notes globales',
   'steps.jv.entreprise': 'Entreprise',
 
-  // ---- News (NewsPage : liste + glossaire) ----
+  // ---- Étape « Source en ligne » (veille ciblée dans la session) ----
+  'source.doneBadge': 'Veille générée',
+  'source.needProblem':
+    'Choisissez d’abord votre problématique (étape Problématique) avant de lancer la veille.',
+  'source.recapLine': 'Veille sur le thème « {theme} » pour le sujet : {sujet}',
+  'source.selectedProblem': 'Problématique retenue :',
+  'source.run': 'Récupérer jusqu’à 4 articles ciblés',
+  'source.running': 'Récupération en cours (recherche + lecture + sélection IA)…',
+  'source.runHint':
+    'DeepSeek déduit les mots-clés du sujet et de la problématique, les sources autorisées sont interrogées, puis les 4 articles les plus utiles sont sélectionnés et archivés dans l’onglet News.',
+  'source.contextLabel': 'Contexte de la veille',
+  'source.keywordsLabel': 'Mots-clés utilisés',
+  'source.selectedArticles': 'Articles retenus (sélection IA)',
+  'source.reRun': 'Relancer une veille',
+  'source.goNext': 'Continuer vers',
+  'source.archiveHint':
+    'Ces articles sont visibles par tous dans l’onglet News, avec leur thème, leur sujet et leur problématique d’origine.',
+  'source.errorGeneric': 'La veille a échoué. Réessayez.',
+
+  // ---- News (NewsPage : articles issus des veilles de session) ----
   'news.title': 'News — Veille IA & Big Data',
   'news.subtitle':
-    'Articles sélectionnés automatiquement chaque jour depuis des sources autorisées, filtrés par rapport à vos thèmes. Lecture intégrale dans l’app.',
+    'Articles récupérés lors des veilles de vos sessions (étape « Source en ligne »), reliés au thème, au sujet et à la problématique de chaque session. Lecture intégrale dans l’app, traduisible à la demande.',
+  'news.veilleFor': 'Généré pour la session',
   'news.readInApp': 'Lire dans l’app →',
   'news.sourceLabel': 'Source :',
   'news.glossaryTitle': 'Acronymes & termes techniques du jour',
@@ -239,7 +259,7 @@ export const FR = {
   'news.loadingArticles': 'Chargement des articles…',
   'news.loadingArticle': 'Chargement de l’article…',
   'news.emptyArticles':
-    'Aucun article pour le moment. La collecte quotidienne (cron) n’a pas encore tourné : un administrateur peut la lancer depuis Administration → News.',
+    'Aucun article pour le moment. Lancez une veille depuis une session (étape « Source en ligne », après le choix de la problématique) : les articles récupérés arriveront ici.',
 
   // ---- Lecteur d’article (NewsPage : ArticleReader) ----
   'reader.backToList': 'Retour aux articles',
@@ -257,7 +277,7 @@ export const FR = {
   'admin.methodologyTab': 'Méthodologie',
   'admin.schemasTab': 'Schémas de sortie',
   'admin.themesTab': 'Thèmes',
-  'admin.newsTab': 'News — sources',
+  'admin.newsTab': 'Sites sources (veille)',
   'admin.inviteTitle': 'Inviter un utilisateur',
   'admin.inviteHint':
     'Un e-mail (Resend) sera envoyé avec un lien de configuration du mot de passe, valable 48 h.',
@@ -292,7 +312,7 @@ export const FR = {
   'admin.themeConfirmDelete': 'Supprimer le thème « {label} » ?',
   'admin.sourceNameLabel': 'Nom de la source',
   'admin.sourceUrlLabel': 'URL (page, flux RSS ou catégorie)',
-  'admin.sourceActiveLabel': 'Source active (interrogée par le scraping quotidien)',
+  'admin.sourceActiveLabel': 'Source active (interrogée par l’étape « Source en ligne » des sessions)',
   'admin.sourceConfirmDelete': 'Supprimer la source « {name} » ?',
   'admin.scanTitle': 'Collecte quotidienne des articles',
   'admin.scanHint':
@@ -523,9 +543,28 @@ export const EN = {
   'steps.jv.notes_globales': 'Global notes',
   'steps.jv.entreprise': 'Company',
 
+  'source.doneBadge': 'Veille generated',
+  'source.needProblem':
+    'Choose your research question first (Problématique step) before launching the veille.',
+  'source.recapLine': 'Veille on theme “{theme}” for the subject: {sujet}',
+  'source.selectedProblem': 'Selected research question:',
+  'source.run': 'Fetch up to 4 targeted articles',
+  'source.running': 'Fetching in progress (search + reading + AI selection)…',
+  'source.runHint':
+    'DeepSeek infers keywords from the subject and the research question, the approved sources are queried, then the 4 most useful articles are selected and archived in the News tab.',
+  'source.contextLabel': 'Veille context',
+  'source.keywordsLabel': 'Keywords used',
+  'source.selectedArticles': 'Selected articles (AI pick)',
+  'source.reRun': 'Run the veille again',
+  'source.goNext': 'Continue to',
+  'source.archiveHint':
+    'These articles are visible to everyone in the News tab, with their original theme, subject and research question.',
+  'source.errorGeneric': 'The veille failed. Please retry.',
+
   'news.title': 'News — AI & Big Data watch',
   'news.subtitle':
-    'Articles automatically selected every day from approved sources, filtered against your themes. Full reading in the app.',
+    'Articles gathered during your session veilles (Source en ligne step), linked to each session’s theme, subject and research question. Full in-app reading, translatable on demand.',
+  'news.veilleFor': 'Generated for session',
   'news.readInApp': 'Read in the app →',
   'news.sourceLabel': 'Source:',
   'news.glossaryTitle': 'Acronyms & technical terms of the day',
@@ -534,7 +573,7 @@ export const EN = {
   'news.loadingArticles': 'Loading articles…',
   'news.loadingArticle': 'Loading article…',
   'news.emptyArticles':
-    'No article right now. The daily collection (cron) has not run yet: an administrator can launch it from Administration → News.',
+    'No article right now. Run a veille from a session (Source en ligne step, after choosing the research question): the fetched articles will land here.',
 
   'reader.backToList': 'Back to the articles',
   'reader.translatedFrom': 'Auto-translated',
@@ -550,7 +589,7 @@ export const EN = {
   'admin.methodologyTab': 'Methodology',
   'admin.schemasTab': 'Output schemas',
   'admin.themesTab': 'Themes',
-  'admin.newsTab': 'News — sources',
+  'admin.newsTab': 'Source sites (veille)',
   'admin.inviteTitle': 'Invite a user',
   'admin.inviteHint':
     'An e-mail (Resend) will be sent with a password set-up link, valid for 48 hours.',
@@ -586,7 +625,7 @@ export const EN = {
   'admin.themeConfirmDelete': 'Delete the theme “{label}”?',
   'admin.sourceNameLabel': 'Source name',
   'admin.sourceUrlLabel': 'URL (page, RSS feed or category)',
-  'admin.sourceActiveLabel': 'Active source (queried by the daily scraping)',
+  'admin.sourceActiveLabel': 'Active source (queried by the “Source en ligne” step of sessions)',
   'admin.sourceConfirmDelete': 'Delete the source “{name}”?',
   'admin.scanTitle': 'Daily article collection',
   'admin.scanHint':

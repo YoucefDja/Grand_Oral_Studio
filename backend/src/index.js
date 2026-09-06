@@ -19,7 +19,6 @@ const authRouter = require('./routes/auth');
 const newsRouter = require('./routes/news');
 const NewsSource = require('./models/NewsSource');
 const { DEFAULT_NEWS_SOURCES } = require('./data/defaultNewsSources');
-const { startNewsScheduler } = require('./services/newsScheduler');
 const { ensureInitialAdmin, migrateOwnerlessSessions } = require('./bootstrap');
 
 const app = express();
@@ -115,8 +114,8 @@ async function start() {
 
   app.listen(PORT, () => {
     console.log(`Grand Oral Studio backend démarré sur le port ${PORT}.`);
-    // Cron quotidien News (désactivable via NEWS_CRON_ENABLED=false).
-    startNewsScheduler();
+    // Plus aucun cron : les articles sont récupérés à la demande dans les
+    // sessions (étape « Source en ligne ») via les sources configurées.
   });
 }
 

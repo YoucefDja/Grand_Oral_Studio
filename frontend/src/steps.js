@@ -1,10 +1,12 @@
 /**
- * Métadonnées des 6 étapes du parcours Grand Oral.
- * Ordre imposé par la méthodologie (glossaire AVANT le plan et le support).
+ * Métadonnées des 7 étapes du parcours Grand Oral.
+ * Ordre imposé par la méthodologie : l'étape « Source en ligne » (veille ciblée,
+ * manuelle) intervient après la problématique, avant la recherche documentaire.
  */
 export const STEPS = [
   { key: 'analyse', label: 'Analyse du sujet', short: 'Analyse' },
   { key: 'probleme', label: 'Problématique', short: 'Problématique' },
+  { key: 'source', label: 'Source en ligne', short: 'Sources' },
   { key: 'recherche', label: 'Recherche documentaire', short: 'Recherche' },
   { key: 'glossaire', label: 'Glossaire & résumés de sources', short: 'Glossaire' },
   { key: 'plan', label: 'Plan détaillé', short: 'Plan' },
@@ -20,6 +22,8 @@ export const STEP_EXPLANATIONS = {
     'Produit une analyse ouverte du sujet (mots-clés, tensions provisoires) — socle de toute la suite.',
   probleme:
     'Formule 2 à 4 problématiques issues de tensions réelles + la ligne directrice (fil rouge) propagée ensuite.',
+  source:
+    'Récupère manuellement jusqu’à 4 articles ciblés sur le thème, le sujet et la problématique — archivés dans l’onglet News.',
   recherche:
     'Définit les axes, les sources réelles à consulter et les données chiffrées à chercher.',
   glossaire:

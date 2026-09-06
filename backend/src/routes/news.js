@@ -1,6 +1,5 @@
 const express = require('express');
 const NewsArticle = require('../models/NewsArticle');
-const NewsGlossary = require('../models/NewsGlossary');
 const { getArticleForLang } = require('../services/newsTranslate');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -10,17 +9,12 @@ const router = express.Router();
 // Pages "News" visibles par tout utilisateur connecté (user comme admin).
 router.use(requireAuth);
 
-function httpError(status, message) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
-}
-
 /** Champs légers exposés dans les listes (le contenu plein est réservé au détail). */
 const LIST_SELECT =
-  '_id sourceName sourceUrl url title resume category tags themes publishedAt createdAt';
+  '_id sourceName sourceUrl url title resume category tags themes publishedAt createdAt contexts';
 
-// GET /api/news — flux principal : articles récents + glossaire du jour.
+// GET /api/news — flux principal : les articles issus des sessions de veille
+// (étape « Source en ligne »), du plus récent au plus ancien.
 router.get(
   '/',
   asyncHandler(async (req, res) => {
@@ -35,10 +29,24 @@ router.get(
       .limit(limit)
       .lean();
 
-    // Dernier glossaire disponible (celui du jour si le cron est passé).
-    const glossaire = await NewsGlossary.findOne().sort({ date: -1, createdAt: -1 }).lean();
+    // Contexte de génération allégé (dernière entrée utile pour la carte).
+    const light = articles.map((a) => ({
+      ...a,
+      contexts: Array.isArray(a.contexts)
+        ? a.contexts
+            .slice(-3)
+            .reverse()
+            .map((c) => ({
+              sessionId: c.sessionId || null,
+              sessionTitle: c.sessionTitle || '',
+              sessionTheme: c.sessionTheme || '',
+              problematique: c.problematique || '',
+              keywords: Array.isArray(c.keywords) ? c.keywords : [],
+            }))
+        : [],
+    }));
 
-    res.json({ articles, glossaire: glossaire || null });
+    res.json({ articles: light });
   })
 );
 
@@ -54,15 +62,6 @@ router.get(
     const lang = String(req.query.lang || '').toLowerCase();
     const article = await getArticleForLang(req.params.id, lang === 'en' ? 'en' : lang === 'fr' ? 'fr' : null);
     res.json(article);
-  })
-);
-
-// GET /api/news/glossaire — liste des glossaires récents (historique).
-router.get(
-  '/glossaire',
-  asyncHandler(async (_req, res) => {
-    const glossaires = await NewsGlossary.find().sort({ date: -1 }).limit(15).lean();
-    res.json(glossaires);
   })
 );
 

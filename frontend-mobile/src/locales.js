@@ -36,7 +36,8 @@ export const FR = {
   'news.loading': 'Chargement des articles…',
   'news.loadError': 'Impossible de charger les articles.',
   'news.empty':
-    'Aucun article pour le moment. La collecte quotidienne n’a pas encore tourné — réessayez plus tard.',
+    'Aucun article pour le moment. Lancez une veille depuis une session sur le site (étape « Source en ligne », après la problématique) : les articles récupérés arriveront ici.',
+  'news.veilleFor': 'Généré pour la session',
   'news.refresh': 'Actualiser',
   'news.refreshing': 'Actualisation…',
   'news.retry': 'Réessayer',
@@ -85,7 +86,9 @@ export const EN = {
   'news.pageTitle': 'AI & Big Data watch',
   'news.loading': 'Loading articles…',
   'news.loadError': 'Unable to load articles.',
-  'news.empty': 'No articles for now. The daily collection hasn’t run yet — try again later.',
+  'news.empty':
+    'No articles for now. Run a veille from a session on the website (Source en ligne step, after the research question): the fetched articles will land here.',
+  'news.veilleFor': 'Generated for session',
   'news.refresh': 'Refresh',
   'news.refreshing': 'Refreshing…',
   'news.retry': 'Try again',

@@ -17,6 +17,17 @@ function dateFr(value) {
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
 }
 
+function contextLine(article, t) {
+  const ctx = Array.isArray(article.contexts) ? article.contexts[0] : null;
+  if (!ctx) return null;
+  return (
+    <p className="muted" style={{ margin: '0 0 8px', fontSize: 12.5, lineHeight: 1.5 }}>
+      <strong>{t('news.veilleFor')}</strong> « {ctx.sessionTitle} »
+      {ctx.problematique ? <> — <em>{ctx.problematique}</em></> : null}
+    </p>
+  );
+}
+
 function ArticleCard({ article, onOpen, t }) {
   return (
     <article className="news-card">
@@ -33,6 +44,7 @@ function ArticleCard({ article, onOpen, t }) {
           {article.title}
         </button>
       </h3>
+      {contextLine(article, t)}
       {article.resume ? <p className="muted news-resume">{article.resume}</p> : null}
       <div className="news-foot">
         <button type="button" className="news-link btn-link" onClick={() => onOpen(article._id)}>
@@ -74,6 +86,7 @@ function ArticleReader({ article, onBack }) {
           {t('reader.translatedFrom')}
         </p>
       ) : null}
+      {contextLine(article, t)}
       {article.resume ? <p className="reader-lead">{article.resume}</p> : null}
 
       {paragraphs.length ? (
@@ -103,33 +116,9 @@ function ArticleReader({ article, onBack }) {
   );
 }
 
-function GlossaryBlock({ glossaire, t }) {
-  if (!glossaire || !Array.isArray(glossaire.items) || glossaire.items.length === 0) return null;
-  return (
-    <section className="card panel">
-      <h2 style={{ marginTop: 0 }}>{t('news.glossaryTitle')}</h2>
-      <p className="muted">
-        {t('news.glossarySubA')} — {t('news.glossarySubB')} {dateFr(glossaire.date)}.
-      </p>
-      <ul className="news-glossary">
-        {glossaire.items.map((item, i) => (
-          <li key={i}>
-            <strong className="term">
-              {item.acronyme ? `${item.acronyme} — ` : ''}
-              {item.terme}
-            </strong>
-            <p>{item.explication}</p>
-          </li>
-        ))}
-      </ul>
-    </section>
-  );
-}
-
 export default function NewsPage() {
   const { t, lang } = useSettings();
   const [articles, setArticles] = useState([]);
-  const [glossaire, setGlossaire] = useState(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [selectedId, setSelectedId] = useState(null);
@@ -140,7 +129,6 @@ export default function NewsPage() {
     try {
       const data = await api.get('/api/news?limit=60');
       setArticles(Array.isArray(data.articles) ? data.articles : []);
-      setGlossaire(data.glossaire || null);
       setError(null);
     } catch (err) {
       setError(err.message);
@@ -193,20 +181,15 @@ export default function NewsPage() {
           <ArticleReader article={reader} onBack={goBack} />
         </div>
       ) : (
-        <div className="news-layout">
-          <div>
-            {loading ? <p className="muted">{t('news.loadingArticles')}</p> : null}
-            {readerLoading ? <p className="muted">{t('news.loadingArticle')}</p> : null}
-            {!loading && articles.length === 0 ? (
-              <div className="empty">{t('news.emptyArticles')}</div>
-            ) : null}
-            {articles.map((a) => (
-              <ArticleCard key={a._id || a.url} article={a} onOpen={openArticle} t={t} />
-            ))}
-          </div>
-          <aside>
-            <GlossaryBlock glossaire={glossaire} t={t} />
-          </aside>
+        <div style={{ display: 'flex', flexDirection: 'column', gap: 14, marginTop: 16, minWidth: 0 }}>
+          {loading ? <p className="muted">{t('news.loadingArticles')}</p> : null}
+          {readerLoading ? <p className="muted">{t('news.loadingArticle')}</p> : null}
+          {!loading && articles.length === 0 ? (
+            <div className="empty">{t('news.emptyArticles')}</div>
+          ) : null}
+          {articles.map((a) => (
+            <ArticleCard key={a._id || a.url} article={a} onOpen={openArticle} t={t} />
+          ))}
         </div>
       )}
     </div>

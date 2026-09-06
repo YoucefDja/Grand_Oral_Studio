@@ -292,78 +292,6 @@ function NewsSourceEditor({ item, onSaved, onDeleted }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Panneau : scraping News (déclenchement manuel)                      */
-/* ------------------------------------------------------------------ */
-
-function NewsScanPanel({ onScan }) {
-  const { t } = useSettings();
-  const [busy, setBusy] = useState(false);
-  const [report, setReport] = useState(null);
-  const [error, setError] = useState(null);
-
-  async function launch() {
-    setBusy(true);
-    setError(null);
-    setReport(null);
-    try {
-      const r = await onScan();
-      setReport(r);
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className="admin-item">
-      <h3 style={{ marginTop: 0 }}>{t('admin.scanTitle')}</h3>
-      <p className="muted">{t('admin.scanHint')}</p>
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      <div className="actions" style={{ justifyContent: 'flex-start' }}>
-        <button type="button" className="btn-primary" onClick={launch} disabled={busy}>
-          {busy ? (
-            <>
-              <span className="spin" /> {t('admin.scanning')}
-            </>
-          ) : (
-            t('admin.scanButton')
-          )}
-        </button>
-      </div>
-      {report ? (
-        <div className="news-status" style={{ marginTop: 12 }}>
-          {report.error ? <div className="alert alert-error">{report.error}</div> : null}
-          <strong>
-            {t('admin.scanReport')
-              .replace('{date}', report.date || '—')
-              .replace('{n}', report.totalNouveaux)
-              .replace('{d}', report.doublonsIgnores)
-              .replace('{f}', report.totalTrouves)}
-          </strong>
-          {report.glossaire ? ` ${t('admin.scanGlossaireDone')}` : ''}
-          {report.notes && report.notes.length ? (
-            <ul className="news-log" style={{ marginTop: 6 }}>
-              {report.notes.map((n, i) => (
-                <li key={i}>{n}</li>
-              ))}
-            </ul>
-          ) : null}
-          <ul className="news-log" style={{ marginTop: 6 }}>
-            {report.sources.map((s, i) => (
-              <li key={i}>
-                {s.name} : {s.found} {t('admin.linksUnit')} · {s.nouveaux} {t('admin.newUnit')}
-                {s.error ? ` · ${t('admin.errorLabel')} : ${s.error}` : ''}
-              </li>
-            ))}
-          </ul>
-        </div>
-      ) : null}
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Page Admin                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -416,16 +344,6 @@ export default function AdminPage() {
       setNewsSources(await api.get('/api/admin/news-sources'));
     } catch (err) {
       setError(err.message);
-    }
-  }
-
-  async function handleNewsScan() {
-    setError(null);
-    setNotice(null);
-    try {
-      return await api.post('/api/admin/news/run');
-    } catch (err) {
-      throw new Error(err.message);
     }
   }
 
@@ -686,10 +604,9 @@ export default function AdminPage() {
         </div>
       ) : null}
 
-      {/* ---------------- News : sources & scraping ---------------- */}
+      {/* ---------------- News : sites sources des veilles ---------------- */}
       {tab === 'news' ? (
         <div>
-          <NewsScanPanel onScan={handleNewsScan} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
             <button type="button" className="btn-ghost" onClick={resetNewsSources}>
               {t('admin.resetSourcesButton')}

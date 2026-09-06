@@ -103,6 +103,17 @@ function DisplayControls() {
   );
 }
 
+function contextLine(article, t) {
+  const ctx = Array.isArray(article.contexts) ? article.contexts[0] : null;
+  if (!ctx) return null;
+  return (
+    <p className="muted" style={{ fontSize: 11.5, lineHeight: 1.45, margin: '0 0 8px' }}>
+      <strong>{t('news.veilleFor')}</strong> « {ctx.sessionTitle} »
+      {ctx.problematique ? <> — <em>{ctx.problematique}</em></> : null}
+    </p>
+  );
+}
+
 function ArticleCard({ article, onOpen }) {
   const { t } = useSettings();
   return (
@@ -117,6 +128,7 @@ function ArticleCard({ article, onOpen }) {
           {article.title}
         </button>
       </h3>
+      {contextLine(article, t)}
       {article.resume ? <p className="news-resume">{article.resume}</p> : null}
       <button type="button" className="news-link-btn" onClick={() => onOpen(article._id)}>
         {t('news.readInApp')}
@@ -152,6 +164,7 @@ function ArticleReader({ article, onBack }) {
           {t('reader.translatedFrom')}
         </p>
       ) : null}
+      {contextLine(article, t)}
 
       <h1 className="reader-title">{article.title}</h1>
       {article.resume ? <p className="reader-lead">{article.resume}</p> : null}
@@ -183,41 +196,10 @@ function ArticleReader({ article, onBack }) {
   );
 }
 
-function Glossary({ glossaire }) {
-  const { t } = useSettings();
-  if (!glossaire || !Array.isArray(glossaire.items) || glossaire.items.length === 0) return null;
-  const [open, setOpen] = useState(false);
-  return (
-    <section className="glossary">
-      <button type="button" className="glossary-head" onClick={() => setOpen((v) => !v)}>
-        <span>
-          <strong>{t('glossary.title')}</strong>
-          <small>{dateFr(glossaire.date)}</small>
-        </span>
-        <span className={`chevron ${open ? 'open' : ''}`}>▾</span>
-      </button>
-      {open ? (
-        <ul className="glossary-list">
-          {glossaire.items.map((item, i) => (
-            <li key={i}>
-              <strong>
-                {item.acronyme ? `${item.acronyme} — ` : ''}
-                {item.terme}
-              </strong>
-              <p>{item.explication}</p>
-            </li>
-          ))}
-        </ul>
-      ) : null}
-    </section>
-  );
-}
-
 export default function NewsView() {
   const { user, logout } = useAuth();
   const { lang, t } = useSettings();
   const [articles, setArticles] = useState([]);
-  const [glossaire, setGlossaire] = useState(null);
   const [loading, setLoading] = useState(true);
   const [refreshing, setRefreshing] = useState(false);
   const [error, setError] = useState(null);
@@ -233,7 +215,6 @@ export default function NewsView() {
     try {
       const data = await api.get('/api/news?limit=50');
       setArticles(Array.isArray(data.articles) ? data.articles : []);
-      setGlossaire(data.glossaire || null);
       setError(null);
     } catch (err) {
       setError(err.message || tRef.current('news.loadError'));
@@ -328,8 +309,6 @@ export default function NewsView() {
               </button>
             </div>
           ) : null}
-
-          <Glossary glossaire={glossaire} />
 
           {loading ? <p className="muted">{t('news.loading')}</p> : null}
           {!loading && articles.length === 0 && !error ? (

@@ -1,9 +1,11 @@
 # Grand Oral Studio — News mobile (PWA)
 
-Application web mobile **installable** (PWA) pour consulter la **veille IA &
-Big Data** de Grand Oral Studio depuis un téléphone. Seule la partie **News**
-est couverte : connexion en tant qu'**utilisateur** (mêmes comptes que le site
-web) puis lecture des articles et du glossaire du jour.
+Application web mobile **installable** (PWA) pour consulter les **articles de
+veille** de Grand Oral Studio depuis un téléphone. Seule la partie **News** est
+couverte : connexion en tant qu'**utilisateur** (mêmes comptes que le site web)
+puis lecture des articles récupérés dans les sessions (étape « Source en
+ligne ») — contenu intégral, traduction FR/EN à la lecture, thème clair/sombre.
+Les mêmes préférences de langue et de thème sont partagées avec le site web.
 
 Le **backend Express partagé** (`/backend`) est réutilisé tel quel : endpoints
 `POST /api/auth/login`, `GET /api/auth/me` et `GET /api/news`.

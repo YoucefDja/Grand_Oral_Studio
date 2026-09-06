@@ -38,6 +38,22 @@ const newsArticleSchema = new mongoose.Schema(
       ],
       default: [],
     },
+    // Contexte de génération (une entrée par session de veille qui a choisi cet
+    // article). Permet à l'onglet News de rappeler sur quel thème / sujet /
+    // problématique l'article a été récupéré.
+    contexts: {
+      type: [
+        {
+          sessionId: { type: mongoose.Schema.Types.ObjectId, ref: 'Session' },
+          sessionTitle: { type: String, default: '' },
+          sessionTheme: { type: String, default: '' },
+          problematique: { type: String, default: '' },
+          keywords: { type: [String], default: [] },
+          createdAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     // Date de publication (si disponible) sinon date de récupération.
     publishedAt: { type: Date, default: null },
     // Classement produit par DeepSeek (thème IA / Big Data, etc.).

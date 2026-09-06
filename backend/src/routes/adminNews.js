@@ -2,7 +2,6 @@ const express = require('express');
 const mongoose = require('mongoose');
 const NewsSource = require('../models/NewsSource');
 const { DEFAULT_NEWS_SOURCES } = require('../data/defaultNewsSources');
-const { runManualScan } = require('../services/newsScheduler');
 const { requireAdmin } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -123,15 +122,6 @@ router.post(
       }
     }
     res.json({ ok: true, ajoutees, message: `${ajoutees} source(s) par défaut restaurée(s).` });
-  })
-);
-
-// POST /api/admin/news/run — déclenchement manuel du scraping + glossaire du jour.
-router.post(
-  '/news/run',
-  asyncHandler(async (_req, res) => {
-    const report = await runManualScan();
-    res.json(report);
   })
 );
 

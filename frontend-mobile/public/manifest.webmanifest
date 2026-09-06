@@ -1,7 +1,7 @@
 {
   "name": "Grand Oral Studio — News",
   "short_name": "GOS News",
-  "description": "Veille IA & Big Data de Grand Oral Studio — articles et glossaire quotidien.",
+  "description": "Grand Oral Studio News — articles de veille récupérés dans vos sessions (thème, sujet, problématique).",
   "lang": "fr",
   "start_url": "/",
   "scope": "/",

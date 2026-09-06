@@ -1,7 +1,7 @@
 import React, { useState } from 'react';
 import StepShell from '../StepShell.jsx';
 import { useSettings } from '../../settings.jsx';
-import { STEP_EXPLANATIONS, ligneDirectriceOf, glossaireValide } from '../../steps.js';
+import { STEP_EXPLANATIONS, ligneDirectriceOf, glossaireValide, stepIndex } from '../../steps.js';
 import { api, downloadPptx, downloadSupportPrompt } from '../../api.js';
 
 function SlideCard({ slide, index, t }) {
@@ -168,7 +168,7 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0' }}>
               {valide ? <span className="badge badge-done">{t('steps.glossaireOk')}</span> : null}
               <span className="badge badge-progress">{slides.length} {t('steps.slidesUnit')}</span>
-              <button type="button" className="btn-ghost" onClick={() => goStep(3)}>
+              <button type="button" className="btn-ghost" onClick={() => goStep(stepIndex('glossaire'))}>
                 {t('steps.reviewGlossaire')}
               </button>
             </div>

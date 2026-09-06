@@ -9,11 +9,12 @@
 const MethodologySection = require('../models/MethodologySection');
 const StepSchemaModel = require('../models/StepSchema');
 
-const STEP_KEYS = ['analyse', 'probleme', 'recherche', 'glossaire', 'plan', 'support'];
+const STEP_KEYS = ['analyse', 'probleme', 'source', 'recherche', 'glossaire', 'plan', 'support'];
 
 const STEP_LABELS = {
   analyse: 'Analyse du sujet',
   probleme: 'Problématique',
+  source: 'Source en ligne',
   recherche: 'Recherche documentaire',
   glossaire: 'Glossaire et résumés des sources',
   plan: 'Plan détaillé',

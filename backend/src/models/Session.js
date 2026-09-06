@@ -4,7 +4,7 @@ const mongoose = require('mongoose');
  * Session — une session de travail d'un étudiant sur un sujet du Grand Oral.
  * Pas d'authentification : l'app est mono-utilisateur côté étudiant.
  *
- * currentStep : nombre d'étapes terminées (0 à 6).
+ * currentStep : nombre d'étapes terminées (0 à 7).
  * ligneDirectrice : phrase « fil rouge » formulée à l'étape probleme, puis
  * réinjectée dans le prompt de toutes les étapes suivantes.
  */
@@ -22,6 +22,7 @@ const sessionSchema = new mongoose.Schema(
       default: () => ({
         analyse: {},
         probleme: {},
+        source: {},
         recherche: {},
         glossaire: {},
         plan: {},
