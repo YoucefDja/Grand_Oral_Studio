@@ -24,17 +24,32 @@ const frontendUrls = (process.env.FRONTEND_URL || 'http://localhost:5173,http://
   .map((s) => s.trim())
   .filter(Boolean);
 
+if (!process.env.FRONTEND_URL) {
+  console.warn('[cors] FRONTEND_URL absente : le CORS est restreint aux origines locales (http://localhost:5173...). En production, le frontend déployé sera bloqué. Définissez FRONTEND_URL = domaine exact du frontend (https://...) dans les variables Railway du backend.');
+}
+
 app.use(
   cors({
     origin(origin, callback) {
       // Requêtes sans origine (curl, santé…) autorisées.
       if (!origin || frontendUrls.includes(origin)) return callback(null, true);
-      return callback(new Error('Origine CORS non autorisée.'));
+      console.warn('[cors] Origine rejetée : ' + origin);
+      return callback(new Error('Origine CORS non autorisée.'), false);
     },
   })
 );
 
 app.use(express.json({ limit: '1mb' }));
+
+// Route racine — informations générales du service.
+app.get('/', (_req, res) =>
+  res.json({
+    service: 'tension-backend',
+    message: 'API Tension — Grand Oral CESI',
+    health: '/health',
+    api: '/api',
+  })
+);
 
 // Santé — utile pour les checks Railway.
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));

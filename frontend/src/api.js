@@ -18,7 +18,12 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
-    throw new Error('Impossible de joindre le serveur. Vérifiez votre connexion (VITE_API_URL).');
+    throw new Error(
+      `Impossible de joindre le serveur (${BASE || 'même origine — aucune VITE_API_URL définie'}). ` +
+        `VITE_API_URL est figée au build : si vous venez de l'ajouter sur Railway, redéployez le frontend. ` +
+        `L'URL doit être complète (https://…), sans slash final, et orthographiée exactement VITE_API_URL (majuscules). ` +
+        `Côté backend, vérifiez que FRONTEND_URL vaut le domaine exact du frontend.`
+    );
   }
 
   if (!res.ok) {

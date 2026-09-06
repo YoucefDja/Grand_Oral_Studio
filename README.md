@@ -192,6 +192,25 @@ descriptions des JSON de sortie (`StepSchema`) et les thèmes.
 
 ---
 
+## Dépannage — production
+
+Symptôme : « Impossible de joindre le serveur. Vérifiez votre connexion
+(VITE_API_URL) ». Diagnostic pas à pas :
+
+1. **`VITE_API_URL` est figée au build** : inlinée par Vite au moment du build,
+   elle ne peut pas être modifiée à chaud. Ajoutez-la dans les variables du
+   service `tension-frontend` (orthographe exacte en MAJUSCULES `VITE_API_URL`,
+   valeur `https://…` **sans slash final**), **puis redéployez le service
+   frontend** — sans redéploiement, le build continue d'utiliser l'ancienne valeur.
+2. **Vérifiez que le backend répond** : ouvrez `https://tension-backend…/health`
+   dans un navigateur — ou sa racine `/`, qui renvoie un JSON d'information
+   (plus de « Cannot GET »).
+3. **CORS** : définissez `FRONTEND_URL` côté backend = domaine **exact** du
+   frontend (schéma `https`, sans chemin, sans slash final).
+4. **Après chaque changement de variable, redéployez les services concernés.**
+
+---
+
 ## API (résumé)
 
 ```
