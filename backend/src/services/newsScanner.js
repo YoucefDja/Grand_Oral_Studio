@@ -521,21 +521,21 @@ async function runNewsScan() {
 
   report.doublonsIgnores = totalDoublons;
 
-  // Glossaire du jour : basé sur les articles fraîchement récupérés (ou, à
-  // défaut, sur les plus récents déjà en base pour un jour sans nouveauté).
-  let baseGlossaire = stockNouveaux;
-  if (baseGlossaire.length === 0) {
-    baseGlossaire = await NewsArticle.find().sort({ publishedAt: -1 }).limit(20).lean();
-  }
-  if (await deepseekAvailable()) {
-    report.glossaire = await generateDailyGlossary(baseGlossaire, report.totalNouveaux);
+  // Glossaire du jour : uniquement s'il y a de NOUVEAUX articles à analyser.
+  // Régénérer le glossaire à partir des mêmes articles déjà vus (jour sans
+  // nouveauté) produirait un contenu quasi identique daté autrement — inutile.
+  if (report.totalNouveaux > 0) {
+    if (await deepseekAvailable()) {
+      report.glossaire = await generateDailyGlossary(stockNouveaux, report.totalNouveaux);
+    } else {
+      report.notes.push('DEEPSEEK_API_KEY absente : pas de résumé/classement/glossaire généré par IA.');
+    }
   } else {
-    report.notes.push('DEEPSEEK_API_KEY absente : pas de résumé/classement/glossaire généré par IA.');
+    report.notes.push(
+      'Aucun nouvel article : le glossaire du jour n’a pas été régénéré (pas de nouveau contenu à analyser).'
+    );
   }
 
-  if (report.totalNouveaux === 0) {
-    report.notes.push('Aucun nouvel article (tout était déjà en base ou aucune source joignable).');
-  }
   return report;
 }
 
