@@ -853,3 +853,37 @@ button .spin {
 [data-theme='dark'] .step-pill.clickable:hover {
   border-color: var(--accent-text);
 }
+
+/* ============================================================
+   Pied de page (pages légales + copyright)
+   ============================================================ */
+.app-footer {
+  margin-top: 40px;
+  padding: 22px 20px 28px;
+  background: var(--cesi-lighter);
+  border-top: 1px solid var(--line);
+  text-align: center;
+}
+.app-footer-nav {
+  display: flex;
+  gap: 18px;
+  justify-content: center;
+  flex-wrap: wrap;
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 8px;
+}
+.app-footer-nav a {
+  color: var(--cesi-accent);
+}
+.app-footer-nav a:hover {
+  text-decoration: underline;
+}
+.app-footer-copy {
+  margin: 0;
+  color: var(--ink-soft);
+  font-size: 13px;
+}
+[data-theme='dark'] .app-footer-nav a {
+  color: var(--accent-text);
+}

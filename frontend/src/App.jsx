@@ -1,12 +1,14 @@
 import { Routes, Route, Navigate, Link, useNavigate } from 'react-router-dom';
 import { useAuth } from './auth.jsx';
 import { useSettings } from './settings.jsx';
+import { LEGAL_CONFIG } from './legalConfig.js';
 import HomePage from './components/HomePage.jsx';
 import WorkspacePage from './components/WorkspacePage.jsx';
 import AdminPage from './components/AdminPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import AcceptInvitePage from './components/AcceptInvitePage.jsx';
 import NewsPage from './components/NewsPage.jsx';
+import LegalPage from './components/LegalPage.jsx';
 
 /** Sélecteurs langue (FR/EN) + bouton unique thème clair/sombre (lune/soleil). */
 function DisplayPrefs() {
@@ -136,6 +138,23 @@ function RequireAuth({ children, admin = false }) {
   return children;
 }
 
+/** Pied de page : accès aux pages légales + copyright. */
+function Footer() {
+  const { t } = useSettings();
+  return (
+    <footer className="app-footer">
+      <nav className="app-footer-nav" aria-label={t('footer.legal')}>
+        <Link to="/mentions-legales">{t('footer.mentions')}</Link>
+        <Link to="/confidentialite">{t('footer.privacy')}</Link>
+        <Link to="/cgu">{t('footer.cgu')}</Link>
+      </nav>
+      <p className="app-footer-copy">
+        © {LEGAL_CONFIG.year} {LEGAL_CONFIG.product} — {t('footer.rights')}
+      </p>
+    </footer>
+  );
+}
+
 export default function App() {
   return (
     <div className="app">
@@ -176,9 +195,14 @@ export default function App() {
           />
           <Route path="/login" element={<LoginPage />} />
           <Route path="/accept-invite" element={<AcceptInvitePage />} />
+          {/* Pages légales publiques (accessibles connecté ou non). */}
+          <Route path="/mentions-legales" element={<LegalPage page="mentions" />} />
+          <Route path="/confidentialite" element={<LegalPage page="privacy" />} />
+          <Route path="/cgu" element={<LegalPage page="cgu" />} />
           <Route path="*" element={<Navigate to="/" replace />} />
         </Routes>
       </main>
+      <Footer />
     </div>
   );
 }

@@ -20,6 +20,14 @@ export const FR = {
   'role.user': 'utilisateur',
   'role.admin': 'admin',
 
+  // ---- Pied de page & pages légales ----
+  'footer.legal': 'Pages légales',
+  'footer.mentions': 'Mentions légales',
+  'footer.privacy': 'Confidentialité',
+  'footer.cgu': 'Conditions d’utilisation',
+  'footer.rights': 'Tous droits réservés',
+  'legal.backHome': 'Retour à l’accueil',
+
   // ---- Réglages langue / thème ----
   'settings.language': 'Langue',
   'settings.theme': 'Thème',
@@ -344,6 +352,14 @@ export const EN = {
   'nav.logout': 'Sign out',
   'role.user': 'user',
   'role.admin': 'admin',
+
+  // ---- Footer & legal pages ----
+  'footer.legal': 'Legal pages',
+  'footer.mentions': 'Legal notice',
+  'footer.privacy': 'Privacy',
+  'footer.cgu': 'Terms of use',
+  'footer.rights': 'All rights reserved',
+  'legal.backHome': 'Back to home',
 
   'settings.language': 'Language',
   'settings.theme': 'Theme',
