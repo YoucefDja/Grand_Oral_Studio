@@ -14,6 +14,8 @@ if (fs.existsSync(envPath)) {
 const themesRouter = require('./routes/themes');
 const sessionsRouter = require('./routes/sessions');
 const adminRouter = require('./routes/admin');
+const authRouter = require('./routes/auth');
+const { ensureInitialAdmin, migrateOwnerlessSessions } = require('./bootstrap');
 
 const app = express();
 
@@ -57,6 +59,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/themes', themesRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/auth', authRouter);
 
 // 404 JSON pour les routes /api inconnues.
 app.use('/api', (_req, res) => {
@@ -86,6 +89,12 @@ const PORT = Number(process.env.PORT || 4000);
 
 async function start() {
   await connectDb();
+
+  // Compte admin initial (ADMIN_EMAIL / ADMIN_PASSWORD) + migration des sessions
+  // créées avant l'authentification vers ce compte.
+  const admin = await ensureInitialAdmin();
+  await migrateOwnerlessSessions(admin);
+
   app.listen(PORT, () => {
     console.log(`Tension backend démarré sur le port ${PORT}.`);
   });

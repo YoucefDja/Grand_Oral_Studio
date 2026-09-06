@@ -1,20 +1,41 @@
 /**
  * Client API — tous les appels passent par le backend Express via VITE_API_URL.
- * Aucun appel direct à l'API Anthropic depuis le navigateur.
+ * Le token JWT (auth) est automatiquement attaché en `Authorization: Bearer`.
  */
 
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
+
+// --- Gestion de l'authentification persistée (token + user) ---
+const AUTH_KEY = 'tension_auth';
+
+export function getAuth() {
+  try {
+    return JSON.parse(localStorage.getItem(AUTH_KEY) || 'null');
+  } catch {
+    return null;
+  }
+}
+
+export function storeAuth({ token, user }) {
+  localStorage.setItem(AUTH_KEY, JSON.stringify({ token, user: user || null }));
+}
+
+export function clearAuth() {
+  localStorage.removeItem(AUTH_KEY);
+}
 
 export function apiUrl(path) {
   return `${BASE}${path}`;
 }
 
 async function request(path, { method = 'GET', body, headers = {} } = {}) {
+  const auth = getAuth();
+  const authHeader = auth && auth.token ? { Authorization: `Bearer ${auth.token}` } : {};
   let res;
   try {
     res = await fetch(apiUrl(path), {
       method,
-      headers: { 'Content-Type': 'application/json', ...headers },
+      headers: { 'Content-Type': 'application/json', ...authHeader, ...headers },
       body: body !== undefined ? JSON.stringify(body) : undefined,
     });
   } catch {
@@ -34,6 +55,15 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
     } catch {
       /* réponse non JSON */
     }
+    // Session expirée → on nettoie la session locale (sauf sur les routes publiques de login).
+    if (
+      res.status === 401 &&
+      !path.startsWith('/api/auth/login') &&
+      !path.startsWith('/api/auth/accept-invite')
+    ) {
+      clearAuth();
+      window.dispatchEvent(new Event('tension:logout'));
+    }
     throw new Error(message);
   }
   return res;
@@ -46,38 +76,15 @@ export const api = {
   del: (path) => request(path, { method: 'DELETE' }).then((r) => r.json()),
 };
 
-// --- Client admin (JWT en sessionStorage) ---
-
-export function getAdminToken() {
-  return sessionStorage.getItem('tension_admin_token');
-}
-export function setAdminToken(token) {
-  if (token) sessionStorage.setItem('tension_admin_token', token);
-  else sessionStorage.removeItem('tension_admin_token');
-}
-
-async function adminRequest(path, { method = 'GET', body } = {}) {
-  const token = getAdminToken();
-  if (!token) throw new Error('Non authentifié. Reconnectez-vous.');
-  return request(path, {
-    method,
-    body,
-    headers: { Authorization: `Bearer ${token}` },
-  });
-}
-
-export const adminApi = {
-  get: (path) => adminRequest(path).then((r) => r.json()),
-  put: (path, body) => adminRequest(path, { method: 'PUT', body }).then((r) => r.json()),
-  post: (path, body) => adminRequest(path, { method: 'POST', body }).then((r) => r.json()),
-  del: (path) => adminRequest(path, { method: 'DELETE' }).then((r) => r.json()),
-};
-
-/** Télécharge le .pptx généré par le backend. */
+/** Télécharge le .pptx généré par le backend (route protégée). */
 export async function downloadPptx(sessionId, fallbackName = 'presentation-grand-oral.pptx') {
+  const auth = getAuth();
   let res;
   try {
-    res = await fetch(apiUrl(`/api/sessions/${sessionId}/export-pptx`), { method: 'POST' });
+    res = await fetch(apiUrl(`/api/sessions/${sessionId}/export-pptx`), {
+      method: 'POST',
+      headers: auth && auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    });
   } catch {
     throw new Error('Impossible de joindre le serveur pour l’export .pptx.');
   }
@@ -88,6 +95,10 @@ export async function downloadPptx(sessionId, fallbackName = 'presentation-grand
       if (data && data.message) message = data.message;
     } catch {
       /* non JSON */
+    }
+    if (res.status === 401) {
+      clearAuth();
+      window.dispatchEvent(new Event('tension:logout'));
     }
     throw new Error(message);
   }

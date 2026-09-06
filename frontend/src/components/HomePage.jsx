@@ -1,6 +1,7 @@
 import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
+import { useAuth } from '../auth.jsx';
 import { STEPS } from '../steps.js';
 
 function stepLabelOf(session) {
@@ -11,6 +12,7 @@ function stepLabelOf(session) {
 
 export default function HomePage() {
   const navigate = useNavigate();
+  const { user } = useAuth();
   const [themes, setThemes] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -80,7 +82,9 @@ export default function HomePage() {
 
   return (
     <div>
-      <h1 className="page-title">Préparer un Grand Oral</h1>
+      <h1 className="page-title">
+        {user?.email ? `Bonjour ${user.email.split('@')[0]} 👋` : 'Préparer un Grand Oral'}
+      </h1>
       <p className="page-subtitle">
         Suivez les 6 étapes méthodologiques pour construire votre sujet, votre problématique, votre
         plan… jusqu’au support .pptx prêt pour le jury.

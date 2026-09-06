@@ -1,14 +1,18 @@
 const express = require('express');
-const crypto = require('crypto');
-const jwt = require('jsonwebtoken');
 const mongoose = require('mongoose');
+const User = require('../models/User');
 const MethodologySection = require('../models/MethodologySection');
 const StepSchema = require('../models/StepSchema');
 const Theme = require('../models/Theme');
-const { requireAdminAuth } = require('../middleware/requireAdminAuth');
+const { requireAdmin } = require('../middleware/auth');
+const { generateInviteToken } = require('../services/password');
+const { sendInviteEmail } = require('../services/resend');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
+
+// Toutes les routes ci-dessous sont réservées au rôle admin.
+router.use(requireAdmin);
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -23,13 +27,12 @@ function isObjectIdOr404(id) {
   return id;
 }
 
-/** Compare deux chaînes en temps constant (évite les fuites temporelles). */
-function passwordsMatch(password, expected) {
-  if (!expected) return false;
-  const a = Buffer.from(String(password || ''));
-  const b = Buffer.from(String(expected));
-  if (a.length !== b.length) return false;
-  return crypto.timingSafeEqual(a, b);
+function pick(body, keys) {
+  const out = {};
+  for (const key of keys) {
+    if (body[key] !== undefined) out[key] = body[key];
+  }
+  return out;
 }
 
 function normalizeSteps(value) {
@@ -45,30 +48,106 @@ function normalizeSteps(value) {
     .filter((s, i, arr) => arr.indexOf(s) === i);
 }
 
-function pick(body, keys) {
-  const out = {};
-  for (const key of keys) {
-    if (body[key] !== undefined) out[key] = body[key];
-  }
-  return out;
+/** Préparation du document user renvoyé à l'admin (jamais de hash/token). */
+function serializeUser(u) {
+  const doc = u.toObject ? u.toObject() : u;
+  return {
+    _id: doc._id,
+    email: doc.email,
+    role: doc.role,
+    acceptedAt: doc.acceptedAt,
+    createdAt: doc.createdAt,
+    pending: !doc.passwordHash || !doc.acceptedAt,
+  };
 }
 
-// POST /api/admin/login — vérifie ADMIN_PASSWORD, émet un JWT
+// ---------------------------------------------------------------------------
+// Utilisateurs & invitations
+// ---------------------------------------------------------------------------
+const INVITE_TTL_MS = 48 * 60 * 60 * 1000; // 48 h
+
+router.get(
+  '/users',
+  asyncHandler(async (_req, res) => {
+    const users = await User.find().sort({ createdAt: -1 }).lean();
+    res.json(users.map(serializeUser));
+  })
+);
+
+/** Crée un utilisateur "user" à partir de son email et lui envoie l'invitation. */
 router.post(
-  '/login',
+  '/users',
   asyncHandler(async (req, res) => {
-    if (!process.env.ADMIN_PASSWORD) {
-      throw httpError(500, 'ADMIN_PASSWORD n’est pas configurée côté serveur.');
+    const email = String(req.body?.email || '').trim().toLowerCase();
+    if (!email || !/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email)) {
+      throw httpError(400, 'Adresse e-mail invalide.');
     }
-    if (!process.env.JWT_SECRET) {
-      throw httpError(500, 'JWT_SECRET n’est pas configurée côté serveur.');
+
+    let user = await User.findOne({ email });
+    const isNew = !user;
+    if (isNew) {
+      user = new User({
+        email,
+        role: 'user',
+        inviteToken: generateInviteToken(),
+        inviteExpires: new Date(Date.now() + INVITE_TTL_MS),
+        invitedBy: req.userId,
+      });
+    } else if (user.passwordHash) {
+      throw httpError(409, 'Cet e-mail est déjà un utilisateur actif.');
+    } else {
+      // Déjà en attente → régénère un lien frais (nouvel e-mail).
+      user.inviteToken = generateInviteToken();
+      user.inviteExpires = new Date(Date.now() + INVITE_TTL_MS);
+      user.invitedBy = req.userId;
     }
-    const { password } = req.body || {};
-    if (!passwordsMatch(password, process.env.ADMIN_PASSWORD)) {
-      throw httpError(401, 'Mot de passe incorrect.');
+    await user.save();
+
+    // L'envoi d'e-mail peut échouer (clé Resend absente, solde…) : l'utilisateur
+    // reste en attente et l'admin peut relancer l'invitation.
+    await sendInviteEmail({ email: user.email, token: user.inviteToken });
+
+    res.status(isNew ? 201 : 200).json({
+      user: serializeUser(user.toObject()),
+      message: `E-mail d’invitation envoyé à ${email}.`,
+    });
+  })
+);
+
+/** Renvoie une invitation à un utilisateur encore en attente. */
+router.post(
+  '/users/:id/resend-invite',
+  asyncHandler(async (req, res) => {
+    isObjectIdOr404(req.params.id);
+    const user = await User.findById(req.params.id);
+    if (!user) throw httpError(404, 'Utilisateur introuvable.');
+    if (user.passwordHash) {
+      throw httpError(400, 'Cet utilisateur a déjà configuré son mot de passe.');
     }
-    const token = jwt.sign({ role: 'admin' }, process.env.JWT_SECRET, { expiresIn: '12h' });
-    res.json({ token });
+    user.inviteToken = generateInviteToken();
+    user.inviteExpires = new Date(Date.now() + INVITE_TTL_MS);
+    user.invitedBy = req.userId;
+    await user.save();
+
+    await sendInviteEmail({ email: user.email, token: user.inviteToken });
+    res.json({ user: serializeUser(user.toObject()), message: `Invitation renvoyée à ${user.email}.` });
+  })
+);
+
+router.delete(
+  '/users/:id',
+  asyncHandler(async (req, res) => {
+    isObjectIdOr404(req.params.id);
+    const user = await User.findById(req.params.id);
+    if (!user) throw httpError(404, 'Utilisateur introuvable.');
+    if (user.role === 'admin') {
+      throw httpError(400, 'Impossible de supprimer un compte administrateur.');
+    }
+    if (String(user._id) === String(req.userId)) {
+      throw httpError(400, 'Impossible de supprimer votre propre compte.');
+    }
+    await user.deleteOne();
+    res.json({ ok: true, id: req.params.id });
   })
 );
 
@@ -77,7 +156,6 @@ router.post(
 // ---------------------------------------------------------------------------
 router.get(
   '/methodology',
-  requireAdminAuth,
   asyncHandler(async (_req, res) => {
     const sections = await MethodologySection.find().sort({ order: 1, sectionId: 1 }).lean();
     res.json(sections);
@@ -86,7 +164,6 @@ router.get(
 
 router.put(
   '/methodology/:id',
-  requireAdminAuth,
   asyncHandler(async (req, res) => {
     isObjectIdOr404(req.params.id);
     const body = pick(req.body, ['sectionId', 'title', 'content', 'order', 'appliesToSteps']);
@@ -109,7 +186,6 @@ router.put(
 
 router.post(
   '/methodology',
-  requireAdminAuth,
   asyncHandler(async (req, res) => {
     const body = pick(req.body, ['sectionId', 'title', 'content', 'order', 'appliesToSteps']);
     if (!body.sectionId || !body.title || !body.content) {
@@ -125,7 +201,6 @@ router.post(
 
 router.delete(
   '/methodology/:id',
-  requireAdminAuth,
   asyncHandler(async (req, res) => {
     isObjectIdOr404(req.params.id);
     const section = await MethodologySection.findByIdAndDelete(req.params.id);
@@ -139,7 +214,6 @@ router.delete(
 // ---------------------------------------------------------------------------
 router.get(
   '/step-schemas',
-  requireAdminAuth,
   asyncHandler(async (_req, res) => {
     const schemas = await StepSchema.find().sort({ stepKey: 1 }).lean();
     res.json(schemas);
@@ -148,7 +222,6 @@ router.get(
 
 router.put(
   '/step-schemas/:id',
-  requireAdminAuth,
   asyncHandler(async (req, res) => {
     isObjectIdOr404(req.params.id);
     const body = pick(req.body, ['stepKey', 'jsonSchemaDescription']);
@@ -168,7 +241,6 @@ router.put(
 // ---------------------------------------------------------------------------
 router.get(
   '/themes',
-  requireAdminAuth,
   asyncHandler(async (_req, res) => {
     const themes = await Theme.find().sort({ order: 1, label: 1 }).lean();
     res.json(themes);
@@ -177,7 +249,6 @@ router.get(
 
 router.post(
   '/themes',
-  requireAdminAuth,
   asyncHandler(async (req, res) => {
     const { label, order } = req.body || {};
     if (!label || !String(label).trim()) {
@@ -190,7 +261,6 @@ router.post(
 
 router.delete(
   '/themes/:id',
-  requireAdminAuth,
   asyncHandler(async (req, res) => {
     isObjectIdOr404(req.params.id);
     const theme = await Theme.findByIdAndDelete(req.params.id);

@@ -1,8 +1,8 @@
 import React, { useEffect, useState } from 'react';
-import { adminApi, api, getAdminToken, setAdminToken } from '../api.js';
+import { api } from '../api.js';
 
 /* ------------------------------------------------------------------ */
-/* Sous-composants d'édition                                           */
+/* Éditeur : MethodologySection                                        */
 /* ------------------------------------------------------------------ */
 
 function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
@@ -34,9 +34,9 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
     };
     try {
       const saved = item
-        ? await adminApi.put(`/api/admin/methodology/${item._id}`, payload)
-        : await adminApi.post('/api/admin/methodology', payload);
-      onSaved(saved, item ? false : true);
+        ? await api.put(`/api/admin/methodology/${item._id}`, payload)
+        : await api.post('/api/admin/methodology', payload);
+      onSaved(saved, !item);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -50,7 +50,7 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
     setBusy(true);
     setError(null);
     try {
-      await adminApi.del(`/api/admin/methodology/${item._id}`);
+      await api.del(`/api/admin/methodology/${item._id}`);
       onDeleted(item._id);
     } catch (err) {
       setError(err.message);
@@ -103,6 +103,10 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
   );
 }
 
+/* ------------------------------------------------------------------ */
+/* Éditeur : StepSchema                                                */
+/* ------------------------------------------------------------------ */
+
 function StepSchemaEditor({ item, onSaved }) {
   const [description, setDescription] = useState(item.jsonSchemaDescription || '');
   const [busy, setBusy] = useState(false);
@@ -114,7 +118,7 @@ function StepSchemaEditor({ item, onSaved }) {
     setBusy(true);
     setError(null);
     try {
-      const saved = await adminApi.put(`/api/admin/step-schemas/${item._id}`, {
+      const saved = await api.put(`/api/admin/step-schemas/${item._id}`, {
         jsonSchemaDescription: description,
       });
       onSaved(saved);
@@ -146,7 +150,7 @@ function StepSchemaEditor({ item, onSaved }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Page Admin                                                          */
+/* Éditeur : Theme                                                     */
 /* ------------------------------------------------------------------ */
 
 function ThemeEditorItem({ item, onSaved, onDeleted }) {
@@ -155,17 +159,16 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  async function save(e) {
-    e.preventDefault();
-    if (!label.trim()) return;
+  async function save() {
     setBusy(true);
     setError(null);
     try {
-      const updated = { ...item, label: label.trim(), order: Number(order) };
-      await onSaved(item._id, updated);
+      // Pas de PUT /themes/:id côté API : suppression + recréation.
+      await api.del(`/api/admin/themes/${item._id}`);
+      const created = await api.post('/api/admin/themes', { label: label.trim(), order: Number(order) });
+      onSaved(created);
     } catch (err) {
       setError(err.message);
-    } finally {
       setBusy(false);
     }
   }
@@ -173,8 +176,10 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
   async function remove() {
     if (!window.confirm(`Supprimer le thème « ${item.label} » ?`)) return;
     setBusy(true);
+    setError(null);
     try {
-      await onDeleted(item._id);
+      await api.del(`/api/admin/themes/${item._id}`);
+      onDeleted(item._id);
     } catch (err) {
       setError(err.message);
       setBusy(false);
@@ -211,96 +216,99 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
 /* ------------------------------------------------------------------ */
 
 export default function AdminPage() {
-  const [token, setToken] = useState(getAdminToken());
-  const [password, setPassword] = useState('');
-  const [loginBusy, setLoginBusy] = useState(false);
-  const [loginError, setLoginError] = useState(null);
-
-  const [tab, setTab] = useState('methodology');
+  const [tab, setTab] = useState('users');
+  const [users, setUsers] = useState([]);
   const [sections, setSections] = useState([]);
   const [schemas, setSchemas] = useState([]);
   const [themes, setThemes] = useState([]);
-  const [adding, setAdding] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
+  const [notice, setNotice] = useState(null);
+
+  const [adding, setAdding] = useState(false);
+  const [inviteEmail, setInviteEmail] = useState('');
+  const [inviteBusy, setInviteBusy] = useState(false);
 
   async function loadAll() {
     setLoading(true);
     setError(null);
     try {
-      const [s, sc, t] = await Promise.all([
-        adminApi.get('/api/admin/methodology'),
-        adminApi.get('/api/admin/step-schemas'),
-        adminApi.get('/api/admin/themes'),
+      const [u, s, sc, t] = await Promise.all([
+        api.get('/api/admin/users'),
+        api.get('/api/admin/methodology'),
+        api.get('/api/admin/step-schemas'),
+        api.get('/api/admin/themes'),
       ]);
+      setUsers(u);
       setSections(s);
       setSchemas(sc);
       setThemes(t);
     } catch (err) {
-      if (/authentifi|expir|Bearer/i.test(err.message)) {
-        logout();
-      } else {
-        setError(err.message);
-      }
+      setError(err.message);
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    if (token) loadAll();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [token]);
+    loadAll();
+  }, []);
 
-  function logout() {
-    setAdminToken(null);
-    setToken(null);
-    setSections([]);
-    setSchemas([]);
-    setThemes([]);
+  async function refreshUsers() {
+    try {
+      setUsers(await api.get('/api/admin/users'));
+    } catch (err) {
+      setError(err.message);
+    }
   }
 
-  async function handleLogin(e) {
+  async function invite(e) {
     e.preventDefault();
-    setLoginBusy(true);
-    setLoginError(null);
+    if (!inviteEmail.trim()) return;
+    setInviteBusy(true);
+    setError(null);
+    setNotice(null);
     try {
-      const data = await api.post('/api/admin/login', { password });
-      setAdminToken(data.token);
-      setToken(data.token);
-      setPassword('');
+      const data = await api.post('/api/admin/users', { email: inviteEmail.trim() });
+      setInviteEmail('');
+      setNotice(data.message || 'Invitation envoyée.');
+      await refreshUsers();
     } catch (err) {
-      setLoginError(err.message);
+      setError(err.message);
+      await refreshUsers().catch(() => {});
     } finally {
-      setLoginBusy(false);
+      setInviteBusy(false);
+    }
+  }
+
+  async function resendInvite(id) {
+    setError(null);
+    setNotice(null);
+    try {
+      const data = await api.post(`/api/admin/users/${id}/resend-invite`);
+      setNotice(data.message || 'Invitation renvoyée.');
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function deleteUser(id) {
+    if (!window.confirm('Supprimer cet utilisateur ? Ses sessions resteront en base mais ne lui seront plus accessibles.')) return;
+    setError(null);
+    try {
+      await api.del(`/api/admin/users/${id}`);
+      await refreshUsers();
+    } catch (err) {
+      setError(err.message);
     }
   }
 
   function handleSaved(saved, wasNew) {
-    setSections((prev) => {
-      if (wasNew) return [saved, ...prev];
-      return prev.map((s) => (s._id === saved._id ? saved : s));
-    });
+    setSections((prev) => (wasNew ? [saved, ...prev] : prev.map((s) => (s._id === saved._id ? saved : s))));
   }
 
   function handleDeleted(id) {
     setSections((prev) => prev.filter((s) => s._id !== id));
-  }
-
-  async function saveTheme(id, updated) {
-    // Le backend n'expose pas de PUT /themes/:id : on recrée mentalement…
-    // Correction : PUT n'existant pas, on supprime puis on recrée.
-    const old = themes.find((t) => t._id === id);
-    await adminApi.del(`/api/admin/themes/${id}`);
-    const created = await adminApi.post('/api/admin/themes', { label: updated.label, order: updated.order });
-    setThemes((prev) => [created, ...prev.filter((t) => t._id !== id)].sort((a, b) => a.order - b.order));
-    if (old) return old; // valeur ignorée
-    return created;
-  }
-
-  async function deleteTheme(id) {
-    await adminApi.del(`/api/admin/themes/${id}`);
-    setThemes((prev) => prev.filter((t) => t._id !== id));
   }
 
   async function addTheme(e) {
@@ -310,7 +318,7 @@ export default function AdminPage() {
     if (!label) return;
     setError(null);
     try {
-      const created = await adminApi.post('/api/admin/themes', { label, order });
+      const created = await api.post('/api/admin/themes', { label, order });
       setThemes((prev) => [...prev, created].sort((a, b) => a.order - b.order));
       e.target.reset();
     } catch (err) {
@@ -318,50 +326,23 @@ export default function AdminPage() {
     }
   }
 
-  /* ---------- Login ---------- */
-  if (!token) {
-    return (
-      <div style={{ maxWidth: 440, margin: '40px auto' }}>
-        <div className="card panel">
-          <h1 className="page-title">Administration</h1>
-          <p className="muted">Zone réservée — saisissez le mot de passe admin.</p>
-          <form onSubmit={handleLogin}>
-            <label className="field">
-              Mot de passe admin
-              <input
-                type="password"
-                value={password}
-                onChange={(e) => setPassword(e.target.value)}
-                autoFocus
-                required
-              />
-            </label>
-            {loginError ? <div className="alert alert-error">{loginError}</div> : null}
-            <button type="submit" className="btn-primary" disabled={loginBusy}>
-              {loginBusy ? 'Connexion…' : 'Se connecter'}
-            </button>
-          </form>
-        </div>
-      </div>
-    );
+  function dateFr(value) {
+    if (!value) return '—';
+    return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
   }
 
   return (
     <div>
-      <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
-        <div>
-          <h1 className="page-title" style={{ marginBottom: 0 }}>Administration</h1>
-          <p className="muted">
-            La méthodologie, les schémas de sortie et les thèmes sont stockés en base et injectés
-            dynamiquement dans les prompts.
-          </p>
-        </div>
-        <button type="button" className="btn-ghost" onClick={logout}>
-          Se déconnecter
-        </button>
-      </div>
+      <h1 className="page-title" style={{ marginBottom: 0 }}>Administration</h1>
+      <p className="muted">
+        Invitez des utilisateurs par e-mail (ils configureront leur mot de passe via le lien reçu) et
+        gérez la méthodologie, les schémas de sortie et les thèmes.
+      </p>
 
       <div className="tabs">
+        <button className={`tab ${tab === 'users' ? 'on' : ''}`} onClick={() => setTab('users')}>
+          Utilisateurs ({users.length})
+        </button>
         <button className={`tab ${tab === 'methodology' ? 'on' : ''}`} onClick={() => setTab('methodology')}>
           Méthodologie ({sections.length})
         </button>
@@ -381,8 +362,77 @@ export default function AdminPage() {
           </button>
         </div>
       ) : null}
+      {notice ? (
+        <div className="alert alert-success">
+          {notice}
+          <button type="button" className="btn-ghost" style={{ marginLeft: 12 }} onClick={() => setNotice(null)}>
+            Fermer
+          </button>
+        </div>
+      ) : null}
       {loading ? <p className="muted">Chargement…</p> : null}
 
+      {/* ---------------- Utilisateurs ---------------- */}
+      {tab === 'users' ? (
+        <div>
+          <form className="admin-item" onSubmit={invite}>
+            <h3 style={{ marginTop: 0 }}>Inviter un utilisateur</h3>
+            <p className="muted">
+              Un e-mail (Resend) sera envoyé avec un lien de configuration du mot de passe, valable
+              48 h.
+            </p>
+            <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
+              <label className="field" style={{ flex: 1, minWidth: 260, marginBottom: 0 }}>
+                E-mail
+                <input
+                  type="email"
+                  value={inviteEmail}
+                  onChange={(e) => setInviteEmail(e.target.value)}
+                  placeholder="etudiant@exemple.fr"
+                  required
+                />
+              </label>
+              <button type="submit" className="btn-primary" disabled={inviteBusy || !inviteEmail.trim()}>
+                {inviteBusy ? 'Envoi…' : 'Inviter'}
+              </button>
+            </div>
+          </form>
+
+          {users.map((u) => (
+            <div className="admin-item" key={u._id} style={{ padding: 14 }}>
+              <div style={{ display: 'flex', justifyContent: 'space-between', gap: 12, flexWrap: 'wrap', alignItems: 'center' }}>
+                <div>
+                  <strong>{u.email}</strong>{' '}
+                  {u.role === 'admin' ? (
+                    <span className="badge badge-progress">admin</span>
+                  ) : u.pending ? (
+                    <span className="badge" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
+                      Invitation en attente
+                    </span>
+                  ) : (
+                    <span className="badge badge-done">utilisateur actif</span>
+                  )}
+                  <div className="muted">Inscrit le {dateFr(u.createdAt)}</div>
+                </div>
+                <div className="session-actions">
+                  {u.role !== 'admin' && u.pending ? (
+                    <button type="button" className="btn-ghost" onClick={() => resendInvite(u._id)}>
+                      Renvoyer l’invitation
+                    </button>
+                  ) : null}
+                  {u.role !== 'admin' ? (
+                    <button type="button" className="btn-danger" onClick={() => deleteUser(u._id)}>
+                      Supprimer
+                    </button>
+                  ) : null}
+                </div>
+              </div>
+            </div>
+          ))}
+        </div>
+      ) : null}
+
+      {/* ---------------- Méthodologie ---------------- */}
       {tab === 'methodology' ? (
         <div>
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
@@ -403,16 +453,12 @@ export default function AdminPage() {
             />
           ) : null}
           {sections.map((s) => (
-            <MethodologyEditor
-              key={s._id}
-              item={s}
-              onSaved={handleSaved}
-              onDeleted={handleDeleted}
-            />
+            <MethodologyEditor key={s._id} item={s} onSaved={handleSaved} onDeleted={handleDeleted} />
           ))}
         </div>
       ) : null}
 
+      {/* ---------------- Schémas ---------------- */}
       {tab === 'schemas' ? (
         <div>
           {schemas.map((s) => (
@@ -425,9 +471,14 @@ export default function AdminPage() {
         </div>
       ) : null}
 
+      {/* ---------------- Thèmes ---------------- */}
       {tab === 'themes' ? (
         <div>
-          <form className="admin-item" onSubmit={addTheme} style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: 12, alignItems: 'end' }}>
+          <form
+            className="admin-item"
+            onSubmit={addTheme}
+            style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: 12, alignItems: 'end' }}
+          >
             <label className="field" style={{ marginBottom: 0 }}>
               Nouveau thème
               <input type="text" name="label" placeholder="Ex. Mobilité & transports" required />
@@ -441,7 +492,12 @@ export default function AdminPage() {
             </button>
           </form>
           {themes.map((t) => (
-            <ThemeEditorItem key={t._id} item={t} onSaved={saveTheme} onDeleted={deleteTheme} />
+            <ThemeEditorItem
+              key={t._id}
+              item={t}
+              onSaved={(saved) => setThemes((prev) => [...prev.filter((x) => x._id !== t._id), saved].sort((a, b) => a.order - b.order))}
+              onDeleted={(id) => setThemes((prev) => prev.filter((x) => x._id !== id))}
+            />
           ))}
         </div>
       ) : null}

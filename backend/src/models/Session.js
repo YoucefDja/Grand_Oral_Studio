@@ -13,6 +13,8 @@ const sessionSchema = new mongoose.Schema(
     titre: { type: String, required: true, trim: true },
     theme: { type: String, default: '' },
     contexte: { type: String, default: '' },
+    // Propriétaire : chaque utilisateur ne voit que ses propres sessions.
+    owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     currentStep: { type: Number, default: 0 },
     ligneDirectrice: { type: String, default: '' },
     data: {

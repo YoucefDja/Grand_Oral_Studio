@@ -5,9 +5,14 @@ const { buildStepPrompt, STEP_KEYS, STEP_LABELS } = require('../services/promptB
 const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
 const { buildPptx } = require('../services/pptx');
+const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
 const router = express.Router();
+
+// Toutes les routes de session exigent un utilisateur connecté ; chaque
+// utilisateur n'accède qu'à ses propres sessions (owner).
+router.use(requireAuth);
 
 // Routage des providers selon l'étape :
 //  - étapes 1 à 5  → DeepSeek (deepseek-v4-flash, non-thinking)
@@ -27,11 +32,11 @@ function httpError(status, message) {
   return err;
 }
 
-function findSessionOr404(id) {
+function findSessionOr404(id, userId) {
   if (!mongoose.isValidObjectId(id)) {
     throw httpError(400, 'Identifiant de session invalide.');
   }
-  return Session.findById(id);
+  return Session.findOne({ _id: id, owner: userId });
 }
 
 function isNonEmptyObject(obj) {
@@ -94,8 +99,8 @@ function assertGlossaireValide(session, pourEtape) {
 // GET /api/sessions — liste des sessions (plus récentes d'abord)
 router.get(
   '/',
-  asyncHandler(async (_req, res) => {
-    const sessions = await Session.find().sort({ updatedAt: -1 }).lean();
+  asyncHandler(async (req, res) => {
+    const sessions = await Session.find({ owner: req.userId }).sort({ updatedAt: -1 }).lean();
     res.json(sessions);
   })
 );
@@ -112,6 +117,7 @@ router.post(
       titre: String(titre).trim(),
       theme: theme ? String(theme) : '',
       contexte: contexte ? String(contexte) : '',
+      owner: req.userId,
       currentStep: 0,
     });
     res.status(201).json(session);
@@ -122,7 +128,7 @@ router.post(
 router.get(
   '/:id',
   asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id);
+    const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
     res.json(session);
   })
@@ -132,7 +138,7 @@ router.get(
 router.patch(
   '/:id',
   asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id);
+    const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
     const { titre, theme, contexte, currentStep } = req.body || {};
@@ -155,7 +161,7 @@ router.patch(
 router.delete(
   '/:id',
   asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id);
+    const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
     await session.deleteOne();
     res.json({ ok: true, id: req.params.id });
@@ -175,7 +181,7 @@ router.post(
       );
     }
 
-    const session = await findSessionOr404(req.params.id);
+    const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
     // Règle produit : glossaire obligatoire avant plan et support.
@@ -216,7 +222,7 @@ router.post(
 router.post(
   '/:id/export-pptx',
   asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id);
+    const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
     const glossaire = session.data && session.data.glossaire;

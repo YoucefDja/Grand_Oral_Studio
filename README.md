@@ -9,6 +9,12 @@ La méthodologie, les schémas JSON de sortie et les thèmes sont **stockés en 
 de données** et modifiables via un **panneau admin** (page `/admin`) : rien n'est
 codé en dur dans le frontend ni le backend.
 
+L'application est **authentifiée par rôles** : un compte **admin** initial est
+créé au premier démarrage (variables `ADMIN_EMAIL` / `ADMIN_PASSWORD`), puis
+l'admin **invite par e-mail** (Resend) les utilisateurs, qui reçoivent un lien
+pour configurer leur mot de passe. Chaque utilisateur ne voit que **ses propres
+sessions**.
+
 > Le contenu exact des sections de méthodologie est extrait de
 > [`methodologie-grand-oral.md`](methodologie-grand-oral.md) (fichier métier
 > fourni séparément) — copié **tel quel** dans la base par le script de seed,
@@ -32,10 +38,11 @@ L'application est découpée en **3 services Railway** :
 │   ├── /scripts
 │   │   └── seed-methodology.js   # Seed idempotent (méthodologie + schémas + thèmes)
 │   ├── /src
-│   │   ├── /middleware           # requireAdminAuth (JWT)
-│   │   ├── /models               # MethodologySection, StepSchema, Theme, Session
-│   │   ├── /routes               # themes, sessions, admin
-│   │   ├── /services             # promptBuilder, anthropic, pptx
+│   │   ├── /middleware           # auth : requireAuth / requireAdmin (JWT)
+│   │   ├── /models               # User, MethodologySection, StepSchema, Theme, Session
+│   │   ├── /routes               # themes, sessions, admin, auth
+│   │   ├── /services             # promptBuilder, anthropic, deepseek, pptx, password, resend
+│   │   ├── bootstrap.js          # création du compte admin initial + migration des sessions
 │   │   ├── db.js
 │   │   └── index.js
 │   ├── methodology-content.json  # Contenu des sections extrait du .md (seed)
@@ -82,6 +89,26 @@ strictement identique, seul l'appel change) :
 `ANTHROPIC_API_KEY` reste donc nécessaire, et `DEEPSEEK_API_KEY` est requise pour
 les étapes 1 à 5. Un solde DeepSeek insuffisant renvoie une erreur explicite (402).
 
+### Comptes & connexion
+
+L'accès passe par une authentification **par rôles** (JWT sur
+`Authorization: Bearer`) :
+
+- **admin** — accès complet : invite et gère les utilisateurs (onglet
+  « Utilisateurs » de `/admin`), édite méthodologie/schémas/thèmes, et dispose de
+  ses propres sessions. Le premier compte admin est **créé automatiquement au
+  démarrage** du backend depuis `ADMIN_EMAIL` et `ADMIN_PASSWORD`.
+- **user** — étudiant invité par l'admin : l'admin saisit son **e-mail** dans
+  `/admin` → un **e-mail Resend** est envoyé avec un lien
+  `/accept-invite?token=…` (valable 48 h) → l'utilisateur **configure son mot de
+  passe** puis se connecte sur `/login`. Il ne voit que **ses propres sessions**
+  (créées après connexion).
+
+Sécurité : mots de passe hachés en `scrypt`, liens d'invitation à usage unique
+et expirants, sessions d'API privées par utilisateur. Les anciennes sessions
+(créées avant l'authentification) sont automatiquement rattachées au compte
+admin au démarrage.
+
 ---
 
 ## Prérequis
@@ -103,10 +130,13 @@ les étapes 1 à 5. Un solde DeepSeek insuffisant renvoie une erreur explicite (
 | `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes 1 à 5** |
 | `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
 | `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
-| `JWT_SECRET` | Secret de signature des JWT admin |
-| `ADMIN_PASSWORD` | Mot de passe admin unique du panneau `/admin` |
+| `JWT_SECRET` | Secret de signature des JWT (auth utilisateur + admin) |
+| `ADMIN_EMAIL` | E-mail du compte admin initial (défaut : `admin@tension.local`) |
+| `ADMIN_PASSWORD` | Mot de passe du compte admin initial (créé au démarrage si absent) |
+| `RESEND_API_KEY` | Clé API Resend — envoi des e-mails d'invitation |
+| `RESEND_FROM` | Expéditeur vérifié Resend (défaut : `Tension <onboarding@resend.dev>`) |
 | `PORT` | Port d'écoute (Railway la fournit automatiquement ; défaut local : 4000) |
-| `FRONTEND_URL` | Origine(s) CORS autorisée(s), séparées par des virgules |
+| `FRONTEND_URL` | Origine(s) CORS autorisée(s) **et base des liens d'invitation** (domaine public du frontend) |
 
 ### Frontend (`frontend/.env.example` → `frontend/.env`)
 
@@ -133,7 +163,7 @@ Ou toute instance MongoDB accessible ; la seule exigence est la variable `MONGO_
 ```bash
 cd backend
 npm install
-cp .env.example .env        # puis renseignez MONGO_URL, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, JWT_SECRET, ADMIN_PASSWORD
+cp .env.example .env        # puis renseignez MONGO_URL, JWT_SECRET, ADMIN_EMAIL, ADMIN_PASSWORD, DEEPSEEK_API_KEY, ANTHROPIC_API_KEY, RESEND_API_KEY
 npm run seed                # insère méthodologie (copie du .md), schémas, thèmes — idempotent
 npm run dev                 # http://localhost:4000  (health : /health)
 ```
@@ -151,9 +181,11 @@ Pour pointer vers un autre backend : renseignez `VITE_API_URL` dans `frontend/.e
 
 ### Administration
 
-Rendez-vous sur `/admin`, saisissez `ADMIN_PASSWORD` : vous pouvez alors éditer
-les sections de méthodologie (contenu markdown, ordre, étapes concernées), les
-descriptions des JSON de sortie (`StepSchema`) et les thèmes.
+Au premier démarrage, le backend **crée le compte admin initial**
+(`ADMIN_EMAIL` / `ADMIN_PASSWORD`). Connectez-vous sur `/login` avec ces
+identifiants, puis ouvrez `/admin` pour inviter des utilisateurs (onglet
+« Utilisateurs ») et éditer la méthodologie (contenu markdown, ordre, étapes
+concernées), les descriptions des JSON de sortie (`StepSchema`) et les thèmes.
 
 ---
 
@@ -169,10 +201,11 @@ descriptions des JSON de sortie (`StepSchema`) et les thèmes.
    `/backend`**, nommez le service **`tension-backend`**.
    - Onglet **Variables** :
      - `MONGO_URL` → référence auto `${{MongoDB.MONGO_URL}}` (proposée par Railway)
+     - `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (compte admin initial, créé au démarrage)
      - `DEEPSEEK_API_KEY`, `DEEPSEEK_MODEL` (défaut `deepseek-v4-flash`)
      - `ANTHROPIC_API_KEY` (ne pas supprimer — étape support)
-     - `JWT_SECRET`, `ADMIN_PASSWORD`
-     - `FRONTEND_URL` → l'URL publique du frontend (générée à l'étape 4)
+     - `RESEND_API_KEY`, `RESEND_FROM` (expéditeur vérifié Resend)
+     - `FRONTEND_URL` → l'URL publique du frontend (générée à l'étape 4) — sert aussi de base aux liens d'invitation
    - Onglet **Settings → Networking → Generate Domain** : notez l'URL
      (ex. `https://tension-backend.up.railway.app`).
 4. **Frontend** : « + New » → « GitHub Repo » → même repo, **Root Directory =
@@ -188,7 +221,10 @@ descriptions des JSON de sortie (`StepSchema`) et les thèmes.
 
    ou en local en pointant `MONGO_URL` vers la base Railway. Le script est idempotent.
 
-6. Ouvrez le domaine du frontend : le parcours étudiant est sur `/`, l'admin sur `/admin`.
+6. Ouvrez le domaine du frontend : connectez-vous d'abord avec le compte admin
+   initial (`ADMIN_EMAIL` / `ADMIN_PASSWORD`) sur `/login`, puis invitez vos
+   utilisateurs depuis `/admin` (l'onglet « Utilisateurs » envoie les e-mails
+   d'invitation Resend).
 
 ---
 
@@ -214,23 +250,36 @@ Symptôme : « Impossible de joindre le serveur. Vérifiez votre connexion
 ## API (résumé)
 
 ```
+# Auth (publique)
+POST   /api/auth/login                       # { email, password } → { token, user }
+POST   /api/auth/accept-invite               # { token, password } → activation + connexion
+GET    /api/auth/me                          # (auth) → utilisateur courant
+
+# Thèmes (publique)
 GET    /api/themes
+
+# Sessions (auth requise — uniquement les sessions de l'utilisateur connecté)
 POST   /api/sessions
 GET    /api/sessions
 GET    /api/sessions/:id
 PATCH  /api/sessions/:id
 DELETE /api/sessions/:id
-POST   /api/sessions/:id/generate/:step     # analyse | probleme | recherche | glossaire | plan | support
-POST   /api/sessions/:id/export-pptx        # refuse (400) si glossaire absent ou support non généré
+POST   /api/sessions/:id/generate/:step      # analyse | probleme | recherche | glossaire | plan | support
+POST   /api/sessions/:id/export-pptx         # refuse (400) si glossaire absent ou support non généré
 
-POST   /api/admin/login                     # { password } → { token }
+# Admin (rôle admin requis)
+GET|POST|DELETE /api/admin/users[/:id]
+POST            /api/admin/users/:id/resend-invite
 GET|PUT|POST|DELETE /api/admin/methodology[/:id]
 GET|PUT             /api/admin/step-schemas[/:id]
 GET|POST|DELETE     /api/admin/themes[/:id]
 ```
 
-Les routes `/api/admin/*` (hors login) sont protégées par un JWT émis par
-`/api/admin/login` (validation du mot de passe contre `ADMIN_PASSWORD`).
+Toutes les routes `/api/sessions/*` et `/api/admin/*` exigent un token JWT
+(`Authorization: Bearer …`) émis par `/api/auth/login` ou
+`/api/auth/accept-invite` ; `/api/admin/*` est réservée au rôle `admin`. Les
+sessions renvoyées sont filtrées par propriétaire : un utilisateur ne voit que
+les siennes.
 
 ---
 
@@ -248,6 +297,9 @@ Les routes `/api/admin/*` (hors login) sont protégées par un JWT émis par
 - **Génération .pptx** (`pptxgenjs`) : layout `LAYOUT_WIDE` défini avant l'ajout des
   slides, couleurs hex sans `#`, puces via l'option `bullet` (jamais de « • » littéral),
   objet d'options neuf à chaque `addText`.
+- **Authentification** : mots de passe hachés en `scrypt` (aucune dépendance
+  supplémentaire), JWT signé avec `JWT_SECRET`, invitations par e-mail (Resend) à
+  lien unique expirant (48 h), sessions d'API privées par propriétaire (`owner`).
 - Le seed insère **12 sections de méthodologie** (contenu copié du .md tel quel,
   section `glossaire` rédigée à partir du principe `principe_glossaire_sources`),
   **6 StepSchema** (dont `glossaire` et le champ `ligne_directrice` obligatoire sur
