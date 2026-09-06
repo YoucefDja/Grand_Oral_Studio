@@ -129,7 +129,9 @@ admin au démarrage.
 | `ANTHROPIC_API_KEY` | Clé API Anthropic — **étape 6 (support)** uniquement (jamais exposée au frontend) |
 | `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes 1 à 5** |
 | `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
+| `DEEPSEEK_MAX_TOKENS` | Budget de sortie par génération DeepSeek (défaut : `8192`) |
 | `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
+| `ANTHROPIC_MAX_TOKENS` | Budget de sortie par génération Anthropic (défaut : `8192`) |
 | `JWT_SECRET` | Secret de signature des JWT (auth utilisateur + admin) |
 | `ADMIN_EMAIL` | E-mail du compte admin initial (défaut : `admin@grand-oral-studio.local`) |
 | `ADMIN_PASSWORD` | Mot de passe du compte admin initial (créé au démarrage si absent) |

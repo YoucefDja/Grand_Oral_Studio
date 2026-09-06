@@ -5,7 +5,8 @@
  */
 
 const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
-const MAX_TOKENS = 4000;
+// Budget de sortie configurable (env ANTHROPIC_MAX_TOKENS), 8192 par défaut.
+const MAX_TOKENS = parseInt(process.env.ANTHROPIC_MAX_TOKENS || '8192', 10) || 8192;
 const TIMEOUT_MS = 120000;
 
 function httpError(status, message) {
@@ -99,7 +100,12 @@ async function generateAnthropic(promptSystem, promptUser) {
 
   const data = await response.json();
   if (data.stop_reason === 'max_tokens') {
-    throw httpError(502, 'La réponse de l’IA a été tronquée (max_tokens atteint). Réessayez.');
+    throw httpError(
+      502,
+      'La réponse de l’IA a été tronquée (budget de sortie atteint). ' +
+        'Augmentez ANTHROPIC_MAX_TOKENS côté backend (valeur actuelle : ' +
+        MAX_TOKENS + ') puis réessayez.'
+    );
   }
 
   const text = (data.content || [])

@@ -15,7 +15,9 @@
  */
 
 const DEEPSEEK_API_URL = 'https://api.deepseek.com/v1/chat/completions';
-const MAX_TOKENS = 4000;
+// Budget de sortie configurable (env DEEPSEEK_MAX_TOKENS), 8192 par défaut —
+// les réponses JSON des étapes 1-5 (analyse, glossaire…) dépassent 4000 tokens.
+const MAX_TOKENS = parseInt(process.env.DEEPSEEK_MAX_TOKENS || '8192', 10) || 8192;
 const TIMEOUT_MS = 120000;
 
 function httpError(status, message) {
@@ -91,7 +93,12 @@ async function generateDeepseek(promptSystem, promptUser) {
     throw httpError(502, 'Réponse DeepSeek vide ou inattendue.');
   }
   if (choice.finish_reason === 'length') {
-    throw httpError(502, 'La réponse DeepSeek a été tronquée (max_tokens atteint). Réessayez.');
+    throw httpError(
+      502,
+      'La réponse DeepSeek a été tronquée (budget de sortie atteint). ' +
+        'Augmentez DEEPSEEK_MAX_TOKENS côté backend (valeur actuelle : ' +
+        MAX_TOKENS + ') puis réessayez.'
+    );
   }
 
   return content; // texte brut — le parse JSON est fait par l'appelant
