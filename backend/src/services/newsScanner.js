@@ -352,7 +352,15 @@ async function scrapeSource(source) {
       throw new Error(`Récupération de la source impossible : ${err.message}`);
     }
 
-    const looksXml = /xml|rss|atom/.test(contentType) || /^\s*[<]/.test(text);
+    // Un document EST traité comme un flux XML uniquement si le type de
+    // contenu l'indique, ou si le corps commence explicitement par une
+    // déclaration XML / une balise racine <rss> ou <feed>. Une page HTML
+    // commence par "<!DOCTYPE" ou "<html>" : elle ne doit PAS être lue en XML.
+    const trimmedStart = text.replace(/^\uFEFF/, '').trimStart();
+    const looksXml =
+      /xml|rss|atom/i.test(contentType) ||
+      /^<\?xml/i.test(trimmedStart) ||
+      /^<(rss|feed)[\s>]/i.test(trimmedStart);
     const base = source.url;
     let items = [];
 
