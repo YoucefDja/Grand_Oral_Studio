@@ -9,9 +9,9 @@
  */
 export const LEGAL_CONFIG = {
   // Nom / pseudo de l'éditeur (personne physique).
-  editor: 'YoucefDja',
+  editor: 'Youcef Djarane',
   // Ville de l'éditeur (facultatif pour un projet démo).
-  editorCity: '',
+  editorCity: 'Marseille',
   // E-mail de contact public (adresse no-reply du domaine).
   contactEmail: 'no-reply@mon-grand-oral.site',
   // Nom du service / produit.
