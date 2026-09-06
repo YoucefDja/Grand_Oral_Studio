@@ -38,7 +38,7 @@ Les messages actuels sont trop génériques pour diagnostiquer ces causes.
 Le backend SHALL répondre `200` avec un objet JSON sur sa route racine `GET /`.
 
 #### Scenario: Ouverture du domaine du backend
-- **WHEN** l'utilisateur ouvre `https://tension-backend…` dans un navigateur
+- **WHEN** l'utilisateur ouvre `https://grand-oral-studio-backend…` dans un navigateur
 - **THEN** il reçoit un JSON lisible (nom, `GET /health`, préfixe `/api`) au lieu
   de « Cannot GET / ».
 

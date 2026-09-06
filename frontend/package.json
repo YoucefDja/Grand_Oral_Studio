@@ -1,8 +1,8 @@
 {
-  "name": "tension-frontend",
+  "name": "grand-oral-studio-frontend",
   "version": "1.0.0",
   "private": true,
-  "description": "Frontend Tension — assistant Grand Oral CESI (React + Vite)",
+  "description": "Frontend Grand Oral Studio — assistant Grand Oral CESI (React + Vite)",
   "type": "module",
   "engines": {
     "node": ">=18"

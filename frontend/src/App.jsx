@@ -19,9 +19,9 @@ function Header() {
     <header className="app-header">
       <div className="app-header-inner">
         <Link to={user ? '/' : '/login'} className="brand">
-          <span className="brand-mark">T</span>
+          <span className="brand-mark">GO</span>
           <span>
-            <strong>Tension</strong>
+            <strong>Grand Oral Studio</strong>
             <small>Préparation au Grand Oral CESI</small>
           </span>
         </Link>

@@ -46,8 +46,8 @@ app.use(express.json({ limit: '1mb' }));
 // Route racine — informations générales du service.
 app.get('/', (_req, res) =>
   res.json({
-    service: 'tension-backend',
-    message: 'API Tension — Grand Oral CESI',
+    service: 'grand-oral-studio-backend',
+    message: 'API Grand Oral Studio — assistant Grand Oral CESI',
     health: '/health',
     api: '/api',
   })
@@ -96,7 +96,7 @@ async function start() {
   await migrateOwnerlessSessions(admin);
 
   app.listen(PORT, () => {
-    console.log(`Tension backend démarré sur le port ${PORT}.`);
+    console.log(`Grand Oral Studio backend démarré sur le port ${PORT}.`);
   });
 }
 

@@ -2,7 +2,7 @@
 
 ## Contexte
 
-Le projet "Tension" existe déjà (backend Express + MongoDB, frontend React,
+Le projet "Grand Oral Studio" existe déjà (backend Express + MongoDB, frontend React,
 déployés sur Railway). Modifie le backend pour que les modèles d'IA utilisés
 diffèrent selon l'étape :
 
@@ -101,7 +101,7 @@ OpenAI-compatible suffit.
 
 ## Variable Railway à ajouter après ce changement
 
-Sur le service `tension-backend` dans Railway, Settings → Variables :
+Sur le service `grand-oral-studio-backend` dans Railway, Settings → Variables :
 
 ```
 DEEPSEEK_API_KEY=<ta clé depuis platform.deepseek.com>

@@ -7,7 +7,7 @@ const User = require('./models/User');
 const Session = require('./models/Session');
 const { hashPassword } = require('./services/password');
 
-const DEFAULT_ADMIN_EMAIL = 'admin@tension.local';
+const DEFAULT_ADMIN_EMAIL = 'admin@grand-oral-studio.local';
 
 async function ensureInitialAdmin() {
   const email = (process.env.ADMIN_EMAIL || DEFAULT_ADMIN_EMAIL).trim().toLowerCase();

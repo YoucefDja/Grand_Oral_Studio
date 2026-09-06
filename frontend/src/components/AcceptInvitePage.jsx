@@ -60,7 +60,7 @@ export default function AcceptInvitePage() {
       <div className="card panel">
         <h1 className="page-title">Configurer mon mot de passe</h1>
         <p className="muted">
-          Vous avez été invité(e) à utiliser Tension. Choisissez un mot de passe (8 caractères
+          Vous avez été invité(e) à utiliser Grand Oral Studio. Choisissez un mot de passe (8 caractères
           minimum) pour activer votre compte.
         </p>
         {done ? (

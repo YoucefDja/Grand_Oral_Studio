@@ -32,10 +32,10 @@ export function AuthProvider({ children }) {
     function onLogout() {
       setUser(null);
     }
-    window.addEventListener('tension:logout', onLogout);
+    window.addEventListener('grand_oral_studio:logout', onLogout);
     return () => {
       cancelled = true;
-      window.removeEventListener('tension:logout', onLogout);
+      window.removeEventListener('grand_oral_studio:logout', onLogout);
     };
   }, []);
 

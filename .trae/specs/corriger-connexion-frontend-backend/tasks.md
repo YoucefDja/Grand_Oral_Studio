@@ -2,7 +2,7 @@
 
 - [x] Task 1 : Ajouter la route racine `GET /` du backend (JSON d'information)
   - [x] 1.1 Dans `backend/src/index.js`, ajouter `GET /` renvoyant `200` avec
-        `{ service: "tension-backend", health: "/health", api: "/api/..." }`.
+        `{ service: "grand-oral-studio-backend", health: "/health", api: "/api/..." }`.
   - [x] 1.2 Vérifier qu'aucune route existante (`/health`, `/api/*`) n'est
         impactée (la route racine reste après `express.json`, avant le 404 `/api`).
   - Validation : `node --check backend/src/index.js` puis démarrage local :

@@ -1,4 +1,4 @@
-# Grand Oral Studio — « Tension »
+# Grand Oral Studio
 
 Assistant de préparation au **Grand Oral CESI** : il guide l'étudiant ingénieur à
 travers **6 étapes méthodologiques** — analyse du sujet, problématique, recherche
@@ -28,13 +28,13 @@ L'application est découpée en **3 services Railway** :
 
 | Service | Dossier | Techno | Rôle |
 | --- | --- | --- | --- |
-| `tension-backend` | `/backend` | Node.js + Express + MongoDB (Mongoose) | API, génération Anthropic, export .pptx, admin JWT |
-| `tension-frontend` | `/frontend` | React (Vite) — build statique servi par un mini-serveur SPA | Interface étudiant + page `/admin` |
+| `grand-oral-studio-backend` | `/backend` | Node.js + Express + MongoDB (Mongoose) | API, génération Anthropic, export .pptx, admin JWT |
+| `grand-oral-studio-frontend` | `/frontend` | React (Vite) — build statique servi par un mini-serveur SPA | Interface étudiant + page `/admin` |
 | MongoDB | plugin Railway | MongoDB managé | Base de données |
 
 ```
 .
-├── /backend                  # Service Railway "tension-backend"
+├── /backend                  # Service Railway "grand-oral-studio-backend"
 │   ├── /scripts
 │   │   └── seed-methodology.js   # Seed idempotent (méthodologie + schémas + thèmes)
 │   ├── /src
@@ -48,7 +48,7 @@ L'application est découpée en **3 services Railway** :
 │   ├── methodology-content.json  # Contenu des sections extrait du .md (seed)
 │   ├── package.json
 │   └── .env.example
-├── /frontend                  # Service Railway "tension-frontend"
+├── /frontend                  # Service Railway "grand-oral-studio-frontend"
 │   ├── /src                    # React (Vite) : pages, composants par étape
 │   ├── index.html
 │   ├── static-server.js        # sert dist/ avec fallback SPA (deep links /admin)
@@ -131,10 +131,10 @@ admin au démarrage.
 | `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
 | `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
 | `JWT_SECRET` | Secret de signature des JWT (auth utilisateur + admin) |
-| `ADMIN_EMAIL` | E-mail du compte admin initial (défaut : `admin@tension.local`) |
+| `ADMIN_EMAIL` | E-mail du compte admin initial (défaut : `admin@grand-oral-studio.local`) |
 | `ADMIN_PASSWORD` | Mot de passe du compte admin initial (créé au démarrage si absent) |
 | `RESEND_API_KEY` | Clé API Resend — envoi des e-mails d'invitation |
-| `RESEND_FROM` | Expéditeur vérifié Resend (défaut : `Tension <onboarding@resend.dev>`) |
+| `RESEND_FROM` | Expéditeur vérifié Resend (défaut : `Grand Oral Studio <onboarding@resend.dev>`) |
 | `PORT` | Port d'écoute (Railway la fournit automatiquement ; défaut local : 4000) |
 | `FRONTEND_URL` | Origine(s) CORS autorisée(s) **et base des liens d'invitation** (domaine public du frontend) |
 
@@ -142,7 +142,7 @@ admin au démarrage.
 
 | Variable | Description |
 | --- | --- |
-| `VITE_API_URL` | URL publique du backend (ex. `https://tension-backend.up.railway.app`). Vide en dev = proxy Vite vers `http://localhost:4000`. |
+| `VITE_API_URL` | URL publique du backend (ex. `https://grand-oral-studio-backend.up.railway.app`). Vide en dev = proxy Vite vers `http://localhost:4000`. |
 
 ---
 
@@ -153,7 +153,7 @@ admin au démarrage.
 Avec Docker :
 
 ```bash
-docker run -d --name tension-mongo -p 27017:27017 mongo:7
+docker run -d --name grand-oral-studio-mongo -p 27017:27017 mongo:7
 ```
 
 Ou toute instance MongoDB accessible ; la seule exigence est la variable `MONGO_URL`.
@@ -198,7 +198,7 @@ concernées), les descriptions des JSON de sortie (`StepSchema`) et les thèmes.
 2. **Base de données** : « + New » → « Database » → « MongoDB ». Notez le nom du
    service (ex. `MongoDB`), il sera référencé dans `MONGO_URL`.
 3. **Backend** : « + New » → « GitHub Repo » → sélectionnez le repo, **Root Directory =
-   `/backend`**, nommez le service **`tension-backend`**.
+   `/backend`**, nommez le service **`grand-oral-studio-backend`**.
    - Onglet **Variables** :
      - `MONGO_URL` → référence auto `${{MongoDB.MONGO_URL}}` (proposée par Railway)
      - `JWT_SECRET`, `ADMIN_EMAIL`, `ADMIN_PASSWORD` (compte admin initial, créé au démarrage)
@@ -207,9 +207,9 @@ concernées), les descriptions des JSON de sortie (`StepSchema`) et les thèmes.
      - `RESEND_API_KEY`, `RESEND_FROM` (expéditeur vérifié Resend)
      - `FRONTEND_URL` → l'URL publique du frontend (générée à l'étape 4) — sert aussi de base aux liens d'invitation
    - Onglet **Settings → Networking → Generate Domain** : notez l'URL
-     (ex. `https://tension-backend.up.railway.app`).
+     (ex. `https://grand-oral-studio-backend.up.railway.app`).
 4. **Frontend** : « + New » → « GitHub Repo » → même repo, **Root Directory =
-   `/frontend`**, nommez le service **`tension-frontend`**.
+   `/frontend`**, nommez le service **`grand-oral-studio-frontend`**.
    - Variable `VITE_API_URL` = URL publique du backend (étape 3).
    - Générez aussi son domaine public (Settings → Networking).
 5. **Seed** (une seule fois, après le premier déploiement backend réussi) :
@@ -235,10 +235,10 @@ Symptôme : « Impossible de joindre le serveur. Vérifiez votre connexion
 
 1. **`VITE_API_URL` est figée au build** : inlinée par Vite au moment du build,
    elle ne peut pas être modifiée à chaud. Ajoutez-la dans les variables du
-   service `tension-frontend` (orthographe exacte en MAJUSCULES `VITE_API_URL`,
+   service `grand-oral-studio-frontend` (orthographe exacte en MAJUSCULES `VITE_API_URL`,
    valeur `https://…` **sans slash final**), **puis redéployez le service
    frontend** — sans redéploiement, le build continue d'utiliser l'ancienne valeur.
-2. **Vérifiez que le backend répond** : ouvrez `https://tension-backend…/health`
+2. **Vérifiez que le backend répond** : ouvrez `https://grand-oral-studio-backend…/health`
    dans un navigateur — ou sa racine `/`, qui renvoie un JSON d'information
    (plus de « Cannot GET »).
 3. **CORS** : définissez `FRONTEND_URL` côté backend = domaine **exact** du

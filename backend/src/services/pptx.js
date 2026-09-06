@@ -41,7 +41,7 @@ function cleanBullet(text) {
 }
 
 function addFooter(slide, index, total) {
-  slide.addText('Grand Oral CESI — Tension', {
+  slide.addText('Grand Oral Studio — Grand Oral CESI', {
     x: 0.4,
     y: LAYOUT_H - 0.38,
     w: 6,
@@ -68,7 +68,7 @@ function addFooter(slide, index, total) {
 async function buildPptx(session) {
   const pres = new pptxgen();
   pres.layout = 'LAYOUT_WIDE'; // AVANT tout addSlide
-  pres.author = 'Tension — Grand Oral CESI';
+  pres.author = 'Grand Oral Studio';
 
   const titre = session.titre || 'Présentation Grand Oral';
   const theme = session.theme || '';

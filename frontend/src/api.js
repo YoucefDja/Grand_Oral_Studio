@@ -6,7 +6,7 @@
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 // --- Gestion de l'authentification persistée (token + user) ---
-const AUTH_KEY = 'tension_auth';
+const AUTH_KEY = 'grand_oral_studio_auth';
 
 export function getAuth() {
   try {
@@ -62,7 +62,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
       !path.startsWith('/api/auth/accept-invite')
     ) {
       clearAuth();
-      window.dispatchEvent(new Event('tension:logout'));
+      window.dispatchEvent(new Event('grand_oral_studio:logout'));
     }
     throw new Error(message);
   }
@@ -98,7 +98,7 @@ export async function downloadPptx(sessionId, fallbackName = 'presentation-grand
     }
     if (res.status === 401) {
       clearAuth();
-      window.dispatchEvent(new Event('tension:logout'));
+      window.dispatchEvent(new Event('grand_oral_studio:logout'));
     }
     throw new Error(message);
   }

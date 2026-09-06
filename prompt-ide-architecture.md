@@ -1,4 +1,4 @@
-# Prompt à coller dans l'IDE — plateforme "Tension" (Grand Oral CESI)
+# Prompt à coller dans l'IDE — plateforme "Grand Oral Studio" (Grand Oral CESI)
 
 ## Contexte du repo
 
@@ -12,7 +12,7 @@ déployer sur Railway.
 
 ## Objectif produit
 
-Construis **Tension**, un assistant de préparation au Grand Oral pour les
+Construis **Grand Oral Studio**, un assistant de préparation au Grand Oral pour les
 étudiants du CESI École d'Ingénieurs. L'application guide l'étudiant à travers
 6 étapes séquentielles :
 
@@ -51,12 +51,12 @@ CHAQUE étape et pas seulement citées une fois :**
 ## Structure du repo à créer
 
 ```
-/frontend                    → app React (Vite), service Railway "tension-frontend"
+/frontend                    → app React (Vite), service Railway "grand-oral-studio-frontend"
   /src
   package.json
   vite.config.js
   .env.example
-/backend                     → API Node.js/Express, service Railway "tension-backend"
+/backend                     → API Node.js/Express, service Railway "grand-oral-studio-backend"
   /src
     /models
     /routes
@@ -282,11 +282,11 @@ VITE_API_URL=
 1. Créer un projet Railway.
 2. "+ New" → "Database" → "Add MongoDB".
 3. "+ New" → "GitHub Repo" → sélectionner le repo, Root Directory = `/backend`,
-   nommer le service `tension-backend`. Variables : lier `MONGO_URL` au plugin
+   nommer le service `grand-oral-studio-backend`. Variables : lier `MONGO_URL` au plugin
    MongoDB (référence `${{MongoDB.MONGO_URL}}`), ajouter les autres variables.
    Générer un domaine public (Settings → Networking → Generate Domain).
 4. "+ New" → "GitHub Repo" → même repo, Root Directory = `/frontend`, nommer
-   `tension-frontend`. Variable `VITE_API_URL` = domaine public du backend
+   `grand-oral-studio-frontend`. Variable `VITE_API_URL` = domaine public du backend
    généré à l'étape précédente. Générer aussi son propre domaine public.
 5. Après le premier déploiement backend réussi, exécuter le seed une fois
    (`railway run node scripts/seed-methodology.js` depuis le CLI Railway).

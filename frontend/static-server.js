@@ -3,7 +3,7 @@
  * Gère le fallback SPA : toute route inconnue renvoie index.html, ce qui
  * permet les deep links vers /admin.
  *
- * Utilisé par le service Railway "tension-frontend" (npm start).
+ * Utilisé par le service Railway "grand-oral-studio-frontend" (npm start).
  */
 import { createServer } from 'node:http';
 import { readFile, stat } from 'node:fs/promises';
@@ -63,5 +63,5 @@ createServer(async (req, res) => {
     res.writeHead(500, { 'Content-Type': 'text/plain; charset=utf-8' }).end('Server error');
   }
 }).listen(PORT, () => {
-  console.log(`Tension frontend servi sur le port ${PORT} (dist/).`);
+  console.log(`Grand Oral Studio frontend servi sur le port ${PORT} (dist/).`);
 });
