@@ -1,11 +1,10 @@
 /**
- * Module News — collecte d'articles via Google Custom Search + DeepSeek.
+ * Module News — collecte d'articles via Serper.dev (Google Search API) + DeepSeek.
  *
  * Flux :
  *  1. lit les sources actives en base (NewsSource) + les thèmes admin (Theme) ;
- *  2. pour chaque source, interroge la Google Custom Search JSON API avec un
- *     opérateur site:<hôte> et des mots-clés issus des thèmes admin, restreint
- *     à une période récente (dateRestrict) ;
+ *  2. pour chaque source, interroge l'API Serper.dev (POST /search) avec un
+ *     opérateur site:<hôte> et des mots-clés issus des thèmes admin ;
  *  3. anti-doublon strict : URL d'origine unique en base (NewsArticle.url) —
  *     un article déjà présent est ignoré, jamais inséré deux fois ;
  *  4. récupère mécaniquement le contenu plein de chaque article (lecture
@@ -18,8 +17,8 @@
  *     ont réellement été ajoutés.
  *
  * Tolérant aux pannes : une source en erreur ne bloque jamais le lot entier.
- * Google (Custom Search) est OBLIGATOIRE : sans GOOGLE_SEARCH_API_KEY /
- * GOOGLE_SEARCH_CX configurées, la collecte est refusée (rapport explicite).
+ * Serper est OBLIGATOIRE : sans SERPER_API_KEY configurée, la collecte est
+ * refusée (rapport explicite).
  */
 
 const cheerio = require('cheerio');
@@ -30,7 +29,11 @@ const Theme = require('../models/Theme');
 const { generateDeepseek } = require('./deepseek');
 const { parseJsonStrict } = require('./anthropic'); // simple utilitaire de parsing JSON, aucun appel API
 
-const GOOGLE_SEARCH_URL = 'https://www.googleapis.com/customsearch/v1';
+// Découverte : Serper.dev (Google Search JSON) — POST + clé X-API-KEY.
+const SERPER_SEARCH_URL = 'https://google.serper.dev/search';
+// Pays / langue des résultats Google (les sources françaises restent prioritaires).
+const SERPER_GL = process.env.NEWS_GL || 'fr';
+const SERPER_HL = process.env.NEWS_HL || 'fr';
 
 const MAX_PER_SOURCE = parseInt(process.env.NEWS_MAX_PER_SOURCE || '10', 10) || 10;
 const MAX_TOTAL_PER_RUN = parseInt(process.env.NEWS_MAX_PER_RUN || '50', 10) || 50;
@@ -40,7 +43,16 @@ const NEWS_CONTENT_MAX = parseInt(process.env.NEWS_CONTENT_MAX || '8000', 10) ||
 const AI_TEXT_LIMIT = parseInt(process.env.NEWS_AI_TEXT_LIMIT || '1600', 10) || 1600;
 // Taille des lots d'articles envoyés à DeepSeek (évite de dépasser les budgets).
 const AI_BATCH = 15;
-const DATE_RESTRICT = process.env.NEWS_GOOGLE_DATE_RESTRICT || 'd7';
+// Âge maximum (jours) d'un article conservé, lorsque sa date de publication est
+// connue (défaut : 7 — horizon "récent" du module). Sans date exploitable, pas de filtre.
+const MAX_AGE_DAYS = parseInt(process.env.NEWS_MAX_AGE_DAYS || '7', 10) || 7;
+const MAX_AGE_MS = MAX_AGE_DAYS * 24 * 60 * 60 * 1000;
+
+/** Vrai si la date de publication dépasse l'âge maximum autorisé. */
+function isTooOld(publishedAt) {
+  if (!publishedAt) return false;
+  return Date.now() - publishedAt.getTime() > MAX_AGE_MS;
+}
 
 // Termes "génériques" IA / Big Data utilisés si aucun thème n'est configuré.
 const GENERIC_TERMS = [
@@ -119,15 +131,15 @@ function stripQuery(url) {
 }
 
 /* ------------------------------------------------------------------ *
- * 1) Découverte : Google Custom Search JSON API
+ * 1) Découverte : Serper.dev (Google Search JSON)
  * ------------------------------------------------------------------ */
 
-function googleConfigured() {
-  return Boolean(process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_CX);
+function serperConfigured() {
+  return Boolean(process.env.SERPER_API_KEY);
 }
 
 /**
- * Construit la requête Google pour une source : site:<hôte> + mots-clés issus
+ * Construit la requête Serper pour une source : site:<hôte> + mots-clés issus
  * des thèmes admin (complétés de termes génériques IA / Big Data).
  */
 function buildQuery(hostname, themeLabels) {
@@ -143,51 +155,49 @@ function buildQuery(hostname, themeLabels) {
   return `site:${hostname} (${keywords})`;
 }
 
-/** Interroge l'API Google Custom Search ; retourne la liste des résultats. */
-async function googleSearch(query, num) {
-  const params = new URLSearchParams({
-    key: process.env.GOOGLE_SEARCH_API_KEY,
-    cx: process.env.GOOGLE_SEARCH_CX,
-    q: query,
-    num: String(num),
-  });
-  if (DATE_RESTRICT) params.set('dateRestrict', DATE_RESTRICT);
-
+/** Interroge l'API Serper.dev (/search) ; retourne la liste organic. */
+async function serperSearch(query, num) {
   let response;
   try {
-    response = await fetch(`${GOOGLE_SEARCH_URL}?${params.toString()}`, {
+    response = await fetch(SERPER_SEARCH_URL, {
+      method: 'POST',
+      headers: {
+        'content-type': 'application/json',
+        'x-api-key': process.env.SERPER_API_KEY,
+      },
+      body: JSON.stringify({ q: query, num, gl: SERPER_GL, hl: SERPER_HL }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-      throw new Error('Délai dépassé sur l’API Google Custom Search.');
+      throw new Error('Délai dépassé sur l’API Serper (google.serper.dev).');
     }
-    throw new Error(`Erreur réseau vers Google Custom Search : ${err.message}`);
+    throw new Error(`Erreur réseau vers Serper : ${err.message}`);
   }
 
   if (!response.ok) {
     let detail = '';
-    let reason = '';
     try {
       const body = await response.json();
-      reason = body?.error?.errors?.[0]?.reason || '';
-      detail = body?.error?.message || JSON.stringify(body);
+      detail = body?.error?.message || body?.message || JSON.stringify(body);
     } catch (_e) {
       detail = response.statusText;
     }
-    if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded' || response.status === 429) {
+    if (response.status === 401 || response.status === 403) {
       throw new Error(
-        'Google Custom Search : quota quotidien atteint (100 requêtes/jour gratuites). ' +
-          'Réessayez demain ou ajoutez une clé avec facturation activée.'
+        'Serper a refusé la clé API (401/403). Vérifiez SERPER_API_KEY côté backend.'
       );
     }
-    throw new Error(
-      `Google Custom Search a renvoyé une erreur (${response.status}) : ${detail}`
-    );
+    if (response.status === 429) {
+      throw new Error(
+        'Serper : trop de requêtes ou crédits épuisés (429). Réessayez plus tard.'
+      );
+    }
+    throw new Error(`Serper a renvoyé une erreur (${response.status}) : ${detail}`);
   }
 
   const data = await response.json();
-  return Array.isArray(data.items) ? data.items : [];
+  return Array.isArray(data.organic) ? data.organic : [];
 }
 
 /* ------------------------------------------------------------------ *
@@ -363,14 +373,14 @@ async function generateDailyGlossary(articles, totalNouveaux) {
  * 4) Collecte pour UNE source
  * ------------------------------------------------------------------ */
 
-/** Interroge Google pour une source et renvoie les candidats (pas encore vus). */
-async function googleCandidatesForSource(source, themeLabels) {
+/** Interroge Serper pour une source et renvoie les candidats (pas encore vus). */
+async function serperCandidatesForSource(source, themeLabels) {
   const hostname = hostOf(source.url);
   if (!hostname) throw new Error(`Hôte invalide pour ${source.url}`);
 
   const query = buildQuery(hostname, themeLabels);
-  const num = Math.min(Math.max(MAX_PER_SOURCE, 5), 10); // l'API plafonne à 10/requête
-  const items = await googleSearch(query, num);
+  const num = Math.min(Math.max(MAX_PER_SOURCE, 5), 10); // par requête Serper
+  const items = await serperSearch(query, num);
 
   const candidates = [];
   const seen = new Set();
@@ -402,6 +412,10 @@ async function scrapeNewArticleContents(candidates) {
         logs.push(`Page sans contenu exploitable (${c.url})`);
         continue;
       }
+      if (isTooOld(page.publishedAt)) {
+        logs.push(`Article trop ancien (> ${MAX_AGE_DAYS} j), ignoré (${c.url})`);
+        continue;
+      }
       out.push({
         ...c,
         title: cleanText(page.title || c.title),
@@ -419,10 +433,10 @@ async function scrapeNewArticleContents(candidates) {
 async function scrapeSource(source, themeLabels) {
   const logs = [];
   try {
-    // 1) Découverte Google (hôte autorisé uniquement).
-    const candidates = await googleCandidatesForSource(source, themeLabels);
+    // 1) Découverte Serper (hôte autorisé uniquement).
+    const candidates = await serperCandidatesForSource(source, themeLabels);
     if (!candidates.length) {
-      logs.push('Google n’a retourné aucun résultat pour cette source.');
+      logs.push('Serper n’a retourné aucun résultat pour cette source.');
       return { source: source.name, found: 0, doublons: 0, nouveaux: [], logs };
     }
 
@@ -479,7 +493,7 @@ async function scrapeSource(source, themeLabels) {
 
 /**
  * Exécute le balayage complet. Retourne un rapport agrégé.
- * - Google est OBLIGATOIRE (clé + moteur) : sinon refus explicite.
+ * - Serper est OBLIGATOIRE (clé API) : sinon refus explicite.
  * - DeepSeek est requis pour le filtrage strict par thème admin.
  */
 async function runNewsScan() {
@@ -495,14 +509,14 @@ async function runNewsScan() {
     notes: [],
   };
 
-  if (!googleConfigured()) {
+  if (!serperConfigured()) {
     return {
       ...baseReport,
       error:
-        'Google Custom Search n’est pas configuré (GOOGLE_SEARCH_API_KEY et GOOGLE_SEARCH_CX). ' +
-        'La collecte News est désactivée tant que ces variables ne sont pas renseignées côté backend.',
+        'Serper n’est pas configuré (SERPER_API_KEY). ' +
+        'La collecte News est désactivée tant que cette variable n’est pas renseignée côté backend.',
       notes: [
-        'Module News en attente de configuration Google (clé API + ID du moteur de recherche).',
+        'Module News en attente de configuration Serper (clé API google.serper.dev).',
       ],
     };
   }
@@ -627,4 +641,4 @@ async function runNewsScan() {
   return report;
 }
 
-module.exports = { runNewsScan, todayKey, googleConfigured, googleSearch };
+module.exports = { runNewsScan, todayKey, serperConfigured, serperSearch };

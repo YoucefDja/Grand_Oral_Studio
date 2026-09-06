@@ -126,18 +126,24 @@ affiche une veille automatique : articles récents + **glossaire du jour**
   et sont **modifiables / ajoutables / supprimables** depuis
   **Administration → News — sources**.
 - **Collecte quotidienne** : un **cron** (`node-cron`, défaut 06h30 Europe/Paris,
-  réglable via `NEWS_CRON_*`) parcourt les sources **actives**, parse leur flux
-  RSS/Atom ou leur page HTML, récupère le titre/résumé/date de chaque nouvel
-  article. Un bouton **« Lancer le scraping manuellement »** (même page admin)
-  déclenche le processus à la demande sans attendre le cron.
+  réglable via `NEWS_CRON_*`) interroge pour chaque source **active** l'API
+  **Serper.dev** (résultats Google Search en JSON) avec `site:<hôte>` + les
+  mots-clés des **thèmes admin**, puis récupère mécaniquement le **contenu
+  plein** de chaque article (pour la lecture intégrée dans l'app). Un bouton
+  **« Lancer le scraping manuellement »** (même page admin) déclenche le
+  processus à la demande sans attendre le cron.
+- **Découverte obligatoire via Serper** : sans `SERPER_API_KEY`, la collecte est
+  refusée avec un rapport explicite. Les articles plus vieux que
+  `NEWS_MAX_AGE_DAYS` (défaut `7` j) sont ignorés lorsque la page fournit sa date.
 - **Anti-doublon strict** : l'URL d'origine est **unique** en base
-  (`NewsArticle.url`) ; tout article déjà présent est ignoré. Le scraping reste
-  tolérant : une source injoignable ne bloque jamais le reste du lot.
-- **IA (DeepSeek)** : quand `DEEPSEEK_API_KEY` est présente, chaque lot d'articles
-  est classifié (résumé en français, catégorie IA/Big Data/Cloud, tags) en
-  vérifiant qu'il provient bien d'une source autorisée, puis le **glossaire du
-  jour** (`NewsGlossary`, un document par date) est généré. Sans clé DeepSeek,
-  la collecte fonctionne quand même mais sans résumé IA ni glossaire.
+  (`NewsArticle.url`) ; tout article déjà présent est ignoré. La collecte reste
+  tolérante : une source injoignable ne bloque jamais le reste du lot.
+- **IA (DeepSeek, seul fournisseur News)** : chaque lot d'articles est jugé
+  **strictement par rapport aux thèmes admin** — un article hors-thème ou hors
+  hôte autorisé est **rejeté** (jamais stocké). Les articles retenus sont
+  résumés et classés (catégorie IA/Big Data/Cloud, tags, thèmes couverts), puis
+  le **glossaire du jour** (`NewsGlossary`, un document par date) est généré —
+  uniquement si de nouveaux articles ont réellement été insérés.
 
 Schémas associés : `NewsSource`, `NewsArticle`, `NewsGlossary`
 (fichiers `backend/src/models/`).
@@ -174,11 +180,11 @@ Détails dans [frontend-mobile/README.md](frontend-mobile/README.md).
 | `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes 1 à 5** + module News (filtrage thèmes + glossaire) |
 | `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
 | `DEEPSEEK_MAX_TOKENS` | Budget de sortie par génération DeepSeek (défaut : `8192`) |
-| `GOOGLE_SEARCH_API_KEY` | Clé API Google Custom Search — **requise pour la collecte News** |
-| `GOOGLE_SEARCH_CX` | ID du moteur de recherche Programmable Google (cx) — **requis pour la collecte News** |
-| `NEWS_GOOGLE_DATE_RESTRICT` | Fraîcheur des résultats Google (défaut : `d7` — ex. `d1`, `d3`) |
+| `SERPER_API_KEY` | Clé API **Serper.dev** (Google Search JSON) — **requise pour la collecte News** |
+| `NEWS_MAX_AGE_DAYS` | Âge max (jours) d'un article conservé, si la page fournit sa date (défaut : `7`) |
 | `NEWS_CONTENT_MAX` | Longueur max du contenu stocké par article (lecture intégrée, défaut : `8000`) |
 | `NEWS_AI_TEXT_LIMIT` | Caractères d'article envoyés à DeepSeek pour le jugement (défaut : `1600`) |
+| `NEWS_GL` / `NEWS_HL` | Pays / langue des résultats Google renvoyés par Serper (défaut : `fr`) |
 | `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
 | `ANTHROPIC_MAX_TOKENS` | Budget de sortie par génération Anthropic (défaut : `8192`) |
 | `JWT_SECRET` | Secret de signature des JWT (auth utilisateur + admin) |
