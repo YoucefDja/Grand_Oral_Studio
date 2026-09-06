@@ -519,3 +519,71 @@ button .spin {
   white-space: pre-wrap;
   margin: 6px 0;
 }
+
+/* ---------- Étape Problématique : choix de la formulation ---------- */
+.formulation-list {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 12px;
+}
+.formulation-option {
+  display: flex;
+  align-items: flex-start;
+  gap: 12px;
+  width: 100%;
+  text-align: left;
+  background: #fff;
+  border: 1.5px solid var(--line);
+  border-radius: 12px;
+  padding: 14px 16px;
+  cursor: pointer;
+  transition: border-color 0.15s ease, box-shadow 0.15s ease, background 0.15s ease;
+}
+.formulation-option:hover:not(:disabled) {
+  border-color: var(--cesi-accent);
+}
+.formulation-option.selected {
+  border-color: var(--cesi-accent);
+  background: var(--cesi-lighter);
+  box-shadow: 0 0 0 3px rgba(46, 116, 181, 0.14);
+}
+.formulation-option:disabled {
+  opacity: 0.65;
+  cursor: not-allowed;
+}
+.formulation-radio {
+  flex: none;
+  width: 22px;
+  height: 22px;
+  margin-top: 2px;
+  border-radius: 50%;
+  border: 2px solid var(--cesi-accent);
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 13px;
+  font-weight: 800;
+  color: var(--cesi-accent);
+}
+.formulation-option.selected .formulation-radio {
+  background: var(--cesi-accent);
+  color: #fff;
+}
+.formulation-body {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  min-width: 0;
+}
+.formulation-text {
+  font-weight: 700;
+  color: var(--cesi-primary);
+  line-height: 1.45;
+}
+.formulation-note {
+  color: var(--ink-soft);
+  font-size: 13.5px;
+  line-height: 1.5;
+  white-space: pre-line;
+}

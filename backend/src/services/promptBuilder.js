@@ -55,6 +55,30 @@ function dataBlock(label, obj) {
   ].join('\n');
 }
 
+/**
+ * Réduit l'objet "probleme" (2 à 4 formulations) à la SEULE formulation retenue
+ * pour les étapes suivantes : celle pointée par `recommandation` (choisie par
+ * l'étudiant à l'étape 2). Retombe sur la première formulation si le marqueur
+ * est absent ou incohérent, et conserve la ligne directrice associée.
+ */
+function problemeRetenuPourSuite(probleme) {
+  if (!probleme || typeof probleme !== 'object' || Array.isArray(probleme)) return probleme;
+  const formulations = Array.isArray(probleme.formulations) ? probleme.formulations : [];
+  if (formulations.length === 0) return probleme;
+
+  const recommandation = String(probleme.recommandation || '').trim();
+  const retenue =
+    formulations.find(
+      (f) => f && typeof f === 'object' && String(f.formulation || '').trim() === recommandation
+    ) || formulations[0];
+
+  return {
+    ligne_directrice:
+      typeof probleme.ligne_directrice === 'string' ? probleme.ligne_directrice : '',
+    formulation_retenue: retenue,
+  };
+}
+
 async function buildStepPrompt(session, stepKey) {
   const sections = await MethodologySection.find({
     appliesToSteps: { $in: [stepKey, 'all'] },
@@ -129,9 +153,15 @@ async function buildStepPrompt(session, stepKey) {
     `Étape en cours : « ${STEP_LABELS[stepKey] || stepKey} ». Produis la sortie attendue pour cette étape, en suivant strictement la méthodologie fournie ci-dessus.`,
   ];
 
-  const deps = (STEP_DEPENDENCIES[stepKey] || []).map((key) =>
-    dataBlock(STEP_LABELS[key], session.data && session.data[key])
-  );
+  const deps = (STEP_DEPENDENCIES[stepKey] || []).map((key) => {
+    let obj = session.data && session.data[key];
+    // La problématique peut contenir 2 à 4 formulations candidates : pour les
+    // étapes suivantes on ne réinjecte que la formulation RETENUE (celle pointée
+    // par "recommandation"), pas toutes les alternatives, afin que le fil de la
+    // démonstration reste unique.
+    if (key === 'probleme') obj = problemeRetenuPourSuite(obj);
+    return dataBlock(STEP_LABELS[key], obj);
+  });
 
   const user = [...userLines, ...deps].filter((l) => l !== '' && l != null).join('\n');
 

@@ -58,6 +58,18 @@ export default function WorkspacePage() {
     [id]
   );
 
+  // Étape 2 : l'étudiant choisit SA formulation parmi celles générées.
+  // Persiste le choix (recommandation + ligne directrice) et met à jour la session.
+  const handleChoisirProbleme = useCallback(
+    async (payload) => {
+      setStepError(null);
+      const updated = await api.post(`/api/sessions/${id}/choisir-probleme`, payload);
+      setSession(updated);
+      return updated;
+    },
+    [id]
+  );
+
   const goStep = useCallback(
     (index) => {
       if (!session) return;
@@ -128,6 +140,7 @@ export default function WorkspacePage() {
         onGenerate={handleGenerate}
         goStep={goStep}
         onSessionRefresh={loadSession}
+        onChoisirProbleme={handleChoisirProbleme}
       />
     </div>
   );

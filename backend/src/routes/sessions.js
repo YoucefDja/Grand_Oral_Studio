@@ -202,17 +202,108 @@ router.post(
     }
     validateStepOutput(stepKey, parsed);
 
+    let regenereProbleme = false;
     if (stepKey === 'probleme') {
+      // Régénération de la problématique : un contenu précédent existait peut-être.
+      regenereProbleme = isNonEmptyObject(session.data && session.data.probleme);
       session.ligneDirectrice = String(parsed.ligne_directrice).trim();
+      if (regenereProbleme) {
+        // Les étapes 3 à 6 étaient bâties sur l'ancienne problématique : elles
+        // doivent être re-générées (nouvelle recommandation = choix de l'IA).
+        ['recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
+          if (session.data && session.data[k]) session.data[k] = {};
+        });
+      }
     }
 
     session.data[stepKey] = parsed;
     session.markModified('data');
 
-    // Avance la progression si la génération est un pas en avant.
+    // Avance la progression si la génération est un pas en avant. Si la
+    // problématique a été régénérée alors que le parcours était déjà avancé, on
+    // rabat currentStep sur la recherche (étape suivante) pour forcer le
+    // recommencement des étapes aval.
     const nextIndex = STEP_KEYS.indexOf(stepKey) + 1;
     session.currentStep = Math.max(session.currentStep || 0, nextIndex);
+    if (regenereProbleme) {
+      session.currentStep = Math.min(session.currentStep, nextIndex);
+    }
 
+    await session.save();
+    res.json(session);
+  })
+);
+
+// POST /api/sessions/:id/choisir-probleme
+// L'étudiant choisit, parmi les formulations générées à l'étape 2, celle qu'il
+// défendra : met à jour "recommandation" (utilisée ensuite par promptBuilder
+// pour ne réinjecter que cette formulation dans les étapes 3 à 6) et permet
+// d'affiner la ligne directrice. Body : { formulation, ligneDirectrice? }.
+router.post(
+  '/:id/choisir-probleme',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+
+    const probleme = session.data && session.data.probleme;
+    const formulations = Array.isArray(probleme?.formulations) ? probleme.formulations : [];
+    if (formulations.length === 0) {
+      throw httpError(400, 'Aucune formulation à choisir : générez d’abord la problématique (étape 2).');
+    }
+
+    const formulation = String(req.body?.formulation || '').trim();
+    const index = Number.isInteger(req.body?.index) ? req.body.index : -1;
+    const retenue =
+      formulations.find((f) => f && typeof f === 'object' && String(f.formulation || '').trim() === formulation) ??
+      (index >= 0 && index < formulations.length ? formulations[index] : null);
+    if (!retenue || typeof retenue !== 'object') {
+      throw httpError(400, 'La formulation choisie ne correspond à aucune des formulations générées.');
+    }
+
+    const ancienneRecommandation = String(probleme.recommandation || '').trim();
+    const nouvelleRecommandation = String(retenue.formulation || '').trim();
+    const ancienneLD = String(probleme.ligne_directrice || '').trim();
+
+    // La formulation retenue devient la référence pour toute la suite du parcours.
+    probleme.recommandation = nouvelleRecommandation;
+    probleme.justification_recommandation =
+      [
+        `Formulation choisie par l'étudiant.`,
+        retenue.pourquoi_discutable ? `Pourquoi elle est discutable : ${retenue.pourquoi_discutable}` : '',
+        retenue.pourquoi_bornee_par_le_sujet
+          ? `Pourquoi elle reste bornée par le sujet : ${retenue.pourquoi_bornee_par_le_sujet}`
+          : '',
+      ]
+        .filter(Boolean)
+        .join(' ');
+
+    // Ligne directrice éventuellement ajustée par l'étudiant après son choix.
+    let nouvelleLD = ancienneLD;
+    if (req.body?.ligneDirectrice !== undefined) {
+      nouvelleLD = String(req.body.ligneDirectrice).trim();
+      if (!nouvelleLD) {
+        throw httpError(400, 'La ligne directrice ne peut pas être vide.');
+      }
+      probleme.ligne_directrice = nouvelleLD;
+      session.ligneDirectrice = nouvelleLD;
+    } else if (ancienneLD) {
+      session.ligneDirectrice = ancienneLD;
+    }
+
+    // Si la formulation retenue OU la ligne directrice CHANGE, les étapes aval
+    // (recherche → support) sont basées sur l'ancienne problématique / l'ancien
+    // fil rouge : elles doivent être re-générées (elles ne sont plus valides).
+    const changementProbleme = ancienneRecommandation && ancienneRecommandation !== nouvelleRecommandation;
+    const changementLD = nouvelleLD && nouvelleLD !== ancienneLD;
+    if (changementProbleme || changementLD) {
+      ['recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
+        if (session.data && session.data[k]) session.data[k] = {};
+      });
+      const seuil = STEP_KEYS.indexOf('probleme') + 1; // bloque à la recherche (étape 3)
+      session.currentStep = Math.min(session.currentStep || 0, seuil);
+    }
+
+    session.markModified('data');
     await session.save();
     res.json(session);
   })
