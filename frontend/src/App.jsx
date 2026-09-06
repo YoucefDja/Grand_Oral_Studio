@@ -8,9 +8,9 @@ import LoginPage from './components/LoginPage.jsx';
 import AcceptInvitePage from './components/AcceptInvitePage.jsx';
 import NewsPage from './components/NewsPage.jsx';
 
-/** Sélecteurs langue (FR/EN) + thème (Clair/Sombre/Auto) dans l'en-tête. */
+/** Sélecteurs langue (FR/EN) + bouton unique thème clair/sombre (lune/soleil). */
 function DisplayPrefs() {
-  const { lang, setLang, theme, setTheme, t } = useSettings();
+  const { lang, setLang, setTheme, isDark, t } = useSettings();
 
   const seg = (active) => ({
     background: active ? 'rgba(255,255,255,0.92)' : 'transparent',
@@ -21,6 +21,20 @@ function DisplayPrefs() {
     fontSize: 12,
     fontWeight: 700,
   });
+
+  const themeBtn = {
+    background: 'rgba(255,255,255,0.14)',
+    color: '#fff',
+    border: '1px solid rgba(255,255,255,0.5)',
+    borderRadius: 999,
+    padding: '3px 10px',
+    fontSize: 15,
+    lineHeight: 1.35,
+  };
+
+  function toggleTheme() {
+    setTheme(isDark ? 'light' : 'dark');
+  }
 
   return (
     <span style={{ display: 'inline-flex', gap: 6, alignItems: 'center', flexWrap: 'wrap' }}>
@@ -35,20 +49,15 @@ function DisplayPrefs() {
           EN
         </button>
       </span>
-      <span
-        title={t('settings.theme')}
-        style={{ display: 'inline-flex', gap: 4, alignItems: 'center' }}
+      <button
+        type="button"
+        onClick={toggleTheme}
+        style={themeBtn}
+        aria-label={t('settings.toggleTheme')}
+        title={isDark ? t('settings.themeLight') : t('settings.themeDark')}
       >
-        <button type="button" onClick={() => setTheme('light')} style={seg(theme === 'light')}>
-          {t('settings.themeLight')}
-        </button>
-        <button type="button" onClick={() => setTheme('dark')} style={seg(theme === 'dark')}>
-          {t('settings.themeDark')}
-        </button>
-        <button type="button" onClick={() => setTheme('system')} style={seg(theme === 'system')}>
-          {t('settings.themeSystem')}
-        </button>
-      </span>
+        {isDark ? '☀' : '☾'}
+      </button>
     </span>
   );
 }

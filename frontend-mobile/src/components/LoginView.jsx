@@ -14,13 +14,29 @@ const cardSeg = (active) => ({
   lineHeight: 1.5,
 });
 
-/* Sélecteurs FR/EN + thème (Clair/Sombre/Auto), styles 100 % inline. */
+/* Sélecteurs FR/EN (pastilles) + bouton unique thème clair/sombre (lune/soleil). */
 function DisplayControls() {
-  const { lang, setLang, theme, setTheme, t } = useSettings();
+  const { lang, setLang, setTheme, isDark, t } = useSettings();
 
   const labelStyle = { fontSize: 11, fontWeight: 600, color: 'var(--ink-soft)' };
-  const groupStyle = { display: 'inline-flex', alignItems: 'center', gap: 6 };
   const buttonsStyle = { display: 'inline-flex', gap: 4 };
+  const themeBtn = {
+    background: 'transparent',
+    color: isDark ? '#9cc3ea' : 'var(--cesi-primary)',
+    border: '1px solid var(--line)',
+    borderRadius: 999,
+    width: 32,
+    height: 32,
+    fontSize: 17,
+    lineHeight: 1,
+    display: 'inline-flex',
+    alignItems: 'center',
+    justifyContent: 'center',
+  };
+
+  function toggleTheme() {
+    setTheme(isDark ? 'light' : 'dark');
+  }
 
   return (
     <div
@@ -33,7 +49,7 @@ function DisplayControls() {
         marginBottom: 16,
       }}
     >
-      <span style={groupStyle}>
+      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
         <span style={labelStyle}>{t('settings.language')}</span>
         <span style={buttonsStyle}>
           <button
@@ -54,35 +70,15 @@ function DisplayControls() {
           </button>
         </span>
       </span>
-      <span style={groupStyle}>
-        <span style={labelStyle}>{t('settings.theme')}</span>
-        <span style={buttonsStyle}>
-          <button
-            type="button"
-            aria-pressed={theme === 'light'}
-            onClick={() => setTheme('light')}
-            style={cardSeg(theme === 'light')}
-          >
-            {t('settings.themeLight')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={theme === 'dark'}
-            onClick={() => setTheme('dark')}
-            style={cardSeg(theme === 'dark')}
-          >
-            {t('settings.themeDark')}
-          </button>
-          <button
-            type="button"
-            aria-pressed={theme === 'system'}
-            onClick={() => setTheme('system')}
-            style={cardSeg(theme === 'system')}
-          >
-            {t('settings.themeSystem')}
-          </button>
-        </span>
-      </span>
+      <button
+        type="button"
+        onClick={toggleTheme}
+        style={themeBtn}
+        aria-label={t('settings.toggleTheme')}
+        title={isDark ? t('settings.themeLight') : t('settings.themeDark')}
+      >
+        {isDark ? '☀' : '☾'}
+      </button>
     </div>
   );
 }

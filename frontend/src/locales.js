@@ -23,6 +23,7 @@ export const FR = {
   // ---- Réglages langue / thème ----
   'settings.language': 'Langue',
   'settings.theme': 'Thème',
+  'settings.toggleTheme': 'Basculer le thème (clair/sombre)',
   'settings.themeLight': 'Clair',
   'settings.themeDark': 'Sombre',
   'settings.themeSystem': 'Auto',
@@ -346,6 +347,7 @@ export const EN = {
 
   'settings.language': 'Language',
   'settings.theme': 'Theme',
+  'settings.toggleTheme': 'Toggle theme (light/dark)',
   'settings.themeLight': 'Light',
   'settings.themeDark': 'Dark',
   'settings.themeSystem': 'Auto',

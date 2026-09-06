@@ -89,14 +89,17 @@ export function SettingsProvider({ children }) {
   const themeRef = useRef(theme);
   themeRef.current = theme;
 
-  // Compte connecté → ses préférences (serveur) font foi et remplacent le local.
+  // Compte connecté → on applique ses préférences SEULEMENT si elles ont été
+  // explicitement choisies. Les valeurs « système » (theme system / langue fr)
+  // sont des défauts : elles n'écrasent pas un choix fait avant/après connexion
+  // (sinon le dark choisi avant de se connecter serait perdu au login).
   useEffect(() => {
     if (!user) return;
-    if (LANGS.includes(user.language)) {
+    if (user.language && user.language !== 'fr') {
       setLangState(user.language);
       writeLS(KEY_LANG, user.language);
     }
-    if (THEMES.includes(user.theme)) {
+    if (user.theme === 'light' || user.theme === 'dark') {
       setThemeState(user.theme);
       writeLS(KEY_THEME, user.theme);
     }
