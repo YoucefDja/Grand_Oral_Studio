@@ -331,6 +331,7 @@ function NewsScanPanel({ onScan }) {
       </div>
       {report ? (
         <div className="news-status" style={{ marginTop: 12 }}>
+          {report.error ? <div className="alert alert-error">{report.error}</div> : null}
           <strong>Dernière collecte ({report.date || '—'})</strong> : {report.totalNouveaux} nouvel(le)(s)
           article(s) récupéré(s), {report.doublonsIgnores} doublon(s) ignoré(s) sur {report.totalTrouves}{' '}
           lien(s) trouvé(s).

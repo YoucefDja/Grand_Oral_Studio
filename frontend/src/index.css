@@ -656,6 +656,59 @@ button .spin {
   background: var(--warn-bg);
   color: var(--warn);
 }
+.news-theme {
+  background: var(--cesi-tint, #eef3fb);
+  color: var(--cesi-primary, #00458f);
+}
+.news-title-btn {
+  border: 0;
+  background: none;
+  padding: 0;
+  margin: 0;
+  font: inherit;
+  color: var(--ink);
+  text-align: left;
+  cursor: pointer;
+}
+.news-title-btn:hover {
+  color: var(--cesi-accent);
+}
+.btn-link {
+  border: 0;
+  background: none;
+  padding: 0;
+  font: inherit;
+  cursor: pointer;
+  color: var(--cesi-accent);
+  text-align: left;
+}
+/* Lecteur d'article intégré (News) */
+.news-reader .reader-title {
+  font-size: 24px;
+  line-height: 1.3;
+  margin: 14px 0 10px;
+}
+.news-reader .reader-lead {
+  font-size: 15.5px;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  border-left: 3px solid var(--cesi-primary, #00458f);
+  padding-left: 12px;
+}
+.reader-body {
+  margin-top: 16px;
+}
+.reader-body p {
+  line-height: 1.7;
+  margin: 0 0 12px;
+  color: var(--ink);
+}
+.reader-foot {
+  margin-top: 20px;
+  border-top: 1px dashed var(--line);
+  padding-top: 12px;
+  font-size: 13px;
+}
 .news-glossary {
   list-style: none;
   margin: 0;

@@ -171,9 +171,14 @@ Détails dans [frontend-mobile/README.md](frontend-mobile/README.md).
 | --- | --- |
 | `MONGO_URL` | URI MongoDB (auto-fournie par Railway via le plugin ; renseignée en local) |
 | `ANTHROPIC_API_KEY` | Clé API Anthropic — **étape 6 (support)** uniquement (jamais exposée au frontend) |
-| `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes 1 à 5** |
+| `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes 1 à 5** + module News (filtrage thèmes + glossaire) |
 | `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
 | `DEEPSEEK_MAX_TOKENS` | Budget de sortie par génération DeepSeek (défaut : `8192`) |
+| `GOOGLE_SEARCH_API_KEY` | Clé API Google Custom Search — **requise pour la collecte News** |
+| `GOOGLE_SEARCH_CX` | ID du moteur de recherche Programmable Google (cx) — **requis pour la collecte News** |
+| `NEWS_GOOGLE_DATE_RESTRICT` | Fraîcheur des résultats Google (défaut : `d7` — ex. `d1`, `d3`) |
+| `NEWS_CONTENT_MAX` | Longueur max du contenu stocké par article (lecture intégrée, défaut : `8000`) |
+| `NEWS_AI_TEXT_LIMIT` | Caractères d'article envoyés à DeepSeek pour le jugement (défaut : `1600`) |
 | `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
 | `ANTHROPIC_MAX_TOKENS` | Budget de sortie par génération Anthropic (défaut : `8192`) |
 | `JWT_SECRET` | Secret de signature des JWT (auth utilisateur + admin) |
@@ -188,7 +193,6 @@ Détails dans [frontend-mobile/README.md](frontend-mobile/README.md).
 | `NEWS_CRON_TZ` | Fuseau du cron (défaut : `Europe/Paris`) |
 | `NEWS_MAX_PER_SOURCE` | Plafond d'articles nouveaux par source et par exécution (défaut : `10`) |
 | `NEWS_MAX_PER_RUN` | Plafond total d'articles nouveaux par exécution (défaut : `50`) |
-| `NEWS_FETCH_LIMIT` | Nombre max de liens analysés par source (défaut : `200`) |
 
 ### Frontend (`frontend/.env.example` → `frontend/.env`)
 

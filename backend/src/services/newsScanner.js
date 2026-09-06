@@ -1,44 +1,57 @@
 /**
- * Module News — moteur de collecte d'articles.
+ * Module News — collecte d'articles via Google Custom Search + DeepSeek.
  *
  * Flux :
- *  1. lit les sources actives en base (NewsSource) ;
- *  2. pour chaque source, récupère sa page/flux, extrait les liens d'articles ;
- *  3. anti-doublon strict : URL d'origine unique en base (NewsArticle.url) ;
+ *  1. lit les sources actives en base (NewsSource) + les thèmes admin (Theme) ;
+ *  2. pour chaque source, interroge la Google Custom Search JSON API avec un
+ *     opérateur site:<hôte> et des mots-clés issus des thèmes admin, restreint
+ *     à une période récente (dateRestrict) ;
+ *  3. anti-doublon strict : URL d'origine unique en base (NewsArticle.url) —
  *     un article déjà présent est ignoré, jamais inséré deux fois ;
- *  4. récupère le contenu de chaque nouvel article (titre, résumé, date) ;
- *  5. DeepSeek structure/classifie les articles (résumé + thème) si la clé
- *     existe — et confirme qu'ils proviennent des sources autorisées ;
- *  6. génère le glossaire du jour (NewsGlossary) via DeepSeek.
+ *  4. récupère mécaniquement le contenu plein de chaque article (lecture
+ *     intégrée dans l'app web/mobile) ;
+ *  5. DeepSeek — SEUL fournisseur IA utilisé ici — juge la pertinence STRICTE
+ *     par rapport aux thèmes admin, vérifie la provenance (source autorisée),
+ *     et produit résumé / catégorie / tags / thèmes retenus. Un article qui ne
+ *     correspond à AUCUN thème admin est ignoré (jamais stocké) ;
+ *  6. génère le glossaire du jour (NewsGlossary) via DeepSeek si des articles
+ *     ont réellement été ajoutés.
  *
  * Tolérant aux pannes : une source en erreur ne bloque jamais le lot entier.
+ * Google (Custom Search) est OBLIGATOIRE : sans GOOGLE_SEARCH_API_KEY /
+ * GOOGLE_SEARCH_CX configurées, la collecte est refusée (rapport explicite).
  */
 
 const cheerio = require('cheerio');
 const NewsSource = require('../models/NewsSource');
 const NewsArticle = require('../models/NewsArticle');
 const NewsGlossary = require('../models/NewsGlossary');
+const Theme = require('../models/Theme');
 const { generateDeepseek } = require('./deepseek');
-const { parseJsonStrict } = require('./anthropic');
+const { parseJsonStrict } = require('./anthropic'); // simple utilitaire de parsing JSON, aucun appel API
 
-const UA =
-  'Mozilla/5.0 (compatible; GrandOralStudioNews/1.0; +https://grand-oral-studio.local)';
+const GOOGLE_SEARCH_URL = 'https://www.googleapis.com/customsearch/v1';
 
 const MAX_PER_SOURCE = parseInt(process.env.NEWS_MAX_PER_SOURCE || '10', 10) || 10;
 const MAX_TOTAL_PER_RUN = parseInt(process.env.NEWS_MAX_PER_RUN || '50', 10) || 50;
-const TIMEOUT_MS = 20000;
-const FETCH_LIMIT = parseInt(process.env.NEWS_FETCH_LIMIT || '200', 10) || 200;
+const TIMEOUT_MS = 25000;
+const NEWS_CONTENT_MAX = parseInt(process.env.NEWS_CONTENT_MAX || '8000', 10) || 8000;
+// Nombre max de caractères d'article envoyés à DeepSeek pour le jugement.
+const AI_TEXT_LIMIT = parseInt(process.env.NEWS_AI_TEXT_LIMIT || '1600', 10) || 1600;
+// Taille des lots d'articles envoyés à DeepSeek (évite de dépasser les budgets).
+const AI_BATCH = 15;
+const DATE_RESTRICT = process.env.NEWS_GOOGLE_DATE_RESTRICT || 'd7';
 
-// Segments d'URL qui ne sont jamais des articles (navigation, listes, tags…).
-const NAV_SEGMENTS = new Set([
-  'tag', 'tags', 'category', 'categories', 'author', 'authors', 'about',
-  'contact', 'privacy', 'terms', 'login', 'register', 'search', 'page',
-  'wp-json', 'feed', 'rss', 'archive', 'archives', 'newsletter', 'advertise',
-  'careers', 'press', 'legal', 'cookie', 'sitemap', 'category', 'video',
-  'gallery', 'events', 'community',
-]);
-
-const EXTENSION_SKIP = /\.(png|jpe?g|gif|webp|svg|pdf|zip|mp4|mp3|css|js|json|xml)$/i;
+// Termes "génériques" IA / Big Data utilisés si aucun thème n'est configuré.
+const GENERIC_TERMS = [
+  'IA',
+  '"intelligence artificielle"',
+  '"big data"',
+  '"machine learning"',
+  '"deep learning"',
+  '"science des données"',
+  '"data science"',
+];
 
 function httpError(status, message) {
   const err = new Error(message);
@@ -53,187 +66,22 @@ function cleanText(value) {
     .trim();
 }
 
-function decodeBody(buffer, contentType) {
-  const charset = (String(contentType || '').match(/charset=([\w-]+)/i) || [])[1];
+function stripHtml(value) {
+  return String(value || '').replace(/<[^>]*>/g, '');
+}
+
+function hostOf(url) {
   try {
-    return new TextDecoder(charset || 'utf-8').decode(buffer);
+    return new URL(url).hostname.replace(/^www\./, '');
   } catch (_e) {
-    return new TextDecoder('utf-8').decode(buffer);
+    return '';
   }
 }
 
-async function fetchText(url) {
-  const res = await fetch(url, {
-    headers: {
-      'user-agent': UA,
-      accept: 'text/html,application/xhtml+xml,application/xml,application/rss+xml,*/*;q=0.8',
-      'accept-language': 'fr,en;q=0.8',
-    },
-    redirect: 'follow',
-    signal: AbortSignal.timeout(TIMEOUT_MS),
-  });
-  if (!res.ok) throw httpError(res.status, `HTTP ${res.status} pour ${url}`);
-  const buffer = await res.arrayBuffer();
-  const contentType = res.headers.get('content-type') || '';
-  return { text: decodeBody(buffer, contentType), contentType };
-}
-
-function toAbsoluteUrl(href, base) {
-  try {
-    return new URL(href, base).href;
-  } catch (_e) {
-    return null;
-  }
-}
-
-/** Découpe un URL : { origin, hostname, pathname, url } */
-function urlParts(raw) {
-  try {
-    const u = new URL(raw);
-    return {
-      origin: u.origin,
-      hostname: u.hostname,
-      pathname: u.pathname,
-      protocol: u.protocol,
-      url: u.href,
-    };
-  } catch (_e) {
-    return null;
-  }
-}
-
-function stripQuery(url) {
-  try {
-    const u = new URL(url);
-    u.hash = '';
-    // On retire uniquement les paramètres de tracking (utm, réseaux sociaux…).
-    // Le reste de la query est conservé : certaines URLs d'articles en dépendent.
-    for (const key of [...u.searchParams.keys()]) {
-      if (/^(utm_|fbclid|gclid|mc_cid|mc_eid|ref|source|via)$/i.test(key)) {
-        u.searchParams.delete(key);
-      }
-    }
-    return u.href;
-  } catch (_e) {
-    return url;
-  }
-}
-
-/** Un lien ressemble-t-il à un article ? (heuristique de filtrage du bruit). */
-function looksLikeArticle(href, base) {
-  const abs = toAbsoluteUrl(href, base);
-  if (!abs) return false;
-  const parts = urlParts(abs);
-  if (!parts) return false;
-  if (parts.protocol !== 'https:' && parts.protocol !== 'http:') return false;
-  if (parts.pathname === '/' || parts.pathname === '') return false;
-  if (EXTENSION_SKIP.test(parts.pathname)) return false;
-  const segs = parts.pathname.split('/').filter(Boolean);
-  if (segs.length === 0) return false;
-  if (segs.some((s) => NAV_SEGMENTS.has(s.toLowerCase()))) return false;
-  // Un simple mot-clé court est souvent une page d'archive, pas un article.
-  if (segs.length === 1 && segs[0].length < 8) return false;
-  return true;
-}
-
-/** Parse un flux RSS 2.0 ou Atom (text/XML) en items. */
-function parseFeedXml(xml) {
-  const $ = cheerio.load(xml, { xmlMode: true });
+function chunk(items, size) {
   const out = [];
-  $('item, entry').each((_i, el) => {
-    const g = $(el);
-    const title = cleanText(g.find('title').first().text());
-    const linkEl = g.find('link').first();
-    const link =
-      linkEl.attr('href') || cleanText(linkEl.text()) || cleanText(g.find('guid').first().text());
-    const desc =
-      cleanText(g.find('description').first().text()) ||
-      cleanText(g.find('summary').first().text()) ||
-      cleanText(g.find('content').first().text());
-    const pub =
-      cleanText(g.find('pubDate, published, updated').first().text()) ||
-      g.find('pubDate, published').attr('datetime') ||
-      '';
-    if (title && link) out.push({ title, link, description: desc, pubDate: pub });
-  });
+  for (let i = 0; i < items.length; i += size) out.push(items.slice(i, i + size));
   return out;
-}
-
-/** Découvre le premier flux RSS/Atom annoncé dans une page HTML. */
-function findFeedUrlFromHtml($, base) {
-  let feed = '';
-  $('link[rel="alternate"]').each((_i, el) => {
-    const type = $(el).attr('type') || '';
-    if (feed) return;
-    if (type.includes('rss') || type.includes('atom') || type.includes('xml')) {
-      const href = $(el).attr('href');
-      if (href) feed = toAbsoluteUrl(href, base) || '';
-    }
-  });
-  return feed;
-}
-
-/** Extrait les liens d'articles depuis une page de liste HTML. */
-function extractArticleLinks($, base, { sameHost = true } = {}) {
-  let baseHost = '';
-  try {
-    baseHost = new URL(base).hostname.toLowerCase();
-  } catch (_e) {
-    /* base invalide → aucun filtre d'hôte */
-  }
-  const seen = new Set();
-  const links = [];
-  $('a[href]').each((_i, el) => {
-    const href = $(el).attr('href') || '';
-    const url = stripQuery(toAbsoluteUrl(href, base) || '');
-    if (!url || seen.has(url)) return;
-    if (!looksLikeArticle(href, base)) return;
-    if (sameHost && baseHost) {
-      let host = '';
-      try {
-        host = new URL(url).hostname.toLowerCase();
-      } catch (_e) {
-        /* ignoré */
-      }
-      if (host && host !== baseHost && !host.endsWith('.' + baseHost)) return;
-    }
-    seen.add(url);
-    links.push(url);
-  });
-  return links;
-}
-
-/** Récupère une page d'article et en tire { title, description, publishedAt }. */
-async function scrapeArticlePage(url) {
-  const { text } = await fetchText(url);
-  const $ = cheerio.load(text);
-  const ogTitle = cleanText($('meta[property="og:title"]').attr('content'));
-  const htmlTitle = cleanText($('title').first().text());
-  const h1 = cleanText($('h1').first().text());
-  const title = ogTitle || h1 || htmlTitle || '';
-
-  const ogDesc = cleanText($('meta[property="og:description"]').attr('content'));
-  const metaDesc = cleanText($('meta[name="description"]').attr('content'));
-  let firstP = '';
-  $('article p, main p, .post-content p').each((_i, el) => {
-    if (firstP) return;
-    const t = cleanText($(el).text());
-    if (t.length > 60) firstP = t.slice(0, 600);
-  });
-  const description = ogDesc || metaDesc || firstP || '';
-
-  const pubRaw =
-    $('meta[property="article:published_time"]').attr('content') ||
-    $('meta[name="article:published_time"]').attr('content') ||
-    $('time[datetime]').first().attr('datetime') ||
-    cleanText($('time').first().text()) ||
-    '';
-  let publishedAt = null;
-  if (pubRaw) {
-    const d = new Date(pubRaw);
-    if (!Number.isNaN(d.getTime())) publishedAt = d;
-  }
-  return { title, description, publishedAt, url };
 }
 
 function cleanHash(value) {
@@ -255,46 +103,219 @@ function todayKey() {
   return `${get('year')}-${get('month')}-${get('day')}`;
 }
 
-async function deepseekAvailable() {
-  return Boolean(process.env.DEEPSEEK_API_KEY);
+function stripQuery(url) {
+  try {
+    const u = new URL(url);
+    u.hash = '';
+    for (const key of [...u.searchParams.keys()]) {
+      if (/^(utm_|fbclid|gclid|mc_cid|mc_eid|ref|source|via)$/i.test(key)) {
+        u.searchParams.delete(key);
+      }
+    }
+    return u.href;
+  } catch (_e) {
+    return url;
+  }
+}
+
+/* ------------------------------------------------------------------ *
+ * 1) Découverte : Google Custom Search JSON API
+ * ------------------------------------------------------------------ */
+
+function googleConfigured() {
+  return Boolean(process.env.GOOGLE_SEARCH_API_KEY && process.env.GOOGLE_SEARCH_CX);
 }
 
 /**
- * Appel DeepSeek unique sur un lot d'articles pour produire des résumés +
- * classification, et ne retenir que ce qui provient des sources autorisées.
- * Retourne une Map url → { resume, category, tags } (vide en cas d'échec).
+ * Construit la requête Google pour une source : site:<hôte> + mots-clés issus
+ * des thèmes admin (complétés de termes génériques IA / Big Data).
  */
-async function classifyArticles(articles) {
-  const result = new Map();
-  if (!articles.length) return result;
+function buildQuery(hostname, themeLabels) {
+  const terms = new Set();
+  for (const t of themeLabels) {
+    const label = String(t || '').trim();
+    if (!label) continue;
+    // Les thèmes multi-mots sont mis entre guillemets pour rester un tout.
+    terms.add(/\s/.test(label) ? `"${label}"` : label);
+  }
+  for (const g of GENERIC_TERMS) terms.add(g);
+  const keywords = [...terms].slice(0, 12).join(' OR ');
+  return `site:${hostname} (${keywords})`;
+}
+
+/** Interroge l'API Google Custom Search ; retourne la liste des résultats. */
+async function googleSearch(query, num) {
+  const params = new URLSearchParams({
+    key: process.env.GOOGLE_SEARCH_API_KEY,
+    cx: process.env.GOOGLE_SEARCH_CX,
+    q: query,
+    num: String(num),
+  });
+  if (DATE_RESTRICT) params.set('dateRestrict', DATE_RESTRICT);
+
+  let response;
   try {
-    const system =
-      "Tu es un assistant de veille IA / Big Data. À partir d'une liste JSON d'articles " +
-      '(chacun avec url, source et titre), produis UNIQUEMENT un objet JSON de la forme : ' +
-      '{"articles":[{"url":"…","source_autorisee":true|false,"resume":"résumé en 1-2 phrases en français","category":"IA|Big Data|Cloud|Autre","tags":["tag1","tag2"]}]}. ' +
-      "Ne garde aucun commentaire, aucune balise. Si un article ne provient pas d'une source " +
-      'autorisée, mets source_autorisee à false et resume vide.';
-    const user = JSON.stringify(
-      articles.map((a) => ({ url: a.url, source: a.sourceName, title: a.title }))
-    );
-    const raw = await generateDeepseek(system, user);
-    const parsed = parseJsonStrict(raw);
-    const list = Array.isArray(parsed?.articles) ? parsed.articles : [];
-    for (const item of list) {
-      if (!item || typeof item.url !== 'string') continue;
-      const url = item.url;
-      if (item.source_autorisee === false) {
-        result.set(url, { resume: '', category: 'Rejeté', tags: [], reject: true });
-      } else {
-        result.set(url, {
-          resume: String(item.resume || '').trim(),
-          category: String(item.category || '').trim(),
-          tags: Array.isArray(item.tags) ? item.tags.map((t) => String(t)).slice(0, 5) : [],
-        });
-      }
-    }
+    response = await fetch(`${GOOGLE_SEARCH_URL}?${params.toString()}`, {
+      signal: AbortSignal.timeout(TIMEOUT_MS),
+    });
   } catch (err) {
-    console.warn('[news] Classification DeepSeek ignorée :', err.message);
+    if (err.name === 'TimeoutError' || err.name === 'AbortError') {
+      throw new Error('Délai dépassé sur l’API Google Custom Search.');
+    }
+    throw new Error(`Erreur réseau vers Google Custom Search : ${err.message}`);
+  }
+
+  if (!response.ok) {
+    let detail = '';
+    let reason = '';
+    try {
+      const body = await response.json();
+      reason = body?.error?.errors?.[0]?.reason || '';
+      detail = body?.error?.message || JSON.stringify(body);
+    } catch (_e) {
+      detail = response.statusText;
+    }
+    if (reason === 'quotaExceeded' || reason === 'dailyLimitExceeded' || response.status === 429) {
+      throw new Error(
+        'Google Custom Search : quota quotidien atteint (100 requêtes/jour gratuites). ' +
+          'Réessayez demain ou ajoutez une clé avec facturation activée.'
+      );
+    }
+    throw new Error(
+      `Google Custom Search a renvoyé une erreur (${response.status}) : ${detail}`
+    );
+  }
+
+  const data = await response.json();
+  return Array.isArray(data.items) ? data.items : [];
+}
+
+/* ------------------------------------------------------------------ *
+ * 2) Récupération du contenu plein d'un article (mécanique)
+ * ------------------------------------------------------------------ */
+
+async function fetchText(url) {
+  const res = await fetch(url, {
+    headers: {
+      'user-agent':
+        'Mozilla/5.0 (compatible; GrandOralStudioNews/1.0; +https://grand-oral-studio.local)',
+      accept: 'text/html,application/xhtml+xml,*/*;q=0.8',
+      'accept-language': 'fr,en;q=0.8',
+    },
+    redirect: 'follow',
+    signal: AbortSignal.timeout(TIMEOUT_MS),
+  });
+  if (!res.ok) throw httpError(res.status, `HTTP ${res.status} pour ${url}`);
+  const buffer = await res.arrayBuffer();
+  const contentType = res.headers.get('content-type') || '';
+  const charset = (String(contentType).match(/charset=([\w-]+)/i) || [])[1];
+  try {
+    return new TextDecoder(charset || 'utf-8').decode(buffer);
+  } catch (_e) {
+    return new TextDecoder('utf-8').decode(buffer);
+  }
+}
+
+/** Extrait les paragraphes principaux d'une page article (sans le bruit). */
+function extractBodyParagraphs($) {
+  const container = $(
+    'article, [itemprop="articleBody"], .post-content, .entry-content, main, body'
+  ).first();
+  const paragraphs = [];
+  const seen = new Set();
+  container.find('p').each((_i, el) => {
+    const t = cleanText($(el).text());
+    if (t.length < 40 || seen.has(t)) return;
+    seen.add(t);
+    paragraphs.push(t);
+  });
+  if (paragraphs.length) return paragraphs;
+
+  // Repli : tous les <p> d'une taille raisonnable.
+  $('p').each((_i, el) => {
+    const t = cleanText($(el).text());
+    if (t.length < 60 || seen.has(t)) return;
+    seen.add(t);
+    paragraphs.push(t);
+  });
+  return paragraphs;
+}
+
+/** Récupère la page d'un article : { title, publishedAt, content }. */
+async function scrapeArticlePage(url) {
+  const text = await fetchText(url);
+  const $ = cheerio.load(text);
+
+  const ogTitle = cleanText($('meta[property="og:title"]').attr('content'));
+  const h1 = cleanText($('h1').first().text());
+  const htmlTitle = cleanText($('title').first().text());
+  const title = ogTitle || h1 || htmlTitle || '';
+
+  const paragraphs = extractBodyParagraphs($);
+  const content = paragraphs.join('\n\n').slice(0, NEWS_CONTENT_MAX);
+
+  const pubRaw =
+    $('meta[property="article:published_time"]').attr('content') ||
+    $('meta[name="article:published_time"]').attr('content') ||
+    $('meta[property="og:published_time"]').attr('content') ||
+    $('time[datetime]').first().attr('datetime') ||
+    '';
+  let publishedAt = null;
+  if (pubRaw) {
+    const d = new Date(pubRaw);
+    if (!Number.isNaN(d.getTime())) publishedAt = d;
+  }
+  return { title, content, publishedAt };
+}
+
+/* ------------------------------------------------------------------ *
+ * 3) Jugement IA strict (SEUL DeepSeek) : pertinence thèmes + provenance
+ * ------------------------------------------------------------------ */
+
+/**
+ * Envoie un lot d'articles à DeepSeek. Pour chaque URL, il doit indiquer si
+ * l'article correspond à AU MOINS UN des thèmes admin fournis (pertinence
+ * stricte) et renvoyer résumé/catégorie/tags/les thèmes retenus. Retourne une
+ * Map url → { pertinent, themes[], resume, category, tags }.
+ */
+async function judgeArticlesBatch(batch, themeLabels, authorizedHosts) {
+  const system =
+    "Tu es un assistant de veille pour un étudiant ingénieur préparant son Grand Oral sur des " +
+    'thèmes précis. On te donne une liste JSON d’articles, chacun avec { url, source, titre, extrait }.\n' +
+    'Règles STRICTES :\n' +
+    '1. pertinent = true UNIQUEMENT si le contenu porte réellement sur au moins un des thèmes listés ci-dessous.\n' +
+    "2. themes = liste des thèmes (textes exacts fournis) réellement couverts ; vide si aucun.\n" +
+    '3. Ne jamais inventer de thème : seuls les libellés exacts fournis sont acceptés.\n' +
+    "4. Vérifie la provenance : si l'hôte de l'URL n'est pas dans la liste des hôtes autorisés, mets pertinent=false.\n" +
+    'Réponds UNIQUEMENT par un objet JSON : {"avis":[{"url":"…","pertinent":true|false,"themes":["…"],"resume":"résumé en 1-2 phrases en français","category":"IA|Big Data|Cloud|Autre","tags":["tag1","tag2"]}]}. ' +
+    'Aucun commentaire, aucune balise. Retourne un avis pour CHAQUE article fourni.';
+  const user = JSON.stringify({
+    themes_disponibles: themeLabels,
+    hotes_autorises: authorizedHosts,
+    articles: batch.map((a) => ({
+      url: a.url,
+      source: a.sourceName,
+      titre: a.title,
+      extrait: (a.content || a.snippet || '').slice(0, AI_TEXT_LIMIT),
+    })),
+  });
+
+  const raw = await generateDeepseek(system, user);
+  const parsed = parseJsonStrict(raw);
+  const avis = Array.isArray(parsed?.avis) ? parsed.avis : [];
+  const result = new Map();
+  for (const item of avis) {
+    if (!item || typeof item.url !== 'string') continue;
+    const themes = Array.isArray(item.themes)
+      ? item.themes.map((t) => String(t).trim()).filter((t) => themeLabels.includes(t))
+      : [];
+    result.set(item.url, {
+      pertinent: item.pertinent === true && themes.length > 0,
+      themes,
+      resume: String(item.resume || '').trim(),
+      category: String(item.category || '').trim(),
+      tags: Array.isArray(item.tags) ? item.tags.map((t) => String(t)).slice(0, 5) : [],
+    });
   }
   return result;
 }
@@ -310,7 +331,7 @@ async function generateDailyGlossary(articles, totalNouveaux) {
     'JSON : {"items":[{"terme":"Nom complet du terme","acronyme":"Sigle si existant (sinon \'\')","explication":"explication claire en français, 1 à 2 phrases"}]}. ' +
     'Priorise les notions réellement utiles pour un étudiant ingénieur.';
   const user = JSON.stringify(
-    sample.map((a) => ({ titre: a.title, resume: a.resume || a.description || '' }))
+    sample.map((a) => ({ titre: a.title, resume: a.resume || a.snippet || '' }))
   );
   let items = [];
   try {
@@ -338,71 +359,74 @@ async function generateDailyGlossary(articles, totalNouveaux) {
   return doc;
 }
 
-/** Scrape UNE source active et retourne les articles nouvellement insérés. */
-async function scrapeSource(source) {
+/* ------------------------------------------------------------------ *
+ * 4) Collecte pour UNE source
+ * ------------------------------------------------------------------ */
+
+/** Interroge Google pour une source et renvoie les candidats (pas encore vus). */
+async function googleCandidatesForSource(source, themeLabels) {
+  const hostname = hostOf(source.url);
+  if (!hostname) throw new Error(`Hôte invalide pour ${source.url}`);
+
+  const query = buildQuery(hostname, themeLabels);
+  const num = Math.min(Math.max(MAX_PER_SOURCE, 5), 10); // l'API plafonne à 10/requête
+  const items = await googleSearch(query, num);
+
+  const candidates = [];
+  const seen = new Set();
+  for (const item of items) {
+    const url = stripQuery(String(item.link || ''));
+    if (!url || seen.has(url)) continue;
+    seen.add(url);
+    // On ne conserve que les liens appartenant bien à l'hôte autorisé.
+    if (hostOf(url) !== hostname) continue;
+    candidates.push({
+      url,
+      sourceName: source.name,
+      sourceUrl: source.url,
+      title: cleanText(item.title),
+      snippet: cleanText(item.snippet),
+    });
+  }
+  return candidates;
+}
+
+/** Récupère le contenu plein des nouveaux candidats (tolérant aux échecs). */
+async function scrapeNewArticleContents(candidates) {
+  const out = [];
   const logs = [];
-  const found = [];
-  try {
-    // 1) On récupère la page / le flux déclaré de la source.
-    let text;
-    let contentType;
+  for (const c of candidates) {
     try {
-      ({ text, contentType } = await fetchText(source.url));
-    } catch (err) {
-      throw new Error(`Récupération de la source impossible : ${err.message}`);
-    }
-
-    // Un document EST traité comme un flux XML uniquement si le type de
-    // contenu l'indique, ou si le corps commence explicitement par une
-    // déclaration XML / une balise racine <rss> ou <feed>. Une page HTML
-    // commence par "<!DOCTYPE" ou "<html>" : elle ne doit PAS être lue en XML.
-    const trimmedStart = text.replace(/^\uFEFF/, '').trimStart();
-    const looksXml =
-      /xml|rss|atom/i.test(contentType) ||
-      /^<\?xml/i.test(trimmedStart) ||
-      /^<(rss|feed)[\s>]/i.test(trimmedStart);
-    const base = source.url;
-    let items = [];
-
-    if (looksXml) {
-      // La source EST un flux RSS/Atom.
-      items = parseFeedXml(text).map((it) => ({ ...it, href: stripQuery(it.link) }));
-    } else {
-      const $ = cheerio.load(text);
-      const feedUrl = findFeedUrlFromHtml($, base);
-      if (feedUrl) {
-        try {
-          const feedRes = await fetchText(feedUrl);
-          items = parseFeedXml(feedRes.text).map((it) => ({ ...it, href: stripQuery(it.link) }));
-        } catch (_err) {
-          logs.push('Flux RSS annoncé injoignable, repli sur le HTML.');
-        }
+      const page = await scrapeArticlePage(c.url);
+      if (!page.title && !page.content) {
+        logs.push(`Page sans contenu exploitable (${c.url})`);
+        continue;
       }
-      if (items.length === 0) {
-        // 2) Pas de flux exploitable : on parse les liens d'articles de la page.
-        const hrefs = extractArticleLinks($, base).slice(0, FETCH_LIMIT);
-        for (const href of hrefs) {
-          items.push({ title: '', description: '', pubDate: '', href });
-        }
-      }
-    }
-
-    // 3) Filtrage : URL valide + pas déjà connue de cette exécution.
-    const candidates = [];
-    for (const item of items) {
-      const url = stripQuery(toAbsoluteUrl(item.href || item.link, base) || '');
-      if (!url) continue;
-      if (found.includes(url)) continue;
-      found.push(url);
-      candidates.push({
-        url,
-        feedTitle: cleanText(item.title),
-        feedDescription: cleanText(item.description),
-        pubRaw: item.pubDate,
+      out.push({
+        ...c,
+        title: cleanText(page.title || c.title),
+        content: page.content,
+        publishedAt: page.publishedAt || null,
       });
+    } catch (err) {
+      logs.push(`Contenu ignoré (${err.message})`);
+    }
+  }
+  return { articles: out, logs };
+}
+
+/** Collecte + filtre UNE source. Retourne { found, doublons, nouveaux, ... }. */
+async function scrapeSource(source, themeLabels) {
+  const logs = [];
+  try {
+    // 1) Découverte Google (hôte autorisé uniquement).
+    const candidates = await googleCandidatesForSource(source, themeLabels);
+    if (!candidates.length) {
+      logs.push('Google n’a retourné aucun résultat pour cette source.');
+      return { source: source.name, found: 0, doublons: 0, nouveaux: [], logs };
     }
 
-    // 4) Anti-doublon stricte contre la base.
+    // 2) Anti-doublon stricte contre la base (URL unique).
     const existing = new Set(
       (
         await NewsArticle.find({ url: { $in: candidates.map((c) => c.url) } })
@@ -411,70 +435,37 @@ async function scrapeSource(source) {
       ).map((d) => d.url)
     );
     const doublons = candidates.filter((c) => existing.has(c.url)).length;
-    const nouveaux = candidates.filter((c) => !existing.has(c.url)).slice(0, MAX_PER_SOURCE);
+    const nouveauxCandidats = candidates
+      .filter((c) => !existing.has(c.url))
+      .slice(0, MAX_PER_SOURCE);
 
-    // 5) Récupération du contenu de chaque nouvel article (tolérante).
-    const scraped = [];
-    for (const c of nouveaux) {
-      try {
-        const page = await scrapeArticlePage(c.url);
-        if (!page.title) continue;
-        scraped.push({
-          url: c.url,
-          title: cleanText(page.title),
-          resume: cleanText(page.description || c.feedDescription).slice(0, 900),
-          publishedAt: page.publishedAt || (c.pubRaw ? new Date(c.pubRaw) : null) || new Date(),
-        });
-      } catch (_err) {
-        logs.push(`Contenu ignoré (${c.url})`);
-      }
+    if (!nouveauxCandidats.length) {
+      return {
+        source: source.name,
+        found: candidates.length,
+        doublons,
+        nouveaux: [],
+        logs: [...logs, 'Tout était déjà en base.'],
+      };
     }
 
-    // 6) Classification DeepSeek (résumé + catégorie) si la clé existe.
-    let classif = new Map();
-    if (await deepseekAvailable()) {
-      classif = await classifyArticles(scraped);
-    }
-
-    // 7) Insertion en base des seuls articles non rejetés par la source autorisée.
-    const inseres = [];
-    for (const a of scraped) {
-      const cls = classif.get(a.url) || {};
-      if (cls.reject) continue;
-      // Upsert conditionnel : si une URL identique a été insérée entre-temps
-      // (exécution concurrente), $setOnInsert ne modifie rien et on compte 0.
-      const resInsert = await NewsArticle.updateOne(
-        { url: a.url },
-        {
-          $setOnInsert: {
-            sourceName: source.name,
-            sourceUrl: source.url,
-            url: a.url,
-            titleHash: cleanHash(a.title),
-            title: a.title,
-            resume: (cls.resume && cls.resume.length > 20 ? cls.resume : a.resume) || a.resume,
-            publishedAt: a.publishedAt,
-            category: cls.category || '',
-            tags: cls.tags || [],
-          },
-        },
-        { upsert: true }
-      );
-      if (resInsert.upsertedCount > 0) {
-        inseres.push({ url: a.url, title: a.title });
-      }
+    // 3) Récupération du contenu plein (pour la lecture intégrée).
+    const { articles, logs: scrapLogs } = await scrapeNewArticleContents(nouveauxCandidats);
+    logs.push(...scrapLogs);
+    if (!articles.length) {
+      return {
+        source: source.name,
+        found: candidates.length,
+        doublons,
+        nouveaux: [],
+        logs: [...logs, 'Aucun contenu récupérable.'],
+      };
     }
 
     source.lastScrapedAt = new Date();
     source.lastError = '';
     await source.save();
-    return {
-      source: source.name,
-      found: found.length,
-      doublons,
-      nouveaux: inseres,
-      logs,
-    };
+    return { source: source.name, found: candidates.length, doublons, nouveaux: articles, logs };
   } catch (err) {
     source.lastError = String(err.message || err).slice(0, 400);
     await source.save().catch(() => {});
@@ -482,28 +473,65 @@ async function scrapeSource(source) {
   }
 }
 
+/* ------------------------------------------------------------------ *
+ * 5) Exécution globale (cron quotidien OU déclenchement manuel)
+ * ------------------------------------------------------------------ */
+
 /**
- * Exécute le balayage complet (cron quotidien OU déclenchement manuel).
- * Retourne un rapport agrégé.
+ * Exécute le balayage complet. Retourne un rapport agrégé.
+ * - Google est OBLIGATOIRE (clé + moteur) : sinon refus explicite.
+ * - DeepSeek est requis pour le filtrage strict par thème admin.
  */
 async function runNewsScan() {
-  // Documents Mongoose (non lean) : scrapeSource met à jour lastScrapedAt/lastError.
-  const sources = await NewsSource.find({ active: true }).sort({ createdAt: 1 });
-  const report = {
+  const baseReport = {
     date: todayKey(),
-    sourcesTraitees: sources.length,
+    sourcesTraitees: 0,
     sources: [],
     totalTrouves: 0,
     totalNouveaux: 0,
+    horsThemes: 0,
     doublonsIgnores: 0,
     glossaire: null,
     notes: [],
   };
 
-  let stockNouveaux = [];
-  let totalDoublons = 0;
+  if (!googleConfigured()) {
+    return {
+      ...baseReport,
+      error:
+        'Google Custom Search n’est pas configuré (GOOGLE_SEARCH_API_KEY et GOOGLE_SEARCH_CX). ' +
+        'La collecte News est désactivée tant que ces variables ne sont pas renseignées côté backend.',
+      notes: [
+        'Module News en attente de configuration Google (clé API + ID du moteur de recherche).',
+      ],
+    };
+  }
+
+  // Thèmes admin : la pertinence d'un article est jugée strictement sur ces labels.
+  const themes = await Theme.find().sort({ order: 1, label: 1 }).lean();
+  const themeLabels = themes.map((t) => String(t.label || '').trim()).filter(Boolean);
+  if (!themeLabels.length) {
+    return {
+      ...baseReport,
+      error:
+        'Aucun thème configuré dans le panneau admin. ' +
+        'Le filtre « articles liés aux thèmes » exige au moins un thème (page Administration → Thèmes).',
+      notes: ['Ajoutez des thèmes admin avant de lancer la collecte.'],
+    };
+  }
+
+  const sources = await NewsSource.find({ active: true }).sort({ createdAt: 1 });
+
+  // Collecte mécanique (contenu plein) jusqu'au plafond global.
+  const report = {
+    ...baseReport,
+    sourcesTraitees: sources.length,
+  };
+
+  const pool = [];
+  let budget = MAX_TOTAL_PER_RUN;
   for (const src of sources) {
-    const res = await scrapeSource(src);
+    const res = await scrapeSource(src, themeLabels);
     report.sources.push({
       name: res.source,
       found: res.found ?? 0,
@@ -513,30 +541,90 @@ async function runNewsScan() {
       logs: res.logs || [],
     });
     report.totalTrouves += res.found ?? 0;
-    totalDoublons += res.doublons ?? 0;
-    report.totalNouveaux += res.nouveaux ? res.nouveaux.length : 0;
-    if (res.nouveaux) stockNouveaux = stockNouveaux.concat(res.nouveaux);
-    if (stockNouveaux.length >= MAX_TOTAL_PER_RUN) break;
+    report.doublonsIgnores += res.doublons ?? 0;
+    if (res.nouveaux) {
+      for (const a of res.nouveaux) {
+        if (budget <= 0) break;
+        pool.push(a);
+        budget -= 1;
+      }
+    }
+    if (budget <= 0) break;
   }
 
-  report.doublonsIgnores = totalDoublons;
+  if (!pool.length) {
+    report.notes.push('Aucun nouvel article (tout était déjà en base ou aucune source retournée).');
+    return report;
+  }
 
-  // Glossaire du jour : uniquement s'il y a de NOUVEAUX articles à analyser.
-  // Régénérer le glossaire à partir des mêmes articles déjà vus (jour sans
-  // nouveauté) produirait un contenu quasi identique daté autrement — inutile.
-  if (report.totalNouveaux > 0) {
-    if (await deepseekAvailable()) {
-      report.glossaire = await generateDailyGlossary(stockNouveaux, report.totalNouveaux);
-    } else {
-      report.notes.push('DEEPSEEK_API_KEY absente : pas de résumé/classement/glossaire généré par IA.');
+  // Jugement DeepSeek par lots — SEUL fournisseur IA utilisé ici.
+  const authorizedHosts = [...new Set(sources.map((s) => hostOf(s.url)))].filter(Boolean);
+  const kept = [];
+  for (const batch of chunk(pool, AI_BATCH)) {
+    try {
+      const avis = await judgeArticlesBatch(batch, themeLabels, authorizedHosts);
+      for (const a of batch) {
+        const v = avis.get(a.url);
+        if (!v || !v.pertinent) {
+          report.horsThemes += 1;
+          continue;
+        }
+        kept.push({
+          url: a.url,
+          sourceName: a.sourceName,
+          sourceUrl: a.sourceUrl,
+          title: a.title,
+          resume: v.resume || a.snippet || '',
+          content: a.content || '',
+          themes: v.themes.slice(0, 5),
+          category: v.category || 'Autre',
+          tags: v.tags || [],
+          publishedAt: a.publishedAt || new Date(),
+        });
+      }
+    } catch (err) {
+      report.notes.push(`Lot DeepSeek ignoré (${err.message}) — ${batch.length} article(s) non traités.`);
+    }
+  }
+
+  // Insertion des seuls articles pertinents (upsert anti-course).
+  let inseres = 0;
+  for (const a of kept) {
+    const resInsert = await NewsArticle.updateOne(
+      { url: a.url },
+      {
+        $setOnInsert: {
+          sourceName: a.sourceName,
+          sourceUrl: a.sourceUrl,
+          url: a.url,
+          titleHash: cleanHash(a.title),
+          title: a.title,
+          resume: a.resume,
+          content: a.content,
+          themes: a.themes,
+          category: a.category,
+          tags: a.tags,
+          publishedAt: a.publishedAt,
+        },
+      },
+      { upsert: true }
+    );
+    if (resInsert.upsertedCount > 0) inseres += 1;
+  }
+  report.totalNouveaux = inseres;
+
+  // Glossaire du jour : uniquement s'il y a de réels nouveaux articles.
+  if (inseres > 0) {
+    try {
+      report.glossaire = await generateDailyGlossary(kept, inseres);
+    } catch (err) {
+      report.notes.push(`Glossaire DeepSeek ignoré (${err.message}).`);
     }
   } else {
-    report.notes.push(
-      'Aucun nouvel article : le glossaire du jour n’a pas été régénéré (pas de nouveau contenu à analyser).'
-    );
+    report.notes.push('Aucun article pertinent ajouté — le glossaire du jour n’a pas été régénéré.');
   }
 
   return report;
 }
 
-module.exports = { runNewsScan, todayKey, parseFeedXml, looksLikeArticle };
+module.exports = { runNewsScan, todayKey, googleConfigured, googleSearch };

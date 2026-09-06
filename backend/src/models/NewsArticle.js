@@ -16,6 +16,11 @@ const newsArticleSchema = new mongoose.Schema(
     titleHash: { type: String, index: true },
     title: { type: String, required: true, trim: true },
     resume: { type: String, default: '' },
+    // Contenu intégral (texte nettoyé) — permet la lecture de l'article DANS
+    // l'application (web + mobile), sans redirection obligatoire.
+    content: { type: String, default: '' },
+    // Thèmes admin (labels de la collection Theme) jugés pertinents par DeepSeek.
+    themes: { type: [String], index: true, default: [] },
     // Date de publication (si disponible) sinon date de récupération.
     publishedAt: { type: Date, default: null },
     // Classement produit par DeepSeek (thème IA / Big Data, etc.).
