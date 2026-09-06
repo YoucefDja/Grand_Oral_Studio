@@ -587,3 +587,103 @@ button .spin {
   line-height: 1.5;
   white-space: pre-line;
 }
+
+/* ---------- Page News (veille IA & Big Data) ---------- */
+.news-layout {
+  display: grid;
+  grid-template-columns: 1fr 360px;
+  gap: 22px;
+  align-items: start;
+  margin-top: 16px;
+}
+.news-layout > div:first-child {
+  display: flex;
+  flex-direction: column;
+  gap: 14px;
+  min-width: 0;
+}
+@media (max-width: 900px) {
+  .news-layout {
+    grid-template-columns: 1fr;
+  }
+}
+.news-card {
+  background: #fff;
+  border: 1px solid var(--line);
+  border-radius: 12px;
+  padding: 16px 18px;
+  box-shadow: var(--shadow);
+}
+.news-card-head {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  flex-wrap: wrap;
+  margin-bottom: 8px;
+}
+.news-date {
+  margin-left: auto;
+  font-size: 12.5px;
+}
+.news-title {
+  margin: 0 0 6px;
+  font-size: 16.5px;
+  line-height: 1.4;
+}
+.news-title a {
+  color: var(--ink);
+}
+.news-title a:hover {
+  color: var(--cesi-accent);
+  text-decoration: none;
+}
+.news-resume {
+  margin: 0 0 10px;
+  line-height: 1.55;
+}
+.news-foot {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+  font-size: 13px;
+}
+.news-link {
+  font-weight: 600;
+}
+.news-cat {
+  background: var(--warn-bg);
+  color: var(--warn);
+}
+.news-glossary {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+.news-glossary li {
+  border-top: 1px dashed var(--line);
+  padding: 12px 0;
+}
+.news-glossary li:first-child {
+  border-top: 0;
+  padding-top: 0;
+}
+.news-glossary .term {
+  color: var(--cesi-primary);
+}
+.news-glossary p {
+  margin: 4px 0 0;
+  color: var(--ink-soft);
+  line-height: 1.55;
+}
+.news-status {
+  font-size: 13px;
+}
+.news-log {
+  margin: 0;
+  padding: 0;
+  list-style: none;
+  font-size: 13px;
+  color: var(--ink-soft);
+}

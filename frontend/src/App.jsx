@@ -5,6 +5,7 @@ import WorkspacePage from './components/WorkspacePage.jsx';
 import AdminPage from './components/AdminPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import AcceptInvitePage from './components/AcceptInvitePage.jsx';
+import NewsPage from './components/NewsPage.jsx';
 
 function Header() {
   const { user, logout } = useAuth();
@@ -29,6 +30,7 @@ function Header() {
           {user ? (
             <>
               <Link to="/">Mes sessions</Link>
+              <Link to="/news">News</Link>
               {user.role === 'admin' ? <Link to="/admin">Administration</Link> : null}
               <span
                 className="role-chip"
@@ -100,6 +102,14 @@ export default function App() {
             element={
               <RequireAuth admin>
                 <AdminPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/news"
+            element={
+              <RequireAuth>
+                <NewsPage />
               </RequireAuth>
             }
           />

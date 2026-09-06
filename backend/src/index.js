@@ -14,7 +14,12 @@ if (fs.existsSync(envPath)) {
 const themesRouter = require('./routes/themes');
 const sessionsRouter = require('./routes/sessions');
 const adminRouter = require('./routes/admin');
+const adminNewsRouter = require('./routes/adminNews');
 const authRouter = require('./routes/auth');
+const newsRouter = require('./routes/news');
+const NewsSource = require('./models/NewsSource');
+const { DEFAULT_NEWS_SOURCES } = require('./data/defaultNewsSources');
+const { startNewsScheduler } = require('./services/newsScheduler');
 const { ensureInitialAdmin, migrateOwnerlessSessions } = require('./bootstrap');
 
 const app = express();
@@ -59,7 +64,9 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/themes', themesRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/admin', adminRouter);
+app.use('/api/admin', adminNewsRouter);
 app.use('/api/auth', authRouter);
+app.use('/api/news', newsRouter);
 
 // 404 JSON pour les routes /api inconnues.
 app.use('/api', (_req, res) => {
@@ -87,6 +94,16 @@ app.use((err, _req, res, _next) => {
 
 const PORT = Number(process.env.PORT || 4000);
 
+/** Insère les sources News par défaut si la collection est vide (premier boot). */
+async function seedDefaultNewsSources() {
+  const count = await NewsSource.countDocuments();
+  if (count > 0) return;
+  const inserted = await NewsSource.insertMany(
+    DEFAULT_NEWS_SOURCES.map((s) => ({ ...s, active: true }))
+  );
+  console.log(`[news] ${inserted.length} sources News par défaut ajoutées en base.`);
+}
+
 async function start() {
   await connectDb();
 
@@ -94,9 +111,12 @@ async function start() {
   // créées avant l'authentification vers ce compte.
   const admin = await ensureInitialAdmin();
   await migrateOwnerlessSessions(admin);
+  await seedDefaultNewsSources();
 
   app.listen(PORT, () => {
     console.log(`Grand Oral Studio backend démarré sur le port ${PORT}.`);
+    // Cron quotidien News (désactivable via NEWS_CRON_ENABLED=false).
+    startNewsScheduler();
   });
 }
 

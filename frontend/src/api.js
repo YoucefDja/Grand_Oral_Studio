@@ -72,6 +72,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
 export const api = {
   get: (path) => request(path).then((r) => r.json()),
   post: (path, body) => request(path, { method: 'POST', body }).then((r) => r.json()),
+  put: (path, body) => request(path, { method: 'PUT', body }).then((r) => r.json()),
   patch: (path, body) => request(path, { method: 'PATCH', body }).then((r) => r.json()),
   del: (path) => request(path, { method: 'DELETE' }).then((r) => r.json()),
 };

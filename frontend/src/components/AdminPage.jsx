@@ -212,6 +212,150 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
 }
 
 /* ------------------------------------------------------------------ */
+/* Éditeur : Source News (veille IA / Big Data)                        */
+/* ------------------------------------------------------------------ */
+
+function NewsSourceEditor({ item, onSaved, onDeleted }) {
+  const [name, setName] = useState(item.name || '');
+  const [url, setUrl] = useState(item.url || '');
+  const [active, setActive] = useState(item.active !== false);
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState(null);
+
+  async function save() {
+    setBusy(true);
+    setError(null);
+    try {
+      const saved = item
+        ? await api.put(`/api/admin/news-sources/${item._id}`, { name: name.trim(), url: url.trim(), active })
+        : await api.post('/api/admin/news-sources', { name: name.trim(), url: url.trim(), active });
+      onSaved(saved);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  async function remove() {
+    if (!item) return;
+    if (!window.confirm(`Supprimer la source « ${item.name} » ?`)) return;
+    setBusy(true);
+    setError(null);
+    try {
+      await api.del(`/api/admin/news-sources/${item._id}`);
+      onDeleted(item._id);
+    } catch (err) {
+      setError(err.message);
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className={`admin-item ${busy ? 'saving' : ''}`} style={{ padding: 14 }}>
+      <div className="row-2">
+        <label className="field">
+          Nom de la source
+          <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
+        </label>
+        <label className="field">
+          URL (page, flux RSS ou catégorie)
+          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
+        </label>
+      </div>
+      <label className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
+        <input
+          type="checkbox"
+          checked={active}
+          onChange={(e) => setActive(e.target.checked)}
+          style={{ width: 'auto' }}
+        />
+        Source active (interrogée par le scraping quotidien)
+      </label>
+      {error ? <div className="alert alert-error">{error}</div> : null}
+      <div className="actions">
+        <button type="button" className="btn-primary" onClick={save} disabled={busy || !name.trim() || !url.trim()}>
+          {busy ? '…' : item ? 'Enregistrer' : 'Ajouter'}
+        </button>
+        {item ? (
+          <button type="button" className="btn-danger" onClick={remove} disabled={busy}>
+            Supprimer
+          </button>
+        ) : null}
+      </div>
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
+/* Panneau : scraping News (déclenchement manuel)                      */
+/* ------------------------------------------------------------------ */
+
+function NewsScanPanel({ onScan }) {
+  const [busy, setBusy] = useState(false);
+  const [report, setReport] = useState(null);
+  const [error, setError] = useState(null);
+
+  async function launch() {
+    setBusy(true);
+    setError(null);
+    setReport(null);
+    try {
+      const r = await onScan();
+      setReport(r);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setBusy(false);
+    }
+  }
+
+  return (
+    <div className="admin-item">
+      <h3 style={{ marginTop: 0 }}>Collecte quotidienne des articles</h3>
+      <p className="muted">
+        Le cron quotidien interroge automatiquement les sources actives (6h30, Europe/Paris).
+        Ce bouton déclenche immédiatement le même processus (collecte + glossaire du jour), sans
+        attendre le cron.
+      </p>
+      {error ? <div className="alert alert-error">{error}</div> : null}
+      <div className="actions" style={{ justifyContent: 'flex-start' }}>
+        <button type="button" className="btn-primary" onClick={launch} disabled={busy}>
+          {busy ? (
+            <>
+              <span className="spin" /> Scraping en cours…
+            </>
+          ) : (
+            'Lancer le scraping manuellement'
+          )}
+        </button>
+      </div>
+      {report ? (
+        <div className="news-status" style={{ marginTop: 12 }}>
+          <strong>Dernière collecte ({report.date || '—'})</strong> : {report.totalNouveaux} nouvel(le)(s)
+          article(s) récupéré(s), {report.doublonsIgnores} doublon(s) ignoré(s) sur {report.totalTrouves}{' '}
+          lien(s) trouvé(s).
+          {report.glossaire ? ' Glossaire du jour généré.' : ''}
+          {report.notes && report.notes.length ? (
+            <ul className="news-log" style={{ marginTop: 6 }}>
+              {report.notes.map((n, i) => (
+                <li key={i}>{n}</li>
+              ))}
+            </ul>
+          ) : null}
+          <ul className="news-log" style={{ marginTop: 6 }}>
+            {report.sources.map((s, i) => (
+              <li key={i}>
+                {s.name} : {s.found} lien(s) · {s.nouveaux} nouveau(x) {s.error ? `· erreur : ${s.error}` : ''}
+              </li>
+            ))}
+          </ul>
+        </div>
+      ) : null}
+    </div>
+  );
+}
+
+/* ------------------------------------------------------------------ */
 /* Page Admin                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -221,6 +365,8 @@ export default function AdminPage() {
   const [sections, setSections] = useState([]);
   const [schemas, setSchemas] = useState([]);
   const [themes, setThemes] = useState([]);
+  const [newsSources, setNewsSources] = useState([]);
+  const [addingNews, setAddingNews] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -233,16 +379,18 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [u, s, sc, t] = await Promise.all([
+      const [u, s, sc, t, ns] = await Promise.all([
         api.get('/api/admin/users'),
         api.get('/api/admin/methodology'),
         api.get('/api/admin/step-schemas'),
         api.get('/api/admin/themes'),
+        api.get('/api/admin/news-sources'),
       ]);
       setUsers(u);
       setSections(s);
       setSchemas(sc);
       setThemes(t);
+      setNewsSources(ns);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -253,6 +401,36 @@ export default function AdminPage() {
   useEffect(() => {
     loadAll();
   }, []);
+
+  async function refreshNewsSources() {
+    try {
+      setNewsSources(await api.get('/api/admin/news-sources'));
+    } catch (err) {
+      setError(err.message);
+    }
+  }
+
+  async function handleNewsScan() {
+    setError(null);
+    setNotice(null);
+    try {
+      return await api.post('/api/admin/news/run');
+    } catch (err) {
+      throw new Error(err.message);
+    }
+  }
+
+  async function resetNewsSources() {
+    if (!window.confirm('Rétablir les 10 sources par défaut (sans toucher aux existantes) ?')) return;
+    setError(null);
+    try {
+      const data = await api.post('/api/admin/news-sources/reset');
+      setNotice(data.message || 'Sources par défaut restaurées.');
+      await refreshNewsSources();
+    } catch (err) {
+      setError(err.message);
+    }
+  }
 
   async function refreshUsers() {
     try {
@@ -351,6 +529,9 @@ export default function AdminPage() {
         </button>
         <button className={`tab ${tab === 'themes' ? 'on' : ''}`} onClick={() => setTab('themes')}>
           Thèmes ({themes.length})
+        </button>
+        <button className={`tab ${tab === 'news' ? 'on' : ''}`} onClick={() => setTab('news')}>
+          News — sources ({newsSources.length})
         </button>
       </div>
 
@@ -499,6 +680,46 @@ export default function AdminPage() {
               onDeleted={(id) => setThemes((prev) => prev.filter((x) => x._id !== id))}
             />
           ))}
+        </div>
+      ) : null}
+
+      {/* ---------------- News : sources & scraping ---------------- */}
+      {tab === 'news' ? (
+        <div>
+          <NewsScanPanel onScan={handleNewsScan} />
+          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
+            <button type="button" className="btn-ghost" onClick={resetNewsSources}>
+              Restaurer les 10 sources par défaut
+            </button>
+            {!addingNews ? (
+              <button type="button" className="btn-primary" onClick={() => setAddingNews(true)}>
+                + Ajouter une source
+              </button>
+            ) : null}
+          </div>
+          {addingNews ? (
+            <NewsSourceEditor
+              item={null}
+              onSaved={(saved) => {
+                setNewsSources((prev) => [saved, ...prev]);
+                setAddingNews(false);
+              }}
+            />
+          ) : null}
+          {newsSources.map((src) => (
+            <NewsSourceEditor
+              key={src._id}
+              item={src}
+              onSaved={(saved) => setNewsSources((prev) => prev.map((x) => (x._id === saved._id ? saved : x)))}
+              onDeleted={(id) => setNewsSources((prev) => prev.filter((x) => x._id !== id))}
+            />
+          ))}
+          {newsSources.length === 0 ? (
+            <div className="empty">
+              Aucune source configurée. Cliquez sur « Restaurer les 10 sources par défaut » pour
+              démarrer la veille IA / Big Data.
+            </div>
+          ) : null}
         </div>
       ) : null}
     </div>

@@ -39,9 +39,10 @@ L'application est découpée en **3 services Railway** :
 │   │   └── seed-methodology.js   # Seed idempotent (méthodologie + schémas + thèmes)
 │   ├── /src
 │   │   ├── /middleware           # auth : requireAuth / requireAdmin (JWT)
-│   │   ├── /models               # User, MethodologySection, StepSchema, Theme, Session
-│   │   ├── /routes               # themes, sessions, admin, auth
-│   │   ├── /services             # promptBuilder, anthropic, deepseek, pptx, password, resend
+│   │   ├── /models               # User, MethodologySection, StepSchema, Theme, Session, News*
+│   │   ├── /routes               # themes, sessions, admin, adminNews, auth, news
+│   │   ├── /services             # promptBuilder, anthropic, deepseek, pptx, password, resend, news*
+│   │   ├── /data                 # defaultNewsSources (10 sources de départ)
 │   │   ├── bootstrap.js          # création du compte admin initial + migration des sessions
 │   │   ├── db.js
 │   │   └── index.js
@@ -111,6 +112,35 @@ admin au démarrage.
 
 ---
 
+## Veille News (IA & Big Data)
+
+Un onglet **News** (barre de navigation, visible par tout utilisateur connecté)
+affiche une veille automatique : articles récents + **glossaire du jour**
+(acronymes et termes techniques expliqués).
+
+- **Sources dynamiques** : table `NewsSource` (nom, URL, active). Les 10 sites de
+  départ sont insérés au premier démarrage (fichier `data/defaultNewsSources.js`)
+  et sont **modifiables / ajoutables / supprimables** depuis
+  **Administration → News — sources**.
+- **Collecte quotidienne** : un **cron** (`node-cron`, défaut 06h30 Europe/Paris,
+  réglable via `NEWS_CRON_*`) parcourt les sources **actives**, parse leur flux
+  RSS/Atom ou leur page HTML, récupère le titre/résumé/date de chaque nouvel
+  article. Un bouton **« Lancer le scraping manuellement »** (même page admin)
+  déclenche le processus à la demande sans attendre le cron.
+- **Anti-doublon strict** : l'URL d'origine est **unique** en base
+  (`NewsArticle.url`) ; tout article déjà présent est ignoré. Le scraping reste
+  tolérant : une source injoignable ne bloque jamais le reste du lot.
+- **IA (DeepSeek)** : quand `DEEPSEEK_API_KEY` est présente, chaque lot d'articles
+  est classifié (résumé en français, catégorie IA/Big Data/Cloud, tags) en
+  vérifiant qu'il provient bien d'une source autorisée, puis le **glossaire du
+  jour** (`NewsGlossary`, un document par date) est généré. Sans clé DeepSeek,
+  la collecte fonctionne quand même mais sans résumé IA ni glossaire.
+
+Schémas associés : `NewsSource`, `NewsArticle`, `NewsGlossary`
+(fichiers `backend/src/models/`).
+
+---
+
 ## Prérequis
 
 - Node.js ≥ 18
@@ -139,6 +169,12 @@ admin au démarrage.
 | `RESEND_FROM` | Expéditeur vérifié Resend (défaut : `Grand Oral Studio <onboarding@resend.dev>`) |
 | `PORT` | Port d'écoute (Railway la fournit automatiquement ; défaut local : 4000) |
 | `FRONTEND_URL` | Origine(s) CORS autorisée(s) **et base des liens d'invitation** (domaine public du frontend) |
+| `NEWS_CRON_ENABLED` | Active/désactive le cron quotidien News (défaut : `true`) |
+| `NEWS_CRON_SCHEDULE` | Expression cron quotidienne (défaut : `30 6 * * *`, soit 06h30) |
+| `NEWS_CRON_TZ` | Fuseau du cron (défaut : `Europe/Paris`) |
+| `NEWS_MAX_PER_SOURCE` | Plafond d'articles nouveaux par source et par exécution (défaut : `10`) |
+| `NEWS_MAX_PER_RUN` | Plafond total d'articles nouveaux par exécution (défaut : `50`) |
+| `NEWS_FETCH_LIMIT` | Nombre max de liens analysés par source (défaut : `200`) |
 
 ### Frontend (`frontend/.env.example` → `frontend/.env`)
 
@@ -277,11 +313,20 @@ POST            /api/admin/users/:id/resend-invite
 GET|PUT|POST|DELETE /api/admin/methodology[/:id]
 GET|PUT             /api/admin/step-schemas[/:id]
 GET|POST|DELETE     /api/admin/themes[/:id]
+GET|POST|PUT|DELETE /api/admin/news-sources[/:id]   # gestion des sources News
+POST                /api/admin/news-sources/reset    # restaure les 10 sources par défaut
+POST                /api/admin/news/run              # scraping manuel (collecte + glossaire)
+
+# News (auth requise — tout utilisateur connecté)
+GET    /api/news                       # articles récents + glossaire du jour
+GET    /api/news/articles              # liste d'articles
+GET    /api/news/glossaire             # historique des glossaires quotidiens
 ```
 
-Toutes les routes `/api/sessions/*` et `/api/admin/*` exigent un token JWT
-(`Authorization: Bearer …`) émis par `/api/auth/login` ou
-`/api/auth/accept-invite` ; `/api/admin/*` est réservée au rôle `admin`. Les
+Toutes les routes `/api/sessions/*`, `/api/admin/*` et `/api/news*` exigent un
+token JWT (`Authorization: Bearer …`) émis par `/api/auth/login` ou
+`/api/auth/accept-invite` ; `/api/admin/*` est réservée au rôle `admin`,
+`/api/news*` est ouverte à tout utilisateur connecté. Les
 sessions renvoyées sont filtrées par propriétaire : un utilisateur ne voit que
 les siennes.
 
