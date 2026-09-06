@@ -218,6 +218,79 @@ router.post(
   })
 );
 
+// GET /api/sessions/:id/support-prompt
+// Exporte un fichier .md complet à coller dans Claude (claude.ai) : la même
+// méthodologie/schéma que l'app enverrait à l'API, afin de générer le support
+// SANS consommer de tokens Claude. La réponse JSON de Claude peut ensuite être
+// ré-importée via POST /api/sessions/:id/import-support.
+router.get(
+  '/:id/support-prompt',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    assertGlossaireValide(session, 'support');
+
+    const { system, user } = await buildStepPrompt(session, 'support');
+    const md = [
+      '# Grand Oral Studio — Génération du support de présentation (étape 6)',
+      '',
+      "> Mode « sans consommation de tokens Claude » : collez l'INTÉGRALITÉ de ce document dans Claude (claude.ai), puis collez la réponse JSON reçue dans l'application (étape 6 → « Importer le JSON produit par Claude ») et téléchargez le .pptx. Le résultat est identique à la génération via l'API.",
+      '',
+      '---',
+      '',
+      '## INSTRUCTIONS À SUIVRE (méthodologie, glossaire, format de sortie)',
+      '',
+      system,
+      '',
+      '---',
+      '',
+      '## CONTEXTE ET DONNÉES DE L’ÉTUDIANT',
+      '',
+      user,
+      '',
+    ].join('\n');
+
+    const fileName = 'support-etape-6-prompt-claude.md';
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
+    res.send(md);
+  })
+);
+
+// POST /api/sessions/:id/import-support
+// Ré-importe le JSON produit par Claude (mode sans tokens API) : valide la
+// structure (tableau slides non vide), l'enregistre comme data.support et
+// permet ensuite l'export .pptx sans appel à l'API Anthropic.
+router.post(
+  '/:id/import-support',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    assertGlossaireValide(session, 'support');
+
+    const raw = String(req.body?.json || '').trim();
+    if (!raw) {
+      throw httpError(400, 'Collez le JSON produit par Claude avant de valider.');
+    }
+    const parsed = parseJsonStrict(raw);
+    if (!Array.isArray(parsed?.slides) || parsed.slides.length === 0) {
+      throw httpError(
+        400,
+        'Le JSON importé ne contient pas de tableau "slides" exploitable. Vérifiez la réponse de Claude (elle doit être un objet JSON avec une clé "slides").'
+      );
+    }
+
+    session.data.support = parsed;
+    session.markModified('data');
+    session.currentStep = Math.max(session.currentStep || 0, STEP_KEYS.length);
+    await session.save();
+    res.json(session);
+  })
+);
+
 // POST /api/sessions/:id/export-pptx
 router.post(
   '/:id/export-pptx',

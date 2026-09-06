@@ -127,6 +127,7 @@ export default function WorkspacePage() {
         error={stepError}
         onGenerate={handleGenerate}
         goStep={goStep}
+        onSessionRefresh={loadSession}
       />
     </div>
   );

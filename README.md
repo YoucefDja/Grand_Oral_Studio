@@ -265,6 +265,8 @@ GET    /api/sessions/:id
 PATCH  /api/sessions/:id
 DELETE /api/sessions/:id
 POST   /api/sessions/:id/generate/:step      # analyse | probleme | recherche | glossaire | plan | support
+GET    /api/sessions/:id/support-prompt      # .md complet à coller dans Claude (sans tokens API)
+POST   /api/sessions/:id/import-support      # ré-importe le JSON de slides produit par Claude → .pptx
 POST   /api/sessions/:id/export-pptx         # refuse (400) si glossaire absent ou support non généré
 
 # Admin (rôle admin requis)

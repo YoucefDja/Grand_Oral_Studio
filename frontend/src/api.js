@@ -76,6 +76,54 @@ export const api = {
   del: (path) => request(path, { method: 'DELETE' }).then((r) => r.json()),
 };
 
+/** Télécharge le prompt .md de l'étape 6 (à coller dans Claude sans consommer de tokens). */
+export async function downloadSupportPrompt(sessionId, fallbackName = 'support-etape-6-prompt-claude.md') {
+  const auth = getAuth();
+  let res;
+  try {
+    res = await fetch(apiUrl(`/api/sessions/${sessionId}/support-prompt`), {
+      method: 'GET',
+      headers: auth && auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
+    });
+  } catch {
+    throw new Error('Impossible de joindre le serveur pour l’export du prompt.');
+  }
+  if (!res.ok) {
+    let message = `Erreur ${res.status}`;
+    try {
+      const data = await res.json();
+      if (data && data.message) message = data.message;
+    } catch {
+      /* non JSON */
+    }
+    if (res.status === 401) {
+      clearAuth();
+      window.dispatchEvent(new Event('grand_oral_studio:logout'));
+    }
+    throw new Error(message);
+  }
+  const blob = await res.blob();
+  const disposition = res.headers.get('Content-Disposition') || '';
+  const encoded = disposition.match(/filename\*=UTF-8''([^;]+)/);
+  let fileName = fallbackName;
+  if (encoded) {
+    try {
+      fileName = decodeURIComponent(encoded[1]);
+    } catch {
+      fileName = fallbackName;
+    }
+  }
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = fileName;
+  document.body.appendChild(a);
+  a.click();
+  a.remove();
+  URL.revokeObjectURL(url);
+  return fileName;
+}
+
 /** Télécharge le .pptx généré par le backend (route protégée). */
 export async function downloadPptx(sessionId, fallbackName = 'presentation-grand-oral.pptx') {
   const auth = getAuth();
