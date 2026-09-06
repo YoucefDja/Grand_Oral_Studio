@@ -14,7 +14,7 @@ function stepLabelOf(session, t) {
 export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
-  const { t } = useSettings();
+  const { t, lang } = useSettings();
   const [themes, setThemes] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -22,6 +22,8 @@ export default function HomePage() {
   const [creating, setCreating] = useState(false);
 
   const [form, setForm] = useState({ titre: '', theme: '', contexte: '' });
+  const [ideas, setIdeas] = useState([]);
+  const [ideasLoading, setIdeasLoading] = useState(false);
 
   useEffect(() => {
     let cancelled = false;
@@ -50,6 +52,29 @@ export default function HomePage() {
     } catch (err) {
       setError(err.message);
     }
+  }
+
+  async function handleGenerateIdeas() {
+    if (!form.theme || ideasLoading) return;
+    setIdeasLoading(true);
+    setError(null);
+    try {
+      const data = await api.post('/api/sessions/ideas', {
+        theme: form.theme,
+        contexte: form.contexte,
+        nb: 6,
+        lang,
+      });
+      setIdeas(Array.isArray(data.sujets) ? data.sujets : []);
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setIdeasLoading(false);
+    }
+  }
+
+  function pickIdea(sujet) {
+    setForm((prev) => ({ ...prev, titre: sujet }));
   }
 
   async function handleCreate(e) {
@@ -109,34 +134,98 @@ export default function HomePage() {
         <h2 style={{ marginTop: 0 }}>{t('home.newSession')}</h2>
         <form onSubmit={handleCreate}>
           <label className="field">
+            {t('home.themeLabel')}
+            <small>{t('home.ideaFirst')}</small>
+            <select
+              value={form.theme}
+              onChange={(e) => {
+                setForm((prev) => ({ ...prev, theme: e.target.value }));
+                setIdeas([]);
+              }}
+            >
+              <option value="">{t('home.themeChoice')}</option>
+              {themes.map((themeOpt) => (
+                <option key={themeOpt._id} value={themeOpt.label}>
+                  {themeOpt.label}
+                </option>
+              ))}
+            </select>
+          </label>
+
+          {form.theme ? (
+            <div className="ideas-box">
+              {ideas.length === 0 ? (
+                <button
+                  type="button"
+                  className="btn-ghost"
+                  onClick={handleGenerateIdeas}
+                  disabled={ideasLoading}
+                >
+                  {ideasLoading ? (
+                    <>
+                      <span className="spin" /> {t('home.ideaGenerating')}
+                    </>
+                  ) : (
+                    t('home.ideaGenerate')
+                  )}
+                </button>
+              ) : (
+                <>
+                  <p className="muted" style={{ margin: '0 0 8px' }}>
+                    {t('home.ideaIntro').replace('{theme}', form.theme)}
+                  </p>
+                  <div className="ideas-list">
+                    {ideas.map((sujet, idx) => (
+                      <button
+                        type="button"
+                        key={`${idx}-${sujet}`}
+                        className="btn-ghost idea-chip"
+                        onClick={() => pickIdea(sujet)}
+                      >
+                        {sujet}
+                      </button>
+                    ))}
+                  </div>
+                  <button
+                    type="button"
+                    className="btn-link"
+                    onClick={handleGenerateIdeas}
+                    disabled={ideasLoading}
+                    style={{ marginTop: 10 }}
+                  >
+                    {ideasLoading ? (
+                      <>
+                        <span className="spin" /> {t('home.ideaGenerating')}
+                      </>
+                    ) : (
+                      t('home.ideaMore')
+                    )}
+                  </button>
+                </>
+              )}
+            </div>
+          ) : null}
+
+          <label className="field">
             {t('home.subjectLabel')}
+            {ideas.length > 0 ? (
+              <small>{t('home.subjectChosen')}</small>
+            ) : null}
             <input
               type="text"
               value={form.titre}
-              onChange={(e) => setForm({ ...form, titre: e.target.value })}
+              onChange={(e) => setForm((prev) => ({ ...prev, titre: e.target.value }))}
               placeholder={t('home.subjectPlaceholder')}
               required
             />
           </label>
-          <div className="row-2">
-            <label className="field">
-              {t('home.themeLabel')}
-              <select value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value })}>
-                <option value="">{t('home.themeChoice')}</option>
-                {themes.map((t2) => (
-                  <option key={t2._id} value={t2.label}>
-                    {t2.label}
-                  </option>
-                ))}
-              </select>
-            </label>
-          </div>
+
           <label className="field">
             {t('home.contextLabel')}
             <small>{t('home.contextHint')}</small>
             <textarea
               value={form.contexte}
-              onChange={(e) => setForm({ ...form, contexte: e.target.value })}
+              onChange={(e) => setForm((prev) => ({ ...prev, contexte: e.target.value }))}
               placeholder={t('home.contextPlaceholder')}
             />
           </label>

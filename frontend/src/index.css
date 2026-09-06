@@ -854,6 +854,29 @@ button .spin {
   border-color: var(--accent-text);
 }
 
+/* ---------- Suggestions de sujets (accueil) ---------- */
+.ideas-box {
+  background: var(--cesi-lighter);
+  border: 1px dashed var(--line);
+  border-radius: var(--radius);
+  padding: 14px;
+  margin-bottom: 16px;
+}
+.ideas-list {
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+.idea-chip {
+  width: 100%;
+  text-align: left;
+  white-space: normal;
+  line-height: 1.5;
+}
+[data-theme='dark'] .ideas-box {
+  border-color: #33465c;
+}
+
 /* ============================================================
    Pied de page (pages légales + copyright)
    ============================================================ */

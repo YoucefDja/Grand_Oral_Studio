@@ -126,6 +126,52 @@ router.post(
   })
 );
 
+// POST /api/sessions/ideas — suggestions de sujets (Grand Oral) pour un thème.
+// DeepSeek génère plusieurs idées en rapport avec le thème choisi ; l'étudiant
+// peut ensuite en sélectionner une (pré-remplit le sujet) ou saisir le sien.
+router.post(
+  '/ideas',
+  asyncHandler(async (req, res) => {
+    const theme = String(req.body?.theme || '').trim();
+    if (!theme) {
+      throw httpError(400, 'Choisissez un thème pour générer des idées de sujets.');
+    }
+    const nb = Math.min(Math.max(parseInt(req.body?.nb, 10) || 6, 3), 10);
+    const lang = req.body?.lang === 'en' ? 'en' : 'fr';
+    const langue = lang === 'en' ? 'English' : 'French';
+
+    const system = [
+      'Tu conçois des sujets pour le Grand Oral d’un étudiant ingénieur (CESI).',
+      'À partir du thème choisi (et éventuellement du contexte de l’étudiant), propose des sujets',
+      'percutants, originaux et réalisables, qui portent une vraie tension ou question à défendre.',
+      'Chaque sujet est court (1 phrase), sous forme de question ou de sujet d’oral.',
+      `Rédige les sujets en ${langue}.`,
+      'Réponds UNIQUEMENT par un objet JSON : {"sujets":["…","…"]} — aucun commentaire, aucune balise.',
+    ].join(' ');
+
+    const user = JSON.stringify({
+      theme,
+      nombre: nb,
+      contexte_etudiant: String(req.body?.contexte || '').trim().slice(0, 800) || null,
+    });
+
+    let sujets = [];
+    try {
+      const raw = await generateDeepseek(system, user);
+      const parsed = parseJsonStrict(raw);
+      sujets = Array.isArray(parsed?.sujets)
+        ? parsed.sujets.map((s) => String(s).trim()).filter((s) => s.length >= 10)
+        : [];
+    } catch (err) {
+      throw httpError(502, `Génération d’idées impossible (${err.message}). Réessayez.`);
+    }
+    if (sujets.length < 2) {
+      throw httpError(502, 'Aucune idée exploitable générée pour ce thème. Réessayez.');
+    }
+    res.json({ sujets: sujets.slice(0, nb) });
+  })
+);
+
 // GET /api/sessions/:id
 router.get(
   '/:id',
