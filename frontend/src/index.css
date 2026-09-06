@@ -163,6 +163,7 @@ label.field small {
   margin-top: 2px;
 }
 input[type='text'],
+input[type='email'],
 input[type='password'],
 input[type='number'],
 select,
