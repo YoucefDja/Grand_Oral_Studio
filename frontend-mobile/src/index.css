@@ -449,3 +449,62 @@ button:disabled {
   display: block;
   margin: 18px auto 0;
 }
+
+/* ============================================================
+   Mode sombre — activé via data-theme="dark" sur <html>.
+   ============================================================ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface: #141f2c;
+  --surface-soft: #0f1823;
+  --surface-input: #182635;
+  --surface-hover: #1c2c3d;
+  --text-strong: #e8eef5;
+  --text-soft: #a6b6c7;
+  --accent-text: #8db9e3;
+
+  --cesi-light: #20354a;
+  --cesi-lighter: #192a3c;
+  --ink: var(--text-strong);
+  --ink-soft: var(--text-soft);
+  --line: #2a3c50;
+  --white: var(--surface);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 8px 22px rgba(0, 0, 0, 0.4);
+  --ok: #5fcf97;
+  --ok-bg: #123726;
+  --warn: #e8b061;
+  --warn-bg: #3a2c14;
+  --danger: #ef8f82;
+  --danger-bg: #3b1c18;
+}
+
+[data-theme='dark'] body {
+  background: #0c141d;
+}
+
+[data-theme='dark'] .login-card,
+[data-theme='dark'] .glossary,
+[data-theme='dark'] .news-card {
+  background: var(--surface);
+  border-color: var(--line);
+}
+
+[data-theme='dark'] .field input {
+  background: var(--surface-input);
+  color: var(--text-strong);
+  border-color: var(--line);
+}
+
+/* Textes « marque bleue » → variante claire lisible sur fond sombre. */
+[data-theme='dark'] .page-title,
+[data-theme='dark'] .reader-themes,
+[data-theme='dark'] .glossary-list strong,
+[data-theme='dark'] .badge-source {
+  color: var(--accent-text);
+}
+
+[data-theme='dark'] .reader-body p,
+[data-theme='dark'] .reader-title {
+  color: var(--text-strong);
+}

@@ -1,9 +1,11 @@
 import React from 'react';
 import StepShell from '../StepShell.jsx';
 import JsonViewer from '../JsonViewer.jsx';
+import { useSettings } from '../../settings.jsx';
 import { STEPS, STEP_EXPLANATIONS } from '../../steps.js';
 
 export default function StepAnalyse({ session, busy, error, onGenerate, goStep }) {
+  const { t } = useSettings();
   return (
     <StepShell
       stepKey="analyse"
@@ -18,7 +20,7 @@ export default function StepAnalyse({ session, busy, error, onGenerate, goStep }
       }
       renderData={(data) => <JsonViewer value={data} />}
       next={{
-        label: 'Passer à la problématique →',
+        label: t('steps.toProblematique'),
         disabled: false,
         onClick: () => goStep(STEPS.findIndex((s) => s.key === 'probleme')),
       }}

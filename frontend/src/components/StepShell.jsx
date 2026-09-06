@@ -1,4 +1,5 @@
 import React from 'react';
+import { useSettings } from '../settings.jsx';
 import { STEPS, hasStepData } from '../steps.js';
 
 function Spinner({ text }) {
@@ -27,6 +28,7 @@ export default function StepShell({
   next = null,
   allowRegenerate = true,
 }) {
+  const { t } = useSettings();
   const idx = STEPS.findIndex((s) => s.key === stepKey);
   const meta = STEPS[idx];
   const data = session?.data?.[stepKey];
@@ -39,7 +41,7 @@ export default function StepShell({
         <h2 style={{ margin: '0 0 4px' }}>
           {idx + 1}. {meta.label}
         </h2>
-        {exists ? <span className="badge badge-done">Contenu généré</span> : null}
+        {exists ? <span className="badge badge-done">{t('steps.contentGenerated')}</span> : null}
       </div>
       {intro}
 
@@ -58,16 +60,16 @@ export default function StepShell({
             onClick={() => onGenerate(stepKey)}
           >
             {generating ? (
-              <Spinner text={`Génération en cours (${meta.short.toLowerCase()})…`} />
+              <Spinner text={`${t('steps.generating')} (${meta.short.toLowerCase()})…`} />
             ) : generateDisabled ? (
-              'Étapes précédentes requises'
+              t('steps.previousStepsRequired')
             ) : (
-              `Générer : ${meta.short}`
+              `${t('steps.generate')} : ${meta.short}`
             )}
           </button>
           {generateDisabled ? (
             <p className="muted" style={{ marginTop: 8 }}>
-              Cette étape ne peut être générée tant que les étapes précédentes ne sont pas terminées.
+              {t('steps.generateBlockedHint')}
             </p>
           ) : null}
         </div>
@@ -78,7 +80,7 @@ export default function StepShell({
           <div className="actions-row" style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
             {allowRegenerate ? (
               <button type="button" className="btn-ghost" disabled={generating} onClick={() => onGenerate(stepKey)}>
-                {generating ? <Spinner text="Régénération…" /> : '↻ Régénérer'}
+                {generating ? <Spinner text={t('steps.regenerating')} /> : `↻ ${t('steps.regenerate')}`}
               </button>
             ) : null}
             {next ? (
@@ -88,7 +90,7 @@ export default function StepShell({
                 disabled={generating || next.disabled}
                 onClick={next.onClick}
               >
-                {next.label || 'Passer à l’étape suivante'}
+                {next.label || t('steps.nextStepDefault')}
               </button>
             ) : null}
           </div>

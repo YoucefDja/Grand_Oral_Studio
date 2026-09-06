@@ -21,6 +21,23 @@ const newsArticleSchema = new mongoose.Schema(
     content: { type: String, default: '' },
     // Thèmes admin (labels de la collection Theme) jugés pertinents par DeepSeek.
     themes: { type: [String], index: true, default: [] },
+    // Langue d'origine détectée à la première lecture (fr|en) — permet de
+    // savoir si une traduction est nécessaire selon la langue choisie.
+    originalLang: { type: String, enum: ['fr', 'en'], default: null },
+    // Traductions générées À LA LECTURE par DeepSeek (cache). Un article n'est
+    // traduit que si un utilisateur l'ouvre réellement dans l'autre langue.
+    translations: {
+      type: [
+        {
+          lang: { type: String, enum: ['fr', 'en'] },
+          title: { type: String, default: '' },
+          resume: { type: String, default: '' },
+          content: { type: String, default: '' },
+          updatedAt: { type: Date, default: Date.now },
+        },
+      ],
+      default: [],
+    },
     // Date de publication (si disponible) sinon date de récupération.
     publishedAt: { type: Date, default: null },
     // Classement produit par DeepSeek (thème IA / Big Data, etc.).

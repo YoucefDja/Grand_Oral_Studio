@@ -2,17 +2,19 @@ import React, { useEffect, useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import { api } from '../api.js';
 import { useAuth } from '../auth.jsx';
+import { useSettings } from '../settings.jsx';
 import { STEPS } from '../steps.js';
 
-function stepLabelOf(session) {
+function stepLabelOf(session, t) {
   const done = Number(session.currentStep || 0);
-  if (done >= STEPS.length) return 'Parcours terminé — support prêt';
+  if (done >= STEPS.length) return t('home.finishedBadge');
   return `${STEPS[done].label}`;
 }
 
 export default function HomePage() {
   const navigate = useNavigate();
   const { user } = useAuth();
+  const { t } = useSettings();
   const [themes, setThemes] = useState([]);
   const [sessions, setSessions] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -70,7 +72,7 @@ export default function HomePage() {
 
   async function handleDelete(e, session) {
     e.stopPropagation();
-    if (!window.confirm(`Supprimer la session « ${session.titre} » ?`)) return;
+    if (!window.confirm(t('home.confirmDelete').replace('{titre}', session.titre))) return;
     setError(null);
     try {
       await api.del(`/api/sessions/${session._id}`);
@@ -83,12 +85,11 @@ export default function HomePage() {
   return (
     <div>
       <h1 className="page-title">
-        {user?.email ? `Bonjour ${user.email.split('@')[0]} 👋` : 'Préparer un Grand Oral'}
+        {user?.email
+          ? `${t('home.hello')} ${user.email.split('@')[0]} 👋`
+          : t('home.prepareTitle')}
       </h1>
-      <p className="page-subtitle">
-        Suivez les 6 étapes méthodologiques pour construire votre sujet, votre problématique, votre
-        plan… jusqu’au support .pptx prêt pour le jury.
-      </p>
+      <p className="page-subtitle">{t('home.subtitle')}</p>
 
       {error ? (
         <div className="alert alert-error">
@@ -99,63 +100,63 @@ export default function HomePage() {
             style={{ marginLeft: 12 }}
             onClick={() => setError(null)}
           >
-            Fermer
+            {t('common.close')}
           </button>
         </div>
       ) : null}
 
       <section className="card panel">
-        <h2 style={{ marginTop: 0 }}>Nouvelle session</h2>
+        <h2 style={{ marginTop: 0 }}>{t('home.newSession')}</h2>
         <form onSubmit={handleCreate}>
           <label className="field">
-            Sujet du Grand Oral *
+            {t('home.subjectLabel')}
             <input
               type="text"
               value={form.titre}
               onChange={(e) => setForm({ ...form, titre: e.target.value })}
-              placeholder="Ex. Le cloud signe-t-il la fin des infrastructures sur site ?"
+              placeholder={t('home.subjectPlaceholder')}
               required
             />
           </label>
           <div className="row-2">
             <label className="field">
-              Thème
+              {t('home.themeLabel')}
               <select value={form.theme} onChange={(e) => setForm({ ...form, theme: e.target.value })}>
-                <option value="">— Choisir un thème —</option>
-                {themes.map((t) => (
-                  <option key={t._id} value={t.label}>
-                    {t.label}
+                <option value="">{t('home.themeChoice')}</option>
+                {themes.map((t2) => (
+                  <option key={t2._id} value={t2.label}>
+                    {t2.label}
                   </option>
                 ))}
               </select>
             </label>
           </div>
           <label className="field">
-            Contexte & expérience (entreprise, projet, motivations)
-            <small>Plus il est riche, plus le contenu généré sera ancré dans votre réalité.</small>
+            {t('home.contextLabel')}
+            <small>{t('home.contextHint')}</small>
             <textarea
               value={form.contexte}
               onChange={(e) => setForm({ ...form, contexte: e.target.value })}
-              placeholder="Ex. Alternance chez …, mission sur …, expérience personnelle…"
+              placeholder={t('home.contextPlaceholder')}
             />
           </label>
           <button type="submit" className="btn-primary" disabled={creating || !form.titre.trim()}>
             {creating ? (
               <>
-                <span className="spin" /> Création…
+                <span className="spin" /> {t('home.creating')}
               </>
             ) : (
-              'Créer la session et commencer'
+              t('home.createAndStart')
             )}
           </button>
         </form>
       </section>
 
       <section>
-        <h2 style={{ marginTop: 26 }}>Mes sessions</h2>
-        {loading ? <p className="muted">Chargement…</p> : null}
+        <h2 style={{ marginTop: 26 }}>{t('home.mySessions')}</h2>
+        {loading ? <p className="muted">{t('common.loading')}</p> : null}
         {!loading && sessions.length === 0 ? (
-          <div className="empty">Aucune session pour le moment. Créez-en une ci-dessus.</div>
+          <div className="empty">{t('home.emptySessions')}</div>
         ) : null}
         {sessions.map((s) => (
           <div className="session-row" key={s._id} onClick={() => navigate(`/session/${s._id}`)} style={{ cursor: 'pointer' }}>
@@ -168,7 +169,7 @@ export default function HomePage() {
             </div>
             <div className="session-actions">
               <span className={`badge ${s.currentStep >= STEPS.length ? 'badge-done' : 'badge-progress'}`}>
-                {stepLabelOf(s)}
+                {stepLabelOf(s, t)}
               </span>
               <button
                 type="button"
@@ -178,10 +179,10 @@ export default function HomePage() {
                   navigate(`/session/${s._id}`);
                 }}
               >
-                Ouvrir
+                {t('home.open')}
               </button>
               <button type="button" className="btn-danger" onClick={(e) => handleDelete(e, s)}>
-                Supprimer
+                {t('common.delete')}
               </button>
             </div>
           </div>

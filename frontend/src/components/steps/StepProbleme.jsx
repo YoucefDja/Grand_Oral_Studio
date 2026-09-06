@@ -1,5 +1,6 @@
 import React, { useMemo, useState } from 'react';
 import StepShell from '../StepShell.jsx';
+import { useSettings } from '../../settings.jsx';
 import { STEPS, STEP_EXPLANATIONS } from '../../steps.js';
 
 /**
@@ -8,6 +9,7 @@ import { STEPS, STEP_EXPLANATIONS } from '../../steps.js';
  * enchaîne sur la recherche documentaire. La ligne directrice reste modifiable.
  */
 function ProblemeChooser({ data, disabled, onValider }) {
+  const { t } = useSettings();
   const formulations = useMemo(
     () => (Array.isArray(data?.formulations) ? data.formulations : []),
     [data]
@@ -42,7 +44,7 @@ function ProblemeChooser({ data, disabled, onValider }) {
         ligneDirectrice: ligne.trim(),
       });
     } catch (err) {
-      setLocalError(err.message || 'Impossible d’enregistrer le choix.');
+      setLocalError(err.message || t('steps.saveChoiceError'));
     } finally {
       setSaving(false);
     }
@@ -51,9 +53,8 @@ function ProblemeChooser({ data, disabled, onValider }) {
   return (
     <div>
       <div className="alert alert-info" style={{ marginTop: 0 }}>
-        L’IA a proposé {formulations.length} formulations. <strong>Choisissez celle que vous
-        défendrez</strong> : elle seule sera transmise aux étapes suivantes (recherche, glossaire,
-        plan, support) comme « problématique retenue ».
+        {t('steps.iaProposed').replace('{n}', formulations.length)} <strong>{t('steps.chooseDefended')}</strong>
+        {t('steps.onlyTransmitted')}
       </div>
 
       {localError ? (
@@ -78,15 +79,15 @@ function ProblemeChooser({ data, disabled, onValider }) {
                 {isSel ? '✓' : ''}
               </span>
               <span className="formulation-body">
-                <span className="formulation-text">« {texte || `Formulation ${i + 1}`} »</span>
+                <span className="formulation-text">« {texte || `${t('steps.formulationFallback')} ${i + 1}`} »</span>
                 {typeof f?.pourquoi_discutable === 'string' && f.pourquoi_discutable ? (
                   <span className="formulation-note">
-                    Pourquoi elle est discutable : {f.pourquoi_discutable}
+                    {`${t('steps.whyDebatable')}${f.pourquoi_discutable}`}
                   </span>
                 ) : null}
                 {typeof f?.pourquoi_bornee_par_le_sujet === 'string' && f.pourquoi_bornee_par_le_sujet ? (
                   <span className="formulation-note">
-                    Bornée par le sujet : {f.pourquoi_bornee_par_le_sujet}
+                    {`${t('steps.boundedBySubject')}${f.pourquoi_bornee_par_le_sujet}`}
                   </span>
                 ) : null}
               </span>
@@ -96,7 +97,7 @@ function ProblemeChooser({ data, disabled, onValider }) {
       </div>
 
       <div className="data-section">
-        <div className="data-label">Ligne directrice — fil rouge de la présentation (modifiable)</div>
+        <div className="data-label">{t('steps.ldEditableLabel')}</div>
         <textarea
           className="input-textarea"
           rows={3}
@@ -113,12 +114,11 @@ function ProblemeChooser({ data, disabled, onValider }) {
           disabled={disabled || saving || !selected}
           onClick={handleValider}
         >
-          {saving ? 'Enregistrement du choix…' : '✓ Valider ma problématique choisie et continuer →'}
+          {saving ? t('steps.savingChoice') : `✓ ${t('steps.validateChoice')}`}
         </button>
       </div>
       <p className="muted" style={{ marginTop: 6 }}>
-        Le choix enregistré devient la problématique officielle : la ligne directrice ci-dessus est
-        ajustable avant validation.
+        {t('steps.choiceHint')}
       </p>
     </div>
   );

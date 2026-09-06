@@ -1,0 +1,163 @@
+/**
+ * Réglages d'affichage (langue + thème) — application mobile (PWA News).
+ *
+ * Mêmes conventions que la version web : localStorage pour la réactivité +
+ * synchronisation vers le profil du compte (PUT /api/auth/profile), afin que
+ * les préférences soient partagées entre le site et l'app.
+ */
+
+import React, {
+  createContext,
+  useCallback,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+} from 'react';
+import { useAuth } from './auth.jsx';
+import { api } from './api.js';
+import { LOCALES } from './locales.js';
+
+const SettingsContext = createContext(null);
+
+const KEY_LANG = 'gos_lang';
+const KEY_THEME = 'gos_theme';
+
+const LANGS = ['fr', 'en'];
+const THEMES = ['light', 'dark', 'system'];
+
+function readLS(key, fallback) {
+  try {
+    return localStorage.getItem(key) || fallback;
+  } catch {
+    return fallback;
+  }
+}
+
+function writeLS(key, value) {
+  try {
+    localStorage.setItem(key, value);
+  } catch {
+    /* localStorage indisponible */
+  }
+}
+
+function systemPrefersDark() {
+  try {
+    return Boolean(window.matchMedia && window.matchMedia('(prefers-color-scheme: dark)').matches);
+  } catch {
+    return false;
+  }
+}
+
+export function resolveTheme(theme) {
+  if (theme === 'system') return systemPrefersDark() ? 'dark' : 'light';
+  return theme === 'dark' ? 'dark' : 'light';
+}
+
+export function applyThemeAttr(theme) {
+  const resolved = resolveTheme(theme);
+  if (typeof document !== 'undefined' && document.documentElement) {
+    document.documentElement.dataset.theme = resolved;
+  }
+  return resolved;
+}
+
+export function applyStoredTheme() {
+  applyThemeAttr(readLS(KEY_THEME, 'system'));
+}
+
+export function SettingsProvider({ children }) {
+  const { user } = useAuth();
+
+  const [lang, setLangState] = useState(() => {
+    const v = readLS(KEY_LANG, 'fr');
+    return LANGS.includes(v) ? v : 'fr';
+  });
+  const [theme, setThemeState] = useState(() => {
+    const v = readLS(KEY_THEME, 'system');
+    return THEMES.includes(v) ? v : 'system';
+  });
+
+  const themeRef = useRef(theme);
+  themeRef.current = theme;
+
+  useEffect(() => {
+    if (!user) return;
+    if (LANGS.includes(user.language)) {
+      setLangState(user.language);
+      writeLS(KEY_LANG, user.language);
+    }
+    if (THEMES.includes(user.theme)) {
+      setThemeState(user.theme);
+      writeLS(KEY_THEME, user.theme);
+    }
+  }, [user]);
+
+  useEffect(() => {
+    applyThemeAttr(theme);
+  }, [theme]);
+
+  useEffect(() => {
+    if (typeof window === 'undefined' || !window.matchMedia) return undefined;
+    const mql = window.matchMedia('(prefers-color-scheme: dark)');
+    const onChange = () => {
+      if (themeRef.current === 'system') applyThemeAttr('system');
+    };
+    mql.addEventListener('change', onChange);
+    return () => mql.removeEventListener('change', onChange);
+  }, []);
+
+  const pushProfile = useCallback(
+    async (patch) => {
+      if (!user) return;
+      try {
+        await api.put('/api/auth/profile', patch);
+      } catch {
+        /* hors ligne : le local fait foi pour la session */
+      }
+    },
+    [user]
+  );
+
+  const setLang = useCallback(
+    (next) => {
+      const v = LANGS.includes(next) ? next : 'fr';
+      setLangState(v);
+      writeLS(KEY_LANG, v);
+      pushProfile({ language: v });
+    },
+    [pushProfile]
+  );
+
+  const setTheme = useCallback(
+    (next) => {
+      const v = THEMES.includes(next) ? next : 'system';
+      setThemeState(v);
+      writeLS(KEY_THEME, v);
+      pushProfile({ theme: v });
+    },
+    [pushProfile]
+  );
+
+  const t = useCallback(
+    (key) => {
+      const dict = LOCALES[lang] || LOCALES.fr;
+      const value = dict[key];
+      if (typeof value === 'string' && value !== '') return value;
+      const fallback = LOCALES.fr[key];
+      return typeof fallback === 'string' ? fallback : key;
+    },
+    [lang]
+  );
+
+  const value = { lang, setLang, theme, setTheme, t, isDark: resolveTheme(theme) === 'dark' };
+
+  return <SettingsContext.Provider value={value}>{children}</SettingsContext.Provider>;
+}
+
+export function useSettings() {
+  const ctx = useContext(SettingsContext);
+  if (!ctx) throw new Error('useSettings doit être utilisé à l’intérieur de <SettingsProvider>.');
+  return ctx;
+}

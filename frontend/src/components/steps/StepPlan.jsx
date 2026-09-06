@@ -1,14 +1,15 @@
 import React from 'react';
 import StepShell from '../StepShell.jsx';
+import { useSettings } from '../../settings.jsx';
 import { STEPS, STEP_EXPLANATIONS } from '../../steps.js';
 
-function SectionCard({ section }) {
+function SectionCard({ section, t }) {
   const points = Array.isArray(section.points) ? section.points : [];
   return (
     <div className="obj-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <span className="obj-card-title" style={{ marginBottom: 0 }}>
-          {section.partie || 'Partie'}
+          {section.partie || t('steps.partFallback')}
         </span>
         {typeof section.minutes === 'number' ? (
           <span className="badge badge-progress">{section.minutes} min</span>
@@ -27,6 +28,7 @@ function SectionCard({ section }) {
 }
 
 export default function StepPlan({ session, busy, error, onGenerate, goStep }) {
+  const { t } = useSettings();
   return (
     <StepShell
       stepKey="plan"
@@ -41,7 +43,7 @@ export default function StepPlan({ session, busy, error, onGenerate, goStep }) {
           </p>
           {typeof session?.data?.plan?.duree_totale_minutes === 'number' ? (
             <div className="alert alert-info" style={{ marginTop: 0 }}>
-              Durée totale visée : {session.data.plan.duree_totale_minutes} minutes.
+              {t('steps.planTotalDuration')} {session.data.plan.duree_totale_minutes} {t('steps.minutesUnit')}.
             </div>
           ) : null}
         </div>
@@ -55,11 +57,11 @@ export default function StepPlan({ session, busy, error, onGenerate, goStep }) {
         return (
           <div>
             {sections.map((section, i) => (
-              <SectionCard key={i} section={section} />
+              <SectionCard key={i} section={section} t={t} />
             ))}
             {repartition.length ? (
               <div className="data-section">
-                <div className="data-label">Répartition du temps (minutes)</div>
+                <div className="data-label">{t('steps.timeBreakdown')}</div>
                 <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
                   {repartition.map(([part, min]) => (
                     <span key={part} className="badge badge-progress">
@@ -73,7 +75,7 @@ export default function StepPlan({ session, busy, error, onGenerate, goStep }) {
         );
       }}
       next={{
-        label: 'Passer au support de présentation →',
+        label: t('steps.toSupport'),
         disabled: false,
         onClick: () => goStep(STEPS.findIndex((s) => s.key === 'support')),
       }}

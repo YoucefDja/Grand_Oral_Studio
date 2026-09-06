@@ -1,4 +1,5 @@
-import React from 'react';
+import React, { useContext } from 'react';
+import { useSettings } from '../settings.jsx';
 
 /**
  * Visionneuse générique et tolérante : rend n'importe quelle donnée JSON
@@ -81,6 +82,17 @@ const QUOTE_KEYS = new Set([
   'pourquoi_bornee_par_le_sujet',
 ]);
 
+/** Contexte interne fournissant la fonction de traduction aux sous-composants. */
+const ViewerCtx = React.createContext(null);
+
+/** Libellé traduit d'une clé de données, avec repli sur l'humanisation locale. */
+function labelOf(key, t) {
+  const dictKey = 'steps.jv.' + key;
+  const translated = t(dictKey);
+  if (typeof translated === 'string' && translated !== '' && translated !== dictKey) return translated;
+  return humanLabel(key);
+}
+
 export function humanLabel(key) {
   if (LABELS[key]) return LABELS[key];
   return String(key)
@@ -102,20 +114,22 @@ function isEmptyValue(v) {
 
 /** Affiche une valeur scalaire (string, number, bool). */
 function Scalar({ value, quote }) {
-  const text = typeof value === 'boolean' ? (value ? 'oui' : 'non') : String(value);
+  const t = useContext(ViewerCtx);
+  const text = typeof value === 'boolean' ? (value ? t('steps.yes') : t('steps.no')) : String(value);
   if (quote) return <p className="quote-value">{text}</p>;
   return <p className="text-value">{text}</p>;
 }
 
 /** Cartouche dédié aux objets "tension" { pole_a, pole_b, description }. */
 function TensionView({ obj }) {
+  const t = useContext(ViewerCtx);
   const a = obj.pole_a || obj['pôle_a'];
   const b = obj.pole_b || obj['pôle_b'];
   return (
     <div className="obj-card">
       <div style={{ display: 'flex', gap: 12, alignItems: 'center', flexWrap: 'wrap', marginBottom: 6 }}>
         {a ? <span className="badge badge-progress">{a}</span> : null}
-        <span className="muted">contre</span>
+        <span className="muted">{t('steps.vs')}</span>
         {b ? <span className="badge badge-done">{b}</span> : null}
       </div>
       {obj.description ? <p className="text-value" style={{ marginBottom: 0 }}>{obj.description}</p> : null}
@@ -126,7 +140,8 @@ function TensionView({ obj }) {
 /** Affiche une paire clé/valeur (récursif). */
 function Entry({ k, v }) {
   if (isEmptyValue(v)) return null;
-  const label = humanLabel(k);
+  const t = useContext(ViewerCtx);
+  const label = labelOf(k, t);
 
   if (typeof v === 'string') {
     return (
@@ -209,22 +224,25 @@ function ObjCard({ obj }) {
 
 /** Racine : affiche un objet JSON en sections, ou un tableau d'objets. */
 export default function JsonViewer({ value }) {
-  if (!value) return <p className="muted">Aucune donnée à afficher.</p>;
-  if (Array.isArray(value)) {
-    return (
-      <div>
-        {value.map((item, i) =>
-          item && typeof item === 'object' && !Array.isArray(item) ? (
-            <ObjCard key={i} obj={item} />
-          ) : (
-            <Scalar key={i} value={item} quote={typeof item === 'string'} />
-          )
-        )}
-      </div>
-    );
-  }
-  if (isPlainObject(value)) {
-    return <Nested obj={value} />;
-  }
-  return <Scalar value={value} quote={false} />;
+  const { t } = useSettings();
+  if (!value) return <p className="muted">{t('steps.noData')}</p>;
+  return (
+    <ViewerCtx.Provider value={t}>
+      {Array.isArray(value) ? (
+        <div>
+          {value.map((item, i) =>
+            item && typeof item === 'object' && !Array.isArray(item) ? (
+              <ObjCard key={i} obj={item} />
+            ) : (
+              <Scalar key={i} value={item} quote={typeof item === 'string'} />
+            )
+          )}
+        </div>
+      ) : isPlainObject(value) ? (
+        <Nested obj={value} />
+      ) : (
+        <Scalar value={value} quote={false} />
+      )}
+    </ViewerCtx.Provider>
+  );
 }

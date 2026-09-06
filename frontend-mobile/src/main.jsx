@@ -1,13 +1,19 @@
 import React from 'react';
 import ReactDOM from 'react-dom/client';
 import { AuthProvider } from './auth.jsx';
+import { SettingsProvider, applyStoredTheme } from './settings.jsx';
 import App from './App.jsx';
 import './index.css';
+
+// Applique le thème mémorisé avant le premier rendu (évite le flash clair/sombre).
+applyStoredTheme();
 
 ReactDOM.createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <AuthProvider>
-      <App />
+      <SettingsProvider>
+        <App />
+      </SettingsProvider>
     </AuthProvider>
   </React.StrictMode>
 );

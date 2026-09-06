@@ -1,6 +1,7 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useNavigate, useParams, Link } from 'react-router-dom';
 import { api } from '../api.js';
+import { useSettings } from '../settings.jsx';
 import { STEPS, ligneDirectriceOf } from '../steps.js';
 import StepTracker from './StepTracker.jsx';
 import { stepComponents } from './steps/index.js';
@@ -8,6 +9,7 @@ import { stepComponents } from './steps/index.js';
 export default function WorkspacePage() {
   const { id } = useParams();
   const navigate = useNavigate();
+  const { t } = useSettings();
 
   const [session, setSession] = useState(null);
   const [loading, setLoading] = useState(true);
@@ -30,11 +32,11 @@ export default function WorkspacePage() {
         setActiveIndex((prev) => Math.min(prev, Math.max(data.currentStep, 0)));
       }
     } catch (err) {
-      setFatalError(err.message || 'Session introuvable.');
+      setFatalError(err.message || t('workspace.notFound'));
     } finally {
       setLoading(false);
     }
-  }, [id]);
+  }, [id, t]);
 
   useEffect(() => {
     loadSession();
@@ -83,7 +85,7 @@ export default function WorkspacePage() {
 
   async function handleDelete() {
     if (!session) return;
-    if (!window.confirm(`Supprimer la session « ${session.titre} » ? Toutes les étapes seront perdues.`)) return;
+    if (!window.confirm(t('workspace.confirmDelete').replace('{titre}', session.titre))) return;
     try {
       await api.del(`/api/sessions/${id}`);
       navigate('/');
@@ -93,13 +95,13 @@ export default function WorkspacePage() {
   }
 
   if (loading) {
-    return <p className="muted">Chargement de la session…</p>;
+    return <p className="muted">{t('workspace.loadingSession')}</p>;
   }
   if (fatalError || !session) {
     return (
       <div className="card panel">
-        <div className="alert alert-error">{fatalError || 'Session introuvable.'}</div>
-        <Link to="/">← Retour à mes sessions</Link>
+        <div className="alert alert-error">{fatalError || t('workspace.notFound')}</div>
+        <Link to="/">← {t('workspace.backToSessions')}</Link>
       </div>
     );
   }
@@ -111,15 +113,17 @@ export default function WorkspacePage() {
     <div>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', gap: 14, flexWrap: 'wrap' }}>
         <div>
-          <Link to="/" className="muted">← Mes sessions</Link>
+          <Link to="/" className="muted">← {t('workspace.backLink')}</Link>
           <h1 className="page-title" style={{ marginBottom: 4 }}>{session.titre}</h1>
           <div className="muted">
             {session.theme ? `${session.theme} · ` : ''}
-            {session.currentStep >= STEPS.length ? 'parcours terminé' : `prochaine étape : ${STEPS[session.currentStep].label}`}
+            {session.currentStep >= STEPS.length
+              ? t('workspace.finished')
+              : `${t('workspace.nextStep')} ${STEPS[session.currentStep].label}`}
           </div>
         </div>
         <button type="button" className="btn-danger" onClick={handleDelete}>
-          Supprimer la session
+          {t('workspace.deleteSession')}
         </button>
       </div>
 
@@ -127,7 +131,7 @@ export default function WorkspacePage() {
 
       {ld && activeIndex >= 2 && activeIndex <= 4 ? (
         <div className="ld-banner" style={{ marginTop: 0 }}>
-          <span className="ld-tag">Fil conducteur de la présentation</span>
+          <span className="ld-tag">{t('workspace.ldTag')}</span>
           <p className="ld-text">« {ld} »</p>
         </div>
       ) : null}

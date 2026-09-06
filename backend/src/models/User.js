@@ -29,6 +29,9 @@ const userSchema = new mongoose.Schema(
     inviteExpires: { type: Date, default: null },
     acceptedAt: { type: Date, default: null },
     invitedBy: { type: mongoose.Schema.Types.ObjectId, ref: 'User', default: null },
+    // Préférences d'affichage partagées entre le site web et l'app mobile.
+    language: { type: String, enum: ['fr', 'en'], default: 'fr' },
+    theme: { type: String, enum: ['light', 'dark', 'system'], default: 'system' },
   },
   { timestamps: true }
 );
@@ -38,6 +41,8 @@ userSchema.methods.toPublic = function toPublic() {
     _id: this._id,
     email: this.email,
     role: this.role,
+    language: this.language,
+    theme: this.theme,
     acceptedAt: this.acceptedAt,
     createdAt: this.createdAt,
   };

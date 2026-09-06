@@ -50,6 +50,34 @@ router.get(
   })
 );
 
+// PUT /api/auth/profile — met à jour les préférences de l'utilisateur
+// (language : fr|en, theme : light|dark|system). Servent au site web ET à
+// l'app mobile (même compte, préférences synchronisées).
+router.put(
+  '/profile',
+  requireAuth,
+  asyncHandler(async (req, res) => {
+    const user = await User.findById(req.userId);
+    if (!user) throw httpError(401, 'Utilisateur introuvable.');
+
+    const body = req.body || {};
+    const LANGS = ['fr', 'en'];
+    const THEMES = ['light', 'dark', 'system'];
+
+    if (body.language !== undefined) {
+      if (!LANGS.includes(body.language)) throw httpError(400, 'Langue invalide (fr|en).');
+      user.language = body.language;
+    }
+    if (body.theme !== undefined) {
+      if (!THEMES.includes(body.theme)) throw httpError(400, 'Thème invalide (light|dark|system).');
+      user.theme = body.theme;
+    }
+
+    await user.save();
+    res.json({ user: user.toPublic() });
+  })
+);
+
 // POST /api/auth/accept-invite — configure le mot de passe depuis le lien reçu par e-mail.
 router.post(
   '/accept-invite',

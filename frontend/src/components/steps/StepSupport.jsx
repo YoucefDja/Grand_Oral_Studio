@@ -1,15 +1,16 @@
 import React, { useState } from 'react';
 import StepShell from '../StepShell.jsx';
+import { useSettings } from '../../settings.jsx';
 import { STEP_EXPLANATIONS, ligneDirectriceOf, glossaireValide } from '../../steps.js';
 import { api, downloadPptx, downloadSupportPrompt } from '../../api.js';
 
-function SlideCard({ slide, index }) {
+function SlideCard({ slide, index, t }) {
   const puces = Array.isArray(slide.puces) ? slide.puces : [];
   return (
     <div className="obj-card">
       <div style={{ display: 'flex', justifyContent: 'space-between', gap: 10, flexWrap: 'wrap' }}>
         <span className="obj-card-title" style={{ marginBottom: 0 }}>
-          {index + 1}. {slide.titre || 'Slide'}
+          {index + 1}. {slide.titre || t('steps.slideFallback')}
         </span>
         {slide.type ? <span className="badge badge-progress">{slide.type}</span> : null}
       </div>
@@ -23,7 +24,7 @@ function SlideCard({ slide, index }) {
       {slide.notes_orateur ? (
         <details style={{ marginTop: 6 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>
-            Notes orateur
+            {t('steps.speakerNotes')}
           </summary>
           <div className="alert alert-info" style={{ whiteSpace: 'pre-line' }}>
             {slide.notes_orateur}
@@ -36,6 +37,7 @@ function SlideCard({ slide, index }) {
 
 /** Mode alternatif : générer le support dans Claude (chat) sans consommer de tokens API. */
 function ClaudeModeCard({ session, onSessionRefresh }) {
+  const { t } = useSettings();
   const [exporting, setExporting] = useState(false);
   const [json, setJson] = useState('');
   const [importing, setImporting] = useState(false);
@@ -49,7 +51,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
     setMsg(null);
     try {
       const fileName = await downloadSupportPrompt(session._id);
-      setMsg(`Prompt téléchargé : ${fileName} — collez-le dans Claude (claude.ai).`);
+      setMsg(t('steps.claudePromptDownloaded').replace('{file}', fileName));
     } catch (err) {
       setError(err.message);
     } finally {
@@ -65,7 +67,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
     try {
       await api.post(`/api/sessions/${session._id}/import-support`, { json });
       setJson('');
-      setMsg('Support importé et validé : téléchargez le .pptx ci-dessus (aucun token Claude consommé).');
+      setMsg(t('steps.claudeImportSuccess'));
       await onSessionRefresh();
     } catch (err) {
       setError(err.message);
@@ -76,29 +78,26 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
 
   return (
     <section className="card panel">
-      <h2 style={{ margin: '0 0 4px' }}>Autre option : générer dans Claude (sans tokens API)</h2>
+      <h2 style={{ margin: '0 0 4px' }}>{t('steps.claudeTitle')}</h2>
       <p className="muted" style={{ marginTop: 0 }}>
-        Choix entre consommer vos tokens Claude (génération ci-dessus) ou utiliser Claude directement
-        (claude.ai) : le résultat du .pptx est identique.
+        {t('steps.claudeIntro')}
       </p>
       <ol style={{ margin: '0 0 14px', paddingLeft: 20 }}>
-        <li>Téléchargez le <strong>prompt complet .md</strong> ci-dessous.</li>
-        <li>Collez son intégralité dans Claude (claude.ai).</li>
-        <li>Collez ici le <strong>JSON</strong> renvoyé par Claude.</li>
-        <li>Validez, puis téléchargez le .pptx (0 token Claude consommé).</li>
+        <li>{t('steps.claudeStep1a')} <strong>{t('steps.claudePromptMd')}</strong> {t('steps.claudeStep1b')}</li>
+        <li>{t('steps.claudeStep2')}</li>
+        <li>{t('steps.claudeStep3a')} <strong>JSON</strong> {t('steps.claudeStep3b')}</li>
+        <li>{t('steps.claudeStep4')}</li>
       </ol>
 
       {!valide ? (
-        <div className="alert alert-info">
-          Cette option nécessite un glossaire validé (étape 4) avant le support.
-        </div>
+        <div className="alert alert-info">{t('steps.claudeNeedsGlossaire')}</div>
       ) : (
         <>
           <button type="button" className="btn-ghost" disabled={exporting} onClick={handleExport}>
-            {exporting ? 'Préparation…' : '⬇ Exporter le prompt .md (à coller dans Claude)'}
+            {exporting ? t('steps.preparing') : t('steps.claudeExportPrompt')}
           </button>
           <label className="field" style={{ marginTop: 14 }}>
-            JSON renvoyé par Claude (objet avec une clé "slides")
+            {t('steps.claudeJsonLabel')}
             <textarea
               value={json}
               onChange={(e) => setJson(e.target.value)}
@@ -108,7 +107,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
             />
           </label>
           <button type="button" className="btn-primary" disabled={importing || !json.trim()} onClick={handleImport}>
-            {importing ? 'Validation…' : 'Importer et valider le support'}
+            {importing ? t('steps.importing') : t('steps.importValidate')}
           </button>
           {msg ? <div className="alert alert-success">{msg}</div> : null}
           {error ? <div className="alert alert-error">{error}</div> : null}
@@ -119,8 +118,10 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
 }
 
 export default function StepSupport({ session, busy, error, onGenerate, goStep, onSessionRefresh }) {
+  const { t } = useSettings();
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState(null);
+  const [downloadOk, setDownloadOk] = useState(false);
   const ld = ligneDirectriceOf(session);
   const valide = glossaireValide(session);
   const slides = Array.isArray(session?.data?.support?.slides)
@@ -130,10 +131,13 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
   async function handleExportPptx() {
     setDownloading(true);
     setDownloadMsg(null);
+    setDownloadOk(false);
     try {
       const fileName = await downloadPptx(session._id);
-      setDownloadMsg(`Fichier téléchargé : ${fileName}`);
+      setDownloadOk(true);
+      setDownloadMsg(`${t('steps.downloaded')} : ${fileName}`);
     } catch (err) {
+      setDownloadOk(false);
       setDownloadMsg(err.message);
     } finally {
       setDownloading(false);
@@ -157,39 +161,39 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
           <div>
             {ld ? (
               <div className="ld-banner">
-                <span className="ld-tag">Ligne directrice de la présentation</span>
+                <span className="ld-tag">{t('steps.ldTag')}</span>
                 <p className="ld-text">« {ld} »</p>
               </div>
             ) : null}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0' }}>
-              {valide ? <span className="badge badge-done">Glossaire validé</span> : null}
-              <span className="badge badge-progress">{slides.length} slides</span>
+              {valide ? <span className="badge badge-done">{t('steps.glossaireOk')}</span> : null}
+              <span className="badge badge-progress">{slides.length} {t('steps.slidesUnit')}</span>
               <button type="button" className="btn-ghost" onClick={() => goStep(3)}>
-                Revoir le glossaire validé
+                {t('steps.reviewGlossaire')}
               </button>
             </div>
 
             {slides.map((slide, i) => (
-              <SlideCard key={i} slide={slide} index={i} />
+              <SlideCard key={i} slide={slide} index={i} t={t} />
             ))}
 
             <div style={{ marginTop: 20 }}>
               <button type="button" className="btn-ok" disabled={downloading || slides.length === 0} onClick={handleExportPptx}>
                 {downloading ? (
                   <>
-                    <span className="spin" /> Génération du .pptx…
+                    <span className="spin" /> {t('steps.generatingPptx')}
                   </>
                 ) : (
-                  '⬇ Télécharger le support .pptx'
+                  t('steps.downloadPptx')
                 )}
               </button>
               {downloadMsg ? (
-                <div className={`alert ${downloadMsg.includes('téléchargé') ? 'alert-success' : 'alert-error'}`} style={{ marginTop: 10 }}>
+                <div className={`alert ${downloadOk ? 'alert-success' : 'alert-error'}`} style={{ marginTop: 10 }}>
                   {downloadMsg}
                 </div>
               ) : null}
               <p className="muted" style={{ marginTop: 10 }}>
-                L’export est bloqué tant que le glossaire n’a pas été généré et validé.
+                {t('steps.exportBlockedHint')}
               </p>
             </div>
           </div>

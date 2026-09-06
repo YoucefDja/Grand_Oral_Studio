@@ -1,16 +1,18 @@
 import React, { useState } from 'react';
 import { Link, Navigate, useNavigate } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { useSettings } from '../settings.jsx';
 
 export default function LoginPage() {
   const { user, initializing, login } = useAuth();
+  const { t } = useSettings();
   const navigate = useNavigate();
   const [email, setEmail] = useState('');
   const [password, setPassword] = useState('');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
 
-  if (initializing) return <p className="muted">Chargement…</p>;
+  if (initializing) return <p className="muted">{t('common.loading')}</p>;
   if (user) return <Navigate to="/" replace />;
 
   async function handleSubmit(e) {
@@ -30,25 +32,22 @@ export default function LoginPage() {
   return (
     <div style={{ maxWidth: 440, margin: '40px auto' }}>
       <div className="card panel">
-        <h1 className="page-title">Connexion</h1>
-        <p className="muted">
-          Les comptes sont créés par l’administrateur : vous recevez un e-mail d’invitation pour
-          configurer votre mot de passe.
-        </p>
+        <h1 className="page-title">{t('login.title')}</h1>
+        <p className="muted">{t('login.intro')}</p>
         <form onSubmit={handleSubmit}>
           <label className="field">
-            E-mail
+            {t('login.emailLabel')}
             <input
               type="email"
               autoComplete="email"
               value={email}
               onChange={(e) => setEmail(e.target.value)}
-              placeholder="vous@exemple.fr"
+              placeholder={t('login.emailPlaceholder')}
               required
             />
           </label>
           <label className="field">
-            Mot de passe
+            {t('login.passwordLabel')}
             <input
               type="password"
               autoComplete="current-password"
@@ -59,13 +58,13 @@ export default function LoginPage() {
           </label>
           {error ? <div className="alert alert-error">{error}</div> : null}
           <button type="submit" className="btn-primary" disabled={busy || !email.trim() || !password}>
-            {busy ? 'Connexion…' : 'Se connecter'}
+            {busy ? t('login.signingIn') : t('login.submit')}
           </button>
         </form>
         <p className="muted" style={{ marginTop: 16 }}>
-          Compte administrateur initial : l’e-mail défini par <code>ADMIN_EMAIL</code> et le mot de
-          passe <code>ADMIN_PASSWORD</code> (configurés sur le backend).{' '}
-          <Link to="/">← Retour à l’accueil</Link>
+          {t('login.adminHint1')} <code>ADMIN_EMAIL</code> {t('login.adminHint2')}{' '}
+          <code>ADMIN_PASSWORD</code> {t('login.adminHint3')}{' '}
+          <Link to="/">← {t('login.backHome')}</Link>
         </p>
       </div>
     </div>

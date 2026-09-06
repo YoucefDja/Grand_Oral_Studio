@@ -740,3 +740,116 @@ button .spin {
   font-size: 13px;
   color: var(--ink-soft);
 }
+
+/* ============================================================
+   Mode sombre — activé via data-theme="dark" sur <html>.
+   La palette de remplissage (--cesi-primary, boutons, header…)
+   reste la marque bleue ; les surfaces et textes s'adaptent.
+   ============================================================ */
+[data-theme='dark'] {
+  color-scheme: dark;
+
+  --surface: #141f2c;
+  --surface-soft: #0f1823;
+  --surface-input: #182635;
+  --surface-hover: #1c2c3d;
+  --text-strong: #e8eef5;
+  --text-soft: #a6b6c7;
+  --accent-text: #8db9e3;
+
+  --cesi-light: #20354a;
+  --cesi-lighter: #192a3c;
+  --ink: var(--text-strong);
+  --ink-soft: var(--text-soft);
+  --line: #2a3c50;
+  --white: var(--surface);
+  --shadow: 0 1px 3px rgba(0, 0, 0, 0.5), 0 8px 22px rgba(0, 0, 0, 0.4);
+  --ok: #5fcf97;
+  --ok-bg: #123726;
+  --warn: #e8b061;
+  --warn-bg: #3a2c14;
+  --danger: #ef8f82;
+  --danger-bg: #3b1c18;
+}
+
+[data-theme='dark'] body {
+  background: #0c141d;
+}
+
+[data-theme='dark'] input,
+[data-theme='dark'] select,
+[data-theme='dark'] textarea {
+  background: var(--surface-input);
+  color: var(--text-strong);
+  border-color: var(--line);
+}
+
+[data-theme='dark'] ::placeholder {
+  color: #6f8194;
+}
+
+/* Surfaces blanches codées en dur → surfaces sombres. */
+[data-theme='dark'] .session-row,
+[data-theme='dark'] .step-pill,
+[data-theme='dark'] .tab,
+[data-theme='dark'] .admin-item,
+[data-theme='dark'] .formulation-option,
+[data-theme='dark'] .news-card,
+[data-theme='dark'] .btn-ghost,
+[data-theme='dark'] .step-pill {
+  background: var(--surface);
+  border-color: var(--line);
+  color: var(--text-strong);
+}
+[data-theme='dark'] .formulation-option.selected {
+  background: var(--surface-hover);
+}
+[data-theme='dark'] .code-block {
+  background: var(--surface-soft);
+  border-color: var(--line);
+  color: #cfe0f0;
+}
+
+/* Textes qui utilisaient la marque bleue (illisible sur fond sombre). */
+[data-theme='dark'] .obj-card-title,
+[data-theme='dark'] .formulation-text,
+[data-theme='dark'] .news-glossary .term,
+[data-theme='dark'] .badge-progress,
+[data-theme='dark'] .alert-info,
+[data-theme='dark'] .page-subtitle a,
+[data-theme='dark'] .news-theme {
+  color: var(--accent-text);
+}
+[data-theme='dark'] .news-theme {
+  background: #20354a;
+}
+[data-theme='dark'] .badge-progress {
+  background: #20354a;
+}
+
+/* Bordures d'alertes claires → teintes sombres. */
+[data-theme='dark'] .alert-error {
+  border-color: #6b322b;
+}
+[data-theme='dark'] .alert-success {
+  border-color: #2a5c41;
+}
+[data-theme='dark'] .alert-info {
+  border-color: #2b4966;
+  color: var(--accent-text);
+}
+
+[data-theme='dark'] .reader-body p {
+  color: var(--text-strong);
+}
+[data-theme='dark'] .news-title a,
+[data-theme='dark'] .news-title-btn {
+  color: var(--text-strong);
+}
+[data-theme='dark'] .btn-ghost:hover:not(:disabled) {
+  border-color: var(--accent-text);
+  color: var(--accent-text);
+}
+[data-theme='dark'] .step-pill.clickable:hover {
+  border-color: var(--accent-text);
+}

@@ -1,11 +1,13 @@
 import React, { useState } from 'react';
 import { Link, Navigate, useNavigate, useSearchParams } from 'react-router-dom';
 import { useAuth } from '../auth.jsx';
+import { useSettings } from '../settings.jsx';
 
 export default function AcceptInvitePage() {
   const [params] = useSearchParams();
   const token = params.get('token') || '';
   const { user, initializing, acceptInvite } = useAuth();
+  const { t } = useSettings();
   const navigate = useNavigate();
 
   const [password, setPassword] = useState('');
@@ -14,18 +16,18 @@ export default function AcceptInvitePage() {
   const [error, setError] = useState(null);
   const [done, setDone] = useState(false);
 
-  if (initializing) return <p className="muted">Chargement…</p>;
+  if (initializing) return <p className="muted">{t('common.loading')}</p>;
   if (user) return <Navigate to="/" replace />;
 
   async function handleSubmit(e) {
     e.preventDefault();
     setError(null);
     if (password.length < 8) {
-      setError('Le mot de passe doit contenir au moins 8 caractères.');
+      setError(t('invite.passwordTooShort'));
       return;
     }
     if (password !== confirm) {
-      setError('Les deux mots de passe ne correspondent pas.');
+      setError(t('invite.passwordMismatch'));
       return;
     }
     setBusy(true);
@@ -44,12 +46,9 @@ export default function AcceptInvitePage() {
     return (
       <div style={{ maxWidth: 440, margin: '40px auto' }}>
         <div className="card panel">
-          <h1 className="page-title">Lien d’invitation invalide</h1>
-          <div className="alert alert-error">
-            Ce lien est incomplet ou a déjà été utilisé. Demandez à votre administrateur de vous
-            renvoyer une invitation.
-          </div>
-          <Link to="/login">← Aller à la page de connexion</Link>
+          <h1 className="page-title">{t('invite.invalidTitle')}</h1>
+          <div className="alert alert-error">{t('invite.invalidMessage')}</div>
+          <Link to="/login">← {t('invite.backToLogin')}</Link>
         </div>
       </div>
     );
@@ -58,19 +57,14 @@ export default function AcceptInvitePage() {
   return (
     <div style={{ maxWidth: 440, margin: '40px auto' }}>
       <div className="card panel">
-        <h1 className="page-title">Configurer mon mot de passe</h1>
-        <p className="muted">
-          Vous avez été invité(e) à utiliser Grand Oral Studio. Choisissez un mot de passe (8 caractères
-          minimum) pour activer votre compte.
-        </p>
+        <h1 className="page-title">{t('invite.title')}</h1>
+        <p className="muted">{t('invite.intro')}</p>
         {done ? (
-          <div className="alert alert-success">
-            Compte activé. Connexion en cours…
-          </div>
+          <div className="alert alert-success">{t('invite.success')}</div>
         ) : null}
         <form onSubmit={handleSubmit}>
           <label className="field">
-            Mot de passe
+            {t('invite.passwordLabel')}
             <input
               type="password"
               autoComplete="new-password"
@@ -81,7 +75,7 @@ export default function AcceptInvitePage() {
             />
           </label>
           <label className="field">
-            Confirmer le mot de passe
+            {t('invite.confirmLabel')}
             <input
               type="password"
               autoComplete="new-password"
@@ -93,7 +87,7 @@ export default function AcceptInvitePage() {
           </label>
           {error ? <div className="alert alert-error">{error}</div> : null}
           <button type="submit" className="btn-primary" disabled={busy || !password || !confirm}>
-            {busy ? 'Activation…' : 'Activer mon compte'}
+            {busy ? t('invite.activating') : t('invite.activate')}
           </button>
         </form>
       </div>

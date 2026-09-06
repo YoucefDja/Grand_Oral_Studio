@@ -1,6 +1,7 @@
 const express = require('express');
 const NewsArticle = require('../models/NewsArticle');
 const NewsGlossary = require('../models/NewsGlossary');
+const { getArticleForLang } = require('../services/newsTranslate');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -44,11 +45,14 @@ router.get(
 // GET /api/news/articles/:id — détail complet d'un article (contenu pour la
 // lecture intégrée dans l'app web/mobile). Le contenu n'est jamais envoyé en
 // liste afin de garder des payloads légers.
+// Paramètre optionnel ?lang=fr|en : l'article est renvoyé dans la langue
+// demandée — traduit à la lecture par DeepSeek (avec cache) si sa langue
+// d'origine diffère. Sans paramètre, version brute inchangée.
 router.get(
   '/articles/:id',
   asyncHandler(async (req, res) => {
-    const article = await NewsArticle.findById(req.params.id).lean();
-    if (!article) throw httpError(404, 'Article introuvable.');
+    const lang = String(req.query.lang || '').toLowerCase();
+    const article = await getArticleForLang(req.params.id, lang === 'en' ? 'en' : lang === 'fr' ? 'fr' : null);
     res.json(article);
   })
 );

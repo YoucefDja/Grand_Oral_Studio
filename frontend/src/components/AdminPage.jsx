@@ -1,11 +1,13 @@
 import React, { useEffect, useState } from 'react';
 import { api } from '../api.js';
+import { useSettings } from '../settings.jsx';
 
 /* ------------------------------------------------------------------ */
 /* Éditeur : MethodologySection                                        */
 /* ------------------------------------------------------------------ */
 
 function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
+  const { t } = useSettings();
   const [sectionId, setSectionId] = useState(item?.sectionId || '');
   const [title, setTitle] = useState(item?.title || '');
   const [order, setOrder] = useState(item?.order ?? 10);
@@ -17,7 +19,7 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
   async function save(e) {
     e.preventDefault();
     if (!sectionId.trim() || !title.trim() || !content.trim()) {
-      setError('sectionId, titre et contenu sont obligatoires.');
+      setError(t('admin.methRequiredFields'));
       return;
     }
     setBusy(true);
@@ -46,7 +48,7 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
 
   async function remove() {
     if (!item) return onCancel();
-    if (!window.confirm(`Supprimer la section « ${item.title} » ?`)) return;
+    if (!window.confirm(t('admin.methConfirmDelete').replace('{title}', item.title))) return;
     setBusy(true);
     setError(null);
     try {
@@ -62,40 +64,40 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
     <form className={`admin-item ${busy ? 'saving' : ''}`} onSubmit={save}>
       <div className="row-2">
         <label className="field">
-          sectionId (slug unique)
+          {t('admin.methSectionId')}
           <input type="text" value={sectionId} onChange={(e) => setSectionId(e.target.value)} disabled={!isNew} />
         </label>
         <label className="field">
-          Title (affiché en admin)
+          {t('admin.methTitle')}
           <input type="text" value={title} onChange={(e) => setTitle(e.target.value)} />
         </label>
       </div>
       <div className="row-2">
         <label className="field">
-          Ordre d'assemblage
+          {t('admin.methOrder')}
           <input type="number" value={order} onChange={(e) => setOrder(e.target.value)} />
         </label>
         <label className="field">
-          Étapes concernées (séparées par des virgules ; "all" = toutes)
+          {t('admin.methAppliesToSteps')}
           <input type="text" value={appliesToSteps} onChange={(e) => setAppliesToSteps(e.target.value)} />
         </label>
       </div>
       <label className="field">
-        Contenu (markdown) — injecté tel quel dans le prompt système
+        {t('admin.methContent')}
         <textarea value={content} onChange={(e) => setContent(e.target.value)} rows={8} />
       </label>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="actions">
         <button type="submit" className="btn-primary" disabled={busy}>
-          {busy ? 'Enregistrement…' : 'Enregistrer'}
+          {busy ? t('admin.saving') : t('common.save')}
         </button>
         {isNew ? (
           <button type="button" className="btn-ghost" onClick={onCancel} disabled={busy}>
-            Annuler
+            {t('common.cancel')}
           </button>
         ) : (
           <button type="button" className="btn-danger" onClick={remove} disabled={busy}>
-            Supprimer
+            {t('common.delete')}
           </button>
         )}
       </div>
@@ -108,6 +110,7 @@ function MethodologyEditor({ item, isNew, onSaved, onDeleted, onCancel }) {
 /* ------------------------------------------------------------------ */
 
 function StepSchemaEditor({ item, onSaved }) {
+  const { t } = useSettings();
   const [description, setDescription] = useState(item.jsonSchemaDescription || '');
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState(null);
@@ -132,17 +135,17 @@ function StepSchemaEditor({ item, onSaved }) {
   return (
     <form className={`admin-item ${busy ? 'saving' : ''}`} onSubmit={save}>
       <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'baseline' }}>
-        <strong style={{ color: 'var(--cesi-primary)' }}>Étape : {item.stepKey}</strong>
-        <span className="muted">Injecté à la fin du prompt système de l'étape</span>
+        <strong style={{ color: 'var(--cesi-primary)' }}>{t('admin.schemaStepLabel')} {item.stepKey}</strong>
+        <span className="muted">{t('admin.schemaHint')}</span>
       </div>
       <label className="field">
-        Description du JSON attendu
+        {t('admin.schemaJsonDescription')}
         <textarea value={description} onChange={(e) => setDescription(e.target.value)} rows={8} />
       </label>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="actions">
         <button type="submit" className="btn-primary" disabled={busy}>
-          {busy ? 'Enregistrement…' : 'Enregistrer'}
+          {busy ? t('admin.saving') : t('common.save')}
         </button>
       </div>
     </form>
@@ -154,6 +157,7 @@ function StepSchemaEditor({ item, onSaved }) {
 /* ------------------------------------------------------------------ */
 
 function ThemeEditorItem({ item, onSaved, onDeleted }) {
+  const { t } = useSettings();
   const [label, setLabel] = useState(item.label);
   const [order, setOrder] = useState(item.order);
   const [busy, setBusy] = useState(false);
@@ -174,7 +178,7 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
   }
 
   async function remove() {
-    if (!window.confirm(`Supprimer le thème « ${item.label} » ?`)) return;
+    if (!window.confirm(t('admin.themeConfirmDelete').replace('{label}', item.label))) return;
     setBusy(true);
     setError(null);
     try {
@@ -190,21 +194,21 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
     <div className={`admin-item ${busy ? 'saving' : ''}`} style={{ padding: 14 }}>
       <div className="row-2">
         <label className="field">
-          Label
+          {t('admin.themeLabel')}
           <input type="text" value={label} onChange={(e) => setLabel(e.target.value)} />
         </label>
         <label className="field">
-          Ordre
+          {t('admin.orderLabel')}
           <input type="number" value={order} onChange={(e) => setOrder(e.target.value)} />
         </label>
       </div>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="actions">
         <button type="button" className="btn-primary" onClick={save} disabled={busy || !label.trim()}>
-          {busy ? '…' : 'Enregistrer'}
+          {busy ? '…' : t('common.save')}
         </button>
         <button type="button" className="btn-danger" onClick={remove} disabled={busy}>
-          Supprimer
+          {t('common.delete')}
         </button>
       </div>
     </div>
@@ -216,6 +220,7 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
 /* ------------------------------------------------------------------ */
 
 function NewsSourceEditor({ item, onSaved, onDeleted }) {
+  const { t } = useSettings();
   const [name, setName] = useState(item.name || '');
   const [url, setUrl] = useState(item.url || '');
   const [active, setActive] = useState(item.active !== false);
@@ -238,7 +243,7 @@ function NewsSourceEditor({ item, onSaved, onDeleted }) {
 
   async function remove() {
     if (!item) return;
-    if (!window.confirm(`Supprimer la source « ${item.name} » ?`)) return;
+    if (!window.confirm(t('admin.sourceConfirmDelete').replace('{name}', item.name))) return;
     setBusy(true);
     setError(null);
     try {
@@ -254,11 +259,11 @@ function NewsSourceEditor({ item, onSaved, onDeleted }) {
     <div className={`admin-item ${busy ? 'saving' : ''}`} style={{ padding: 14 }}>
       <div className="row-2">
         <label className="field">
-          Nom de la source
+          {t('admin.sourceNameLabel')}
           <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
         </label>
         <label className="field">
-          URL (page, flux RSS ou catégorie)
+          {t('admin.sourceUrlLabel')}
           <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
         </label>
       </div>
@@ -269,16 +274,16 @@ function NewsSourceEditor({ item, onSaved, onDeleted }) {
           onChange={(e) => setActive(e.target.checked)}
           style={{ width: 'auto' }}
         />
-        Source active (interrogée par le scraping quotidien)
+        {t('admin.sourceActiveLabel')}
       </label>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="actions">
         <button type="button" className="btn-primary" onClick={save} disabled={busy || !name.trim() || !url.trim()}>
-          {busy ? '…' : item ? 'Enregistrer' : 'Ajouter'}
+          {busy ? '…' : item ? t('common.save') : t('admin.addButton')}
         </button>
         {item ? (
           <button type="button" className="btn-danger" onClick={remove} disabled={busy}>
-            Supprimer
+            {t('common.delete')}
           </button>
         ) : null}
       </div>
@@ -291,6 +296,7 @@ function NewsSourceEditor({ item, onSaved, onDeleted }) {
 /* ------------------------------------------------------------------ */
 
 function NewsScanPanel({ onScan }) {
+  const { t } = useSettings();
   const [busy, setBusy] = useState(false);
   const [report, setReport] = useState(null);
   const [error, setError] = useState(null);
@@ -311,31 +317,31 @@ function NewsScanPanel({ onScan }) {
 
   return (
     <div className="admin-item">
-      <h3 style={{ marginTop: 0 }}>Collecte quotidienne des articles</h3>
-      <p className="muted">
-        Le cron quotidien interroge automatiquement les sources actives (6h30, Europe/Paris).
-        Ce bouton déclenche immédiatement le même processus (collecte + glossaire du jour), sans
-        attendre le cron.
-      </p>
+      <h3 style={{ marginTop: 0 }}>{t('admin.scanTitle')}</h3>
+      <p className="muted">{t('admin.scanHint')}</p>
       {error ? <div className="alert alert-error">{error}</div> : null}
       <div className="actions" style={{ justifyContent: 'flex-start' }}>
         <button type="button" className="btn-primary" onClick={launch} disabled={busy}>
           {busy ? (
             <>
-              <span className="spin" /> Scraping en cours…
+              <span className="spin" /> {t('admin.scanning')}
             </>
           ) : (
-            'Lancer le scraping manuellement'
+            t('admin.scanButton')
           )}
         </button>
       </div>
       {report ? (
         <div className="news-status" style={{ marginTop: 12 }}>
           {report.error ? <div className="alert alert-error">{report.error}</div> : null}
-          <strong>Dernière collecte ({report.date || '—'})</strong> : {report.totalNouveaux} nouvel(le)(s)
-          article(s) récupéré(s), {report.doublonsIgnores} doublon(s) ignoré(s) sur {report.totalTrouves}{' '}
-          lien(s) trouvé(s).
-          {report.glossaire ? ' Glossaire du jour généré.' : ''}
+          <strong>
+            {t('admin.scanReport')
+              .replace('{date}', report.date || '—')
+              .replace('{n}', report.totalNouveaux)
+              .replace('{d}', report.doublonsIgnores)
+              .replace('{f}', report.totalTrouves)}
+          </strong>
+          {report.glossaire ? ` ${t('admin.scanGlossaireDone')}` : ''}
           {report.notes && report.notes.length ? (
             <ul className="news-log" style={{ marginTop: 6 }}>
               {report.notes.map((n, i) => (
@@ -346,7 +352,8 @@ function NewsScanPanel({ onScan }) {
           <ul className="news-log" style={{ marginTop: 6 }}>
             {report.sources.map((s, i) => (
               <li key={i}>
-                {s.name} : {s.found} lien(s) · {s.nouveaux} nouveau(x) {s.error ? `· erreur : ${s.error}` : ''}
+                {s.name} : {s.found} {t('admin.linksUnit')} · {s.nouveaux} {t('admin.newUnit')}
+                {s.error ? ` · ${t('admin.errorLabel')} : ${s.error}` : ''}
               </li>
             ))}
           </ul>
@@ -361,6 +368,7 @@ function NewsScanPanel({ onScan }) {
 /* ------------------------------------------------------------------ */
 
 export default function AdminPage() {
+  const { t } = useSettings();
   const [tab, setTab] = useState('users');
   const [users, setUsers] = useState([]);
   const [sections, setSections] = useState([]);
@@ -422,11 +430,11 @@ export default function AdminPage() {
   }
 
   async function resetNewsSources() {
-    if (!window.confirm('Rétablir les 10 sources par défaut (sans toucher aux existantes) ?')) return;
+    if (!window.confirm(t('admin.confirmResetSources'))) return;
     setError(null);
     try {
       const data = await api.post('/api/admin/news-sources/reset');
-      setNotice(data.message || 'Sources par défaut restaurées.');
+      setNotice(data.message || t('admin.sourcesReset'));
       await refreshNewsSources();
     } catch (err) {
       setError(err.message);
@@ -450,7 +458,7 @@ export default function AdminPage() {
     try {
       const data = await api.post('/api/admin/users', { email: inviteEmail.trim() });
       setInviteEmail('');
-      setNotice(data.message || 'Invitation envoyée.');
+      setNotice(data.message || t('admin.inviteSent'));
       await refreshUsers();
     } catch (err) {
       setError(err.message);
@@ -465,14 +473,14 @@ export default function AdminPage() {
     setNotice(null);
     try {
       const data = await api.post(`/api/admin/users/${id}/resend-invite`);
-      setNotice(data.message || 'Invitation renvoyée.');
+      setNotice(data.message || t('admin.inviteResent'));
     } catch (err) {
       setError(err.message);
     }
   }
 
   async function deleteUser(id) {
-    if (!window.confirm('Supprimer cet utilisateur ? Ses sessions resteront en base mais ne lui seront plus accessibles.')) return;
+    if (!window.confirm(t('admin.confirmDeleteUser'))) return;
     setError(null);
     try {
       await api.del(`/api/admin/users/${id}`);
@@ -512,27 +520,24 @@ export default function AdminPage() {
 
   return (
     <div>
-      <h1 className="page-title" style={{ marginBottom: 0 }}>Administration</h1>
-      <p className="muted">
-        Invitez des utilisateurs par e-mail (ils configureront leur mot de passe via le lien reçu) et
-        gérez la méthodologie, les schémas de sortie et les thèmes.
-      </p>
+      <h1 className="page-title" style={{ marginBottom: 0 }}>{t('admin.title')}</h1>
+      <p className="muted">{t('admin.intro')}</p>
 
       <div className="tabs">
         <button className={`tab ${tab === 'users' ? 'on' : ''}`} onClick={() => setTab('users')}>
-          Utilisateurs ({users.length})
+          {t('admin.usersTab')} ({users.length})
         </button>
         <button className={`tab ${tab === 'methodology' ? 'on' : ''}`} onClick={() => setTab('methodology')}>
-          Méthodologie ({sections.length})
+          {t('admin.methodologyTab')} ({sections.length})
         </button>
         <button className={`tab ${tab === 'schemas' ? 'on' : ''}`} onClick={() => setTab('schemas')}>
-          Schémas de sortie ({schemas.length})
+          {t('admin.schemasTab')} ({schemas.length})
         </button>
         <button className={`tab ${tab === 'themes' ? 'on' : ''}`} onClick={() => setTab('themes')}>
-          Thèmes ({themes.length})
+          {t('admin.themesTab')} ({themes.length})
         </button>
         <button className={`tab ${tab === 'news' ? 'on' : ''}`} onClick={() => setTab('news')}>
-          News — sources ({newsSources.length})
+          {t('admin.newsTab')} ({newsSources.length})
         </button>
       </div>
 
@@ -540,7 +545,7 @@ export default function AdminPage() {
         <div className="alert alert-error">
           {error}
           <button type="button" className="btn-ghost" style={{ marginLeft: 12 }} onClick={() => setError(null)}>
-            Fermer
+            {t('common.close')}
           </button>
         </div>
       ) : null}
@@ -548,34 +553,31 @@ export default function AdminPage() {
         <div className="alert alert-success">
           {notice}
           <button type="button" className="btn-ghost" style={{ marginLeft: 12 }} onClick={() => setNotice(null)}>
-            Fermer
+            {t('common.close')}
           </button>
         </div>
       ) : null}
-      {loading ? <p className="muted">Chargement…</p> : null}
+      {loading ? <p className="muted">{t('common.loading')}</p> : null}
 
       {/* ---------------- Utilisateurs ---------------- */}
       {tab === 'users' ? (
         <div>
           <form className="admin-item" onSubmit={invite}>
-            <h3 style={{ marginTop: 0 }}>Inviter un utilisateur</h3>
-            <p className="muted">
-              Un e-mail (Resend) sera envoyé avec un lien de configuration du mot de passe, valable
-              48 h.
-            </p>
+            <h3 style={{ marginTop: 0 }}>{t('admin.inviteTitle')}</h3>
+            <p className="muted">{t('admin.inviteHint')}</p>
             <div style={{ display: 'flex', gap: 10, alignItems: 'flex-end', flexWrap: 'wrap' }}>
               <label className="field" style={{ flex: 1, minWidth: 260, marginBottom: 0 }}>
-                E-mail
+                {t('admin.emailLabel')}
                 <input
                   type="email"
                   value={inviteEmail}
                   onChange={(e) => setInviteEmail(e.target.value)}
-                  placeholder="etudiant@exemple.fr"
+                  placeholder={t('admin.emailPlaceholder')}
                   required
                 />
               </label>
               <button type="submit" className="btn-primary" disabled={inviteBusy || !inviteEmail.trim()}>
-                {inviteBusy ? 'Envoi…' : 'Inviter'}
+                {inviteBusy ? t('common.sending') : t('admin.inviteButton')}
               </button>
             </div>
           </form>
@@ -586,25 +588,25 @@ export default function AdminPage() {
                 <div>
                   <strong>{u.email}</strong>{' '}
                   {u.role === 'admin' ? (
-                    <span className="badge badge-progress">admin</span>
+                    <span className="badge badge-progress">{t('role.admin')}</span>
                   ) : u.pending ? (
                     <span className="badge" style={{ background: 'var(--warn-bg)', color: 'var(--warn)' }}>
-                      Invitation en attente
+                      {t('admin.pendingBadge')}
                     </span>
                   ) : (
-                    <span className="badge badge-done">utilisateur actif</span>
+                    <span className="badge badge-done">{t('admin.activeBadge')}</span>
                   )}
-                  <div className="muted">Inscrit le {dateFr(u.createdAt)}</div>
+                  <div className="muted">{t('admin.registeredOn')} {dateFr(u.createdAt)}</div>
                 </div>
                 <div className="session-actions">
                   {u.role !== 'admin' && u.pending ? (
                     <button type="button" className="btn-ghost" onClick={() => resendInvite(u._id)}>
-                      Renvoyer l’invitation
+                      {t('admin.resendInvite')}
                     </button>
                   ) : null}
                   {u.role !== 'admin' ? (
                     <button type="button" className="btn-danger" onClick={() => deleteUser(u._id)}>
-                      Supprimer
+                      {t('common.delete')}
                     </button>
                   ) : null}
                 </div>
@@ -620,7 +622,7 @@ export default function AdminPage() {
           <div style={{ display: 'flex', justifyContent: 'flex-end', marginBottom: 12 }}>
             {!adding ? (
               <button type="button" className="btn-primary" onClick={() => setAdding(true)}>
-                + Nouvelle section de méthodologie
+                + {t('admin.addSection')}
               </button>
             ) : null}
           </div>
@@ -662,22 +664,22 @@ export default function AdminPage() {
             style={{ display: 'grid', gridTemplateColumns: '1fr 120px auto', gap: 12, alignItems: 'end' }}
           >
             <label className="field" style={{ marginBottom: 0 }}>
-              Nouveau thème
-              <input type="text" name="label" placeholder="Ex. Mobilité & transports" required />
+              {t('admin.newThemeLabel')}
+              <input type="text" name="label" placeholder={t('admin.themePlaceholder')} required />
             </label>
             <label className="field" style={{ marginBottom: 0 }}>
-              Ordre
+              {t('admin.orderLabel')}
               <input type="number" name="order" defaultValue={themes.length + 1} />
             </label>
             <button type="submit" className="btn-primary" style={{ height: 42 }}>
-              Ajouter
+              {t('admin.addButton')}
             </button>
           </form>
-          {themes.map((t) => (
+          {themes.map((th) => (
             <ThemeEditorItem
-              key={t._id}
-              item={t}
-              onSaved={(saved) => setThemes((prev) => [...prev.filter((x) => x._id !== t._id), saved].sort((a, b) => a.order - b.order))}
+              key={th._id}
+              item={th}
+              onSaved={(saved) => setThemes((prev) => [...prev.filter((x) => x._id !== th._id), saved].sort((a, b) => a.order - b.order))}
               onDeleted={(id) => setThemes((prev) => prev.filter((x) => x._id !== id))}
             />
           ))}
@@ -690,11 +692,11 @@ export default function AdminPage() {
           <NewsScanPanel onScan={handleNewsScan} />
           <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
             <button type="button" className="btn-ghost" onClick={resetNewsSources}>
-              Restaurer les 10 sources par défaut
+              {t('admin.resetSourcesButton')}
             </button>
             {!addingNews ? (
               <button type="button" className="btn-primary" onClick={() => setAddingNews(true)}>
-                + Ajouter une source
+                + {t('admin.addSource')}
               </button>
             ) : null}
           </div>
@@ -716,10 +718,7 @@ export default function AdminPage() {
             />
           ))}
           {newsSources.length === 0 ? (
-            <div className="empty">
-              Aucune source configurée. Cliquez sur « Restaurer les 10 sources par défaut » pour
-              démarrer la veille IA / Big Data.
-            </div>
+            <div className="empty">{t('admin.emptySources')}</div>
           ) : null}
         </div>
       ) : null}
