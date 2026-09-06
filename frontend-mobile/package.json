@@ -1,0 +1,25 @@
+{
+  "name": "grand-oral-studio-news-mobile",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Grand Oral Studio — News mobile (PWA) : veille IA & Big Data, accessible aux utilisateurs connectés",
+  "type": "module",
+  "engines": {
+    "node": ">=18"
+  },
+  "scripts": {
+    "dev": "vite",
+    "build": "vite build",
+    "preview": "vite preview",
+    "start": "node static-server.js",
+    "icons": "node scripts/generate-icons.js"
+  },
+  "dependencies": {
+    "react": "^18.3.1",
+    "react-dom": "^18.3.1"
+  },
+  "devDependencies": {
+    "@vitejs/plugin-react": "^4.3.1",
+    "vite": "^5.4.8"
+  }
+}

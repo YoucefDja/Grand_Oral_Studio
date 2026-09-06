@@ -24,12 +24,13 @@ sessions**.
 
 ## Architecture
 
-L'application est découpée en **3 services Railway** :
+L'application est découpée en **4 services Railway** :
 
 | Service | Dossier | Techno | Rôle |
 | --- | --- | --- | --- |
 | `grand-oral-studio-backend` | `/backend` | Node.js + Express + MongoDB (Mongoose) | API, génération Anthropic, export .pptx, admin JWT |
 | `grand-oral-studio-frontend` | `/frontend` | React (Vite) — build statique servi par un mini-serveur SPA | Interface étudiant + page `/admin` |
+| `grand-oral-studio-news-mobile` | `/frontend-mobile` | React (Vite) — **PWA** installable | Version mobile de la veille News (connexion utilisateur) |
 | MongoDB | plugin Railway | MongoDB managé | Base de données |
 
 ```
@@ -55,6 +56,8 @@ L'application est découpée en **3 services Railway** :
 │   ├── static-server.js        # sert dist/ avec fallback SPA (deep links /admin)
 │   ├── package.json
 │   └── .env.example
+├── /frontend-mobile           # Service Railway "grand-oral-studio-news-mobile"
+│   └── …                       # PWA News (voir son README) — même backend
 ├── methodologie-grand-oral.md  # Document métier (source du seed)
 ├── prompt-ide-architecture.md  # Spec d'architecture
 └── README.md
@@ -138,6 +141,17 @@ affiche une veille automatique : articles récents + **glossaire du jour**
 
 Schémas associés : `NewsSource`, `NewsArticle`, `NewsGlossary`
 (fichiers `backend/src/models/`).
+
+### Application mobile (PWA) — `/frontend-mobile`
+
+Une version mobile installable de la veille News vit dans
+[`/frontend-mobile`](frontend-mobile/) (PWA React/Vite, dossier à déployer sur
+Railway comme service dédié `grand-oral-studio-news-mobile`). Elle réutilise le
+**même backend** : connexion avec les comptes utilisateur existants
+(`POST /api/auth/login`) puis lecture de `GET /api/news`. Déployez-la avec
+`VITE_API_URL` = URL du backend et **ajoutez son domaine à la variable
+`FRONTEND_URL` du backend** (origines séparées par des virgules) pour le CORS.
+Détails dans [frontend-mobile/README.md](frontend-mobile/README.md).
 
 ---
 
