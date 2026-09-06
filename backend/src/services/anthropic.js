@@ -59,6 +59,12 @@ async function generateAnthropic(promptSystem, promptUser) {
 
   const model = process.env.ANTHROPIC_MODEL || 'claude-sonnet-4-6';
 
+  // Claude Sonnet 5 (et les modèles Claude 5 / Opus 4.7+) rejettent tout paramètre
+  // d'échantillonnage non-défaut (temperature/top_p → 400). On n'envoie donc
+  // temperature que sur les modèles qui l'acceptent (4.6 et antérieurs) ; pour
+  // les autres, l'API applique sa valeur par défaut.
+  const ACCEPTE_TEMPERATURE = !/claude-(?:sonnet|opus|fable|mythos)-5|claude-opus-4-(?:7|8)/.test(model);
+
   let response;
   try {
     response = await fetch(ANTHROPIC_API_URL, {
@@ -71,9 +77,13 @@ async function generateAnthropic(promptSystem, promptUser) {
       body: JSON.stringify({
         model,
         max_tokens: MAX_TOKENS,
-        temperature: 0.3,
+        ...(ACCEPTE_TEMPERATURE ? { temperature: 0.3 } : {}),
         system: promptSystem,
         messages: [{ role: 'user', content: promptUser }],
+        // Thinking explicitement désactivé : sur les modèles récents (Sonnet 5,
+        // Opus 5…) l'omission du champ active la pensée adaptative — on force
+        // `disabled` (Sonnet 5 accepte { type: "disabled" }).
+        thinking: { type: 'disabled' },
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });

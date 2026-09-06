@@ -6,7 +6,9 @@
  *  - le prompt système est passé comme premier message { role: "system" } ;
  *  - modèle par défaut `deepseek-v4-flash`, surchargé par DEEPSEEK_MODEL ;
  *  - temperature: 1.0 et top_p: 1.0 (valeurs recommandées DeepSeek) ;
- *  - mode thinking JAMAIS activé, alias `deepseek-reasoner` jamais utilisé ;
+ *  - mode thinking explicitement DÉSACTIVÉ via `{"thinking": {"type": "disabled"}}`
+ *    (sur les modèles V4 le thinking est activé PAR DÉFAUT : l'omettre ne suffit
+ *    pas) — alias `deepseek-reasoner` jamais utilisé ;
  *  - retourne le TEXTE BRUT de la réponse : c'est l'appelant qui le parse en
  *    JSON (via parseJsonStrict, qui retire les éventuelles balises ```json```).
  *
@@ -54,7 +56,9 @@ async function generateDeepseek(promptSystem, promptUser) {
         max_tokens: MAX_TOKENS,
         temperature: 1.0,
         top_p: 1.0,
-        // thinking volontairement absent (mode non-thinking, jamais deepseek-reasoner)
+        // Thinking explicitement désactivé : sur les modèles V4 le mode thinking
+        // est ACTIVÉ PAR DÉFAUT, l'omettre ne suffit donc pas (jamais deepseek-reasoner).
+        thinking: { type: 'disabled' },
       }),
       signal: AbortSignal.timeout(TIMEOUT_MS),
     });
