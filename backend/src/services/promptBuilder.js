@@ -77,6 +77,30 @@ function vocabBlock(theme, vocab) {
 }
 
 /**
+ * Structure narrative imposée au support (étape 6). La problématique n'est pas
+ * dévoilée d'emblée : le diaporama y mène (contexte & mots-clés → enjeux), la
+ * pose sur une slide dédiée, puis chaque slide qui suit sert à y répondre sans
+ * sortir du sujet. Les sources sont citées sous les chiffres/exemples, sans
+ * slide « Sources » dédiée.
+ */
+const SUPPORT_STRUCTURE = `
+### Structure narrative du support de présentation — à appliquer STRICTEMENT
+Le .pptx ajoute automatiquement la page de titre (logo, école, candidat, sujet) : tu ne produis donc PAS de slide de titre.
+Chaque slide doit porter un "type" parmi : contexte | enjeux | problematique | existant | solutions | donnees | exemple_entreprise | conclusion.
+
+Ordre impératif des slides :
+1. « Contexte du sujet & mots-clés » (type contexte) : pourquoi ce sujet compte aujourd'hui ; présente les mots-clés du sujet avec leur définition courte (issus de l'analyse) et 1 à 2 chiffres clés actuels.
+2. « Enjeux » (type enjeux) : les enjeux TOHEE directement au cœur du sujet — pas un inventaire.
+3. UNE slide dédiée « Problématique » (type problematique) : la tension sous-jacente, puis la question formulée en une phrase et mise en avant.
+   RÈGLE : ne formule JAMAIS la problématique avant cette slide ; les slides précédentes ne font que préparer sa venue.
+4. À partir de cette slide et jusqu'à la fin, chaque slide doit faire progresser la réponse à CETTE problématique, sans jamais sortir du sujet :
+   - l'existant / l'analyse (type existant), illustré si utile par des slides données ou exemples d'entreprises réelles (types donnees / exemple_entreprise) ;
+   - les solutions / préconisations (type solutions), posture consultant contextualisée par la taille d'entreprise.
+5. « Conclusion » (type conclusion) : synthèse qui répond explicitement à la problématique, rappelle la ligne directrice, puis une ouverture prospective (question) sans y répondre.
+
+Provenance des chiffres, données et exemples rapportés du web : dès qu'une slide en présente un, ajoute juste en dessous une ligne courte commençant par « Source : » en citant l'une des sources validées fournies plus haut (jamais une source inventée). S'il n'existe pas de source correspondante, présente le chiffre comme « à vérifier » plutôt que de l'affirmer.`.trim();
+
+/**
  * Réduit l'objet "probleme" (2 à 4 formulations) à la SEULE formulation retenue
  * pour les étapes suivantes : celle pointée par `recommandation` (choisie par
  * l'étudiant à l'étape 2). Retombe sur la première formulation si le marqueur
@@ -169,6 +193,13 @@ async function buildStepPrompt(session, stepKey) {
   parts.push(
     `Format de sortie attendu pour l'étape « ${STEP_LABELS[stepKey] || stepKey} » :\n${stepDoc.jsonSchemaDescription}`
   );
+
+  // Structure narrative du diaporama (étape Support) — fait autorité sur l'ordre
+  // des slides et la révélation progressive de la problématique.
+  if (stepKey === 'support') {
+    parts.push(SUPPORT_STRUCTURE);
+  }
+
   parts.push(
     'Tu réponds UNIQUEMENT avec un objet JSON valide correspondant exactement au format de sortie attendu : aucune balise markdown de code, aucun texte avant ou après le JSON.'
   );
