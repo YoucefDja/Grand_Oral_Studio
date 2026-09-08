@@ -311,6 +311,30 @@ router.post(
   })
 );
 
+// POST /api/sessions/:id/skip-source
+// L'étape « Source en ligne » est FACULTATIVE : l'étudiant peut la passer et
+// continuer la préparation. La veille reste possible à tout moment ensuite.
+router.post(
+  '/:id/skip-source',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+
+    session.data.source = {
+      ...(session.data && session.data.source ? session.data.source : {}),
+      skipped: true,
+      skippedAt: new Date().toISOString(),
+    };
+    session.markModified('data');
+
+    const nextIndex = STEP_KEYS.indexOf('source') + 1;
+    session.currentStep = Math.max(session.currentStep || 0, nextIndex);
+
+    await session.save();
+    res.json(session);
+  })
+);
+
 // POST /api/sessions/:id/choisir-probleme
 // L'étudiant choisit, parmi les formulations générées à l'étape 2, celle qu'il
 // défendra : met à jour "recommandation" (utilisée ensuite par promptBuilder

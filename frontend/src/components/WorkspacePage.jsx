@@ -72,6 +72,17 @@ export default function WorkspacePage() {
     [id]
   );
 
+  // Étape 3 (facultative) : l'étudiant passe la veille « Source en ligne ».
+  // Le backend avance currentStep ; on enchaîne immédiatement sur l'étape suivante.
+  const handleSkipSource = useCallback(async () => {
+    setStepError(null);
+    const updated = await api.post(`/api/sessions/${id}/skip-source`);
+    setSession(updated);
+    const next = Math.min(Number(updated?.currentStep) || 0, STEPS.length - 1);
+    setActiveIndex(next);
+    return updated;
+  }, [id]);
+
   const goStep = useCallback(
     (index) => {
       if (!session) return;
@@ -145,6 +156,7 @@ export default function WorkspacePage() {
         goStep={goStep}
         onSessionRefresh={loadSession}
         onChoisirProbleme={handleChoisirProbleme}
+        onSkipSource={handleSkipSource}
       />
     </div>
   );

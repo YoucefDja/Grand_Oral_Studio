@@ -4,20 +4,22 @@ import { useSettings } from '../../settings.jsx';
 import { STEPS, STEP_EXPLANATIONS } from '../../steps.js';
 
 /**
- * Étape « Source en ligne » — veille ciblée MANUELLE.
+ * Étape « Source en ligne » — veille ciblée MANUELLE (FACULTATIVE).
  * À partir du thème + du sujet + de la problématique retenue, DeepSeek déduit
  * des mots-clés, les sources actives (admin) sont interrogées via Serper, puis
  * jusqu'à 4 articles sont sélectionnés et archivés dans l'onglet News.
+ * L'étudiant peut passer cette étape (« skip ») et la lancer plus tard.
  */
-export default function StepSource({ session, goStep, onSessionRefresh }) {
+export default function StepSource({ session, goStep, onSessionRefresh, onSkipSource }) {
   const { t } = useSettings();
-  const [running, setRunning] = useState(false);
+  const [busy, setBusy] = useState(null); // 'run' | 'skip' | null
   const [localError, setLocalError] = useState(null);
 
   const idx = STEPS.findIndex((s) => s.key === 'source');
   const meta = STEPS[idx] || { label: 'Source en ligne', short: 'Sources' };
   const data = session?.data?.source || {};
   const exists = Boolean(data?.generatedAt && Array.isArray(data?.articles));
+  const skipped = data?.skipped === true;
 
   // Problématique retenue (même logique que le backend : recommandation sinon 1re).
   const problematique = useMemo(() => {
@@ -32,8 +34,8 @@ export default function StepSource({ session, goStep, onSessionRefresh }) {
 
   const priveDeProblematique = !problematique;
 
-  async function launch() {
-    setRunning(true);
+  async function launchVeille() {
+    setBusy('run');
     setLocalError(null);
     try {
       await api.post(`/api/sessions/${session._id}/source-veille`);
@@ -41,15 +43,38 @@ export default function StepSource({ session, goStep, onSessionRefresh }) {
     } catch (err) {
       setLocalError(err.message || t('source.errorGeneric'));
     } finally {
-      setRunning(false);
+      setBusy(null);
     }
   }
 
-  function goNext() {
-    if (typeof goStep !== 'function') return;
-    const n = Math.min(idx + 1, STEPS.length - 1);
-    goStep(n);
+  // « Passer cette étape » : le parent (WorkspacePage) enregistre le skip puis
+  // enchaîne directement sur l'étape suivante. La veille reste possible plus tard.
+  async function skipSource() {
+    setBusy('skip');
+    setLocalError(null);
+    try {
+      if (typeof onSkipSource === 'function') {
+        await onSkipSource();
+      } else {
+        await api.post(`/api/sessions/${session._id}/skip-source`);
+        if (typeof onSessionRefresh === 'function') await onSessionRefresh();
+      }
+    } catch (err) {
+      setLocalError(err.message || t('source.errorGeneric'));
+    } finally {
+      setBusy(null);
+    }
   }
+
+  const goNext = () => {
+    if (typeof goStep === 'function') goStep(Math.min(idx + 1, STEPS.length - 1));
+  };
+
+  const spinner = (label) => (
+    <>
+      <span className="spin" /> {label}
+    </>
+  );
 
   return (
     <section className="card panel">
@@ -75,32 +100,65 @@ export default function StepSource({ session, goStep, onSessionRefresh }) {
 
       {!exists ? (
         <div>
-          <p className="muted">
-            {t('source.recapLine').replace('{theme}', session?.theme || '—').replace('{sujet}', session?.titre || '—')}
-          </p>
-          {problematique ? (
+          {skipped ? (
             <div className="alert alert-info" style={{ marginTop: 0 }}>
-              <strong>{t('source.selectedProblem')}</strong>{' '}
-              <em>« {problematique} »</em>
+              {t('source.skippedNote')}
             </div>
+          ) : (
+            <>
+              <p className="muted">
+                {t('source.recapLine').replace('{theme}', session?.theme || '—').replace('{sujet}', session?.titre || '—')}
+              </p>
+              {problematique ? (
+                <div className="alert alert-info" style={{ marginTop: 0 }}>
+                  <strong>{t('source.selectedProblem')}</strong>{' '}
+                  <em>« {problematique} »</em>
+                </div>
+              ) : null}
+            </>
+          )}
+
+          {!skipped ? (
+            <div className="actions-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={busy !== null || priveDeProblematique}
+                onClick={launchVeille}
+                style={{ width: 'auto' }}
+              >
+                {busy === 'run' ? spinner(t('source.running')) : t('source.run')}
+              </button>
+              <button
+                type="button"
+                className="btn-ghost"
+                disabled={busy !== null || priveDeProblematique}
+                onClick={skipSource}
+              >
+                {busy === 'skip' ? spinner(t('source.skipping')) : t('source.skip')}
+              </button>
+            </div>
+          ) : (
+            <div className="actions-row" style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center' }}>
+              <button
+                type="button"
+                className="btn-primary"
+                disabled={busy !== null || priveDeProblematique}
+                onClick={launchVeille}
+                style={{ width: 'auto' }}
+              >
+                {busy === 'run' ? spinner(t('source.running')) : t('source.run')}
+              </button>
+              <button type="button" className="btn-ghost" disabled={busy !== null} onClick={goNext}>
+                {t('source.goNext')} →
+              </button>
+            </div>
+          )}
+          {!skipped ? (
+            <p className="muted" style={{ marginTop: 8 }}>
+              {t('source.runHint')}
+            </p>
           ) : null}
-          <button
-            type="button"
-            className="btn-primary"
-            disabled={running || priveDeProblematique}
-            onClick={launch}
-          >
-            {running ? (
-              <>
-                <span className="spin" /> {t('source.running')}
-              </>
-            ) : (
-              t('source.run')
-            )}
-          </button>
-          <p className="muted" style={{ marginTop: 8 }}>
-            {t('source.runHint')}
-          </p>
         </div>
       ) : (
         <div>
@@ -151,16 +209,10 @@ export default function StepSource({ session, goStep, onSessionRefresh }) {
           </div>
 
           <div className="actions-row" style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
-            <button type="button" className="btn-ghost" disabled={running} onClick={launch}>
-              {running ? (
-                <>
-                  <span className="spin" /> {t('source.running')}
-                </>
-              ) : (
-                `↻ ${t('source.reRun')}`
-              )}
+            <button type="button" className="btn-ghost" disabled={busy !== null} onClick={launchVeille}>
+              {busy === 'run' ? spinner(t('source.running')) : `↻ ${t('source.reRun')}`}
             </button>
-            <button type="button" className="btn-primary" onClick={goNext} disabled={running}>
+            <button type="button" className="btn-primary" disabled={busy !== null} onClick={goNext}>
               {t('source.goNext')} →
             </button>
           </div>

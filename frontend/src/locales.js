@@ -254,6 +254,10 @@ export const FR = {
   'source.selectedArticles': 'Articles retenus (sélection IA)',
   'source.reRun': 'Relancer une veille',
   'source.goNext': 'Continuer vers',
+  'source.skip': 'Passer cette étape',
+  'source.skipping': 'Passage…',
+  'source.skippedNote':
+    'Vous avez choisi de passer cette étape sans lancer de veille. La suite du parcours est débloquée : vous pouvez continuer, ou lancer la veille plus tard quand vous le souhaitez.',
   'source.archiveHint':
     'Ces articles sont visibles par tous dans l’onglet News, avec leur thème, leur sujet et leur problématique d’origine.',
   'source.errorGeneric': 'La veille a échoué. Réessayez.',
@@ -581,6 +585,10 @@ export const EN = {
   'source.selectedArticles': 'Selected articles (AI pick)',
   'source.reRun': 'Run the veille again',
   'source.goNext': 'Continue to',
+  'source.skip': 'Skip this step',
+  'source.skipping': 'Skipping…',
+  'source.skippedNote':
+    'You chose to skip this step without running a veille. The rest of the journey is unlocked: you can continue, or run the veille later whenever you want.',
   'source.archiveHint':
     'These articles are visible to everyone in the News tab, with their original theme, subject and research question.',
   'source.errorGeneric': 'The veille failed. Please retry.',
