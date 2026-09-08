@@ -17,6 +17,7 @@ const adminRouter = require('./routes/admin');
 const adminNewsRouter = require('./routes/adminNews');
 const authRouter = require('./routes/auth');
 const newsRouter = require('./routes/news');
+const glossaireRouter = require('./routes/glossaire');
 const NewsSource = require('./models/NewsSource');
 const { DEFAULT_NEWS_SOURCES } = require('./data/defaultNewsSources');
 const { ensureInitialAdmin, migrateOwnerlessSessions } = require('./bootstrap');
@@ -66,6 +67,7 @@ app.use('/api/admin', adminRouter);
 app.use('/api/admin', adminNewsRouter);
 app.use('/api/auth', authRouter);
 app.use('/api/news', newsRouter);
+app.use('/api/glossaire', glossaireRouter);
 
 // 404 JSON pour les routes /api inconnues.
 app.use('/api', (_req, res) => {

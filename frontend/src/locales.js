@@ -14,6 +14,7 @@ export const FR = {
   'brand.sub': 'Préparation au Grand Oral CESI',
   'nav.sessions': 'Mes sessions',
   'nav.news': 'News',
+  'nav.glossary': 'Glossaire',
   'nav.admin': 'Administration',
   'nav.login': 'Se connecter',
   'nav.logout': 'Se déconnecter',
@@ -262,6 +263,21 @@ export const FR = {
     'Ces articles sont visibles par tous dans l’onglet News, avec leur thème, leur sujet et leur problématique d’origine.',
   'source.errorGeneric': 'La veille a échoué. Réessayez.',
 
+  // ---- Glossaire personnel (GlossaryPage) ----
+  'glossary.pageTitle': 'Mon glossaire',
+  'glossary.subtitle':
+    'Tous les termes & acronymes définis dans les glossaires de vos sessions (étape Glossaire), cumulés et sans doublon : de quoi réviser à tout moment.',
+  'glossary.searchPlaceholder': 'Rechercher un terme ou une définition…',
+  'glossary.count': '{n} terme(s)',
+  'glossary.loading': 'Chargement du glossaire…',
+  'glossary.error': 'Impossible de charger le glossaire.',
+  'glossary.empty':
+    'Aucun terme pour le moment. Les termes apparaîtront ici dès que vous aurez généré un glossaire dans une session (étape Glossaire).',
+  'glossary.noMatch': 'Aucun terme ne correspond à « {q} ».',
+  'glossary.noDefinition': 'Définition à compléter.',
+  'glossary.fromSession': 'Issu de la session',
+  'glossary.fromSessions': 'Issu de {n} sessions :',
+
   // ---- News (NewsPage : articles issus des veilles de session) ----
   'news.title': 'News — Veille IA & Big Data',
   'news.subtitle':
@@ -354,6 +370,7 @@ export const EN = {
   'brand.sub': 'Prep for the CESI Grand Oral',
   'nav.sessions': 'My sessions',
   'nav.news': 'News',
+  'nav.glossary': 'Glossary',
   'nav.admin': 'Administration',
   'nav.login': 'Sign in',
   'nav.logout': 'Sign out',
@@ -592,6 +609,21 @@ export const EN = {
   'source.archiveHint':
     'These articles are visible to everyone in the News tab, with their original theme, subject and research question.',
   'source.errorGeneric': 'The veille failed. Please retry.',
+
+  // ---- Personal glossary (GlossaryPage) ----
+  'glossary.pageTitle': 'My glossary',
+  'glossary.subtitle':
+    'Every term & acronym defined in the glossaries of your sessions (Glossary step), merged with no duplicates: handy for reviewing anytime.',
+  'glossary.searchPlaceholder': 'Search a term or a definition…',
+  'glossary.count': '{n} term(s)',
+  'glossary.loading': 'Loading the glossary…',
+  'glossary.error': 'Unable to load the glossary.',
+  'glossary.empty':
+    'No term yet. Terms will appear here as soon as you generate a glossary in a session (Glossary step).',
+  'glossary.noMatch': 'No term matches “{q}”.',
+  'glossary.noDefinition': 'Definition to be completed.',
+  'glossary.fromSession': 'From the session',
+  'glossary.fromSessions': 'From {n} sessions:',
 
   'news.title': 'News — AI & Big Data watch',
   'news.subtitle':

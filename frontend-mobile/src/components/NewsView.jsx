@@ -1,6 +1,5 @@
 import React, { useCallback, useEffect, useRef, useState } from 'react';
 import { api } from '../api.js';
-import { useAuth } from '../auth.jsx';
 import { useSettings } from '../settings.jsx';
 
 function hostOf(url) {
@@ -16,87 +15,6 @@ function dateFr(value) {
   const d = new Date(value);
   if (Number.isNaN(d.getTime())) return '';
   return d.toLocaleDateString('fr-FR', { day: '2-digit', month: 'short', year: 'numeric' });
-}
-
-/* Pastille segmentée des sélecteurs langue / thème (fond bleu de la topbar). */
-const barSeg = (active) => ({
-  background: active ? 'rgba(255, 255, 255, 0.95)' : 'transparent',
-  color: active ? '#1f4e79' : 'rgba(255, 255, 255, 0.92)',
-  border: '1px solid ' + (active ? 'rgba(255, 255, 255, 0.95)' : 'rgba(255, 255, 255, 0.4)'),
-  borderRadius: 999,
-  padding: '2px 8px',
-  fontSize: 12,
-  fontWeight: active ? 700 : 600,
-  lineHeight: 1.5,
-});
-
-/* Sélecteurs FR/EN (pastilles) + bouton unique thème clair/sombre (lune/soleil). */
-function DisplayControls() {
-  const { lang, setLang, setTheme, isDark, t } = useSettings();
-
-  const labelStyle = { fontSize: 11, fontWeight: 600, opacity: 0.9 };
-  const buttonsStyle = { display: 'inline-flex', gap: 4 };
-  const themeBtn = {
-    background: 'rgba(255,255,255,0.16)',
-    color: '#fff',
-    border: '1px solid rgba(255,255,255,0.5)',
-    borderRadius: 999,
-    width: 36,
-    height: 36,
-    fontSize: 18,
-    lineHeight: 1,
-    display: 'inline-flex',
-    alignItems: 'center',
-    justifyContent: 'center',
-  };
-
-  function toggleTheme() {
-    setTheme(isDark ? 'light' : 'dark');
-  }
-
-  return (
-    <span
-      style={{
-        display: 'inline-flex',
-        flexWrap: 'wrap',
-        alignItems: 'center',
-        justifyContent: 'flex-end',
-        gap: '6px 10px',
-        marginLeft: 'auto',
-      }}
-    >
-      <span style={{ display: 'inline-flex', alignItems: 'center', gap: 6 }}>
-        <span style={labelStyle}>{t('settings.language')}</span>
-        <span style={buttonsStyle}>
-          <button
-            type="button"
-            aria-pressed={lang === 'fr'}
-            onClick={() => setLang('fr')}
-            style={barSeg(lang === 'fr')}
-          >
-            FR
-          </button>
-          <button
-            type="button"
-            aria-pressed={lang === 'en'}
-            onClick={() => setLang('en')}
-            style={barSeg(lang === 'en')}
-          >
-            EN
-          </button>
-        </span>
-      </span>
-      <button
-        type="button"
-        onClick={toggleTheme}
-        style={themeBtn}
-        aria-label={t('settings.toggleTheme')}
-        title={isDark ? t('settings.themeLight') : t('settings.themeDark')}
-      >
-        {isDark ? '☀' : '☾'}
-      </button>
-    </span>
-  );
 }
 
 function contextLine(article, t) {
@@ -192,8 +110,12 @@ function ArticleReader({ article, onBack }) {
   );
 }
 
-export default function NewsView() {
-  const { user, logout } = useAuth();
+/**
+ * Onglet News de la PWA — contenu seul (liste + lecteur intégré).
+ * La barre haute (titre, langue/thème, déconnexion) vit dans la coquille
+ * MobileShell ; `refreshTick` y est incrémenté pour forcer un rechargement.
+ */
+export default function NewsView({ refreshTick = 0 }) {
   const { lang, t } = useSettings();
   const [articles, setArticles] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -220,15 +142,16 @@ export default function NewsView() {
     }
   }, []);
 
-  useEffect(() => {
-    load();
-  }, [load]);
-
-  async function handleRefresh() {
+  const reload = useCallback(async () => {
     setRefreshing(true);
     setError(null);
     await load();
-  }
+  }, [load]);
+
+  // Au montage, puis à chaque demande de rafraîchissement de la barre haute.
+  useEffect(() => {
+    reload();
+  }, [reload, refreshTick]);
 
   function goBack() {
     setReader(null);
@@ -247,83 +170,47 @@ export default function NewsView() {
     }
   }
 
+  if (readerLoading) {
+    return (
+      <main className="content">
+        <p className="muted">{t('reader.loading')}</p>
+      </main>
+    );
+  }
+
+  if (reader) {
+    return <ArticleReader article={reader} onBack={goBack} />;
+  }
+
   return (
-    <div className="app-mobile">
-      <header className="topbar">
-        <div
-          style={{
-            display: 'flex',
-            flexWrap: 'wrap',
-            alignItems: 'center',
-            justifyContent: 'space-between',
-            gap: '6px 10px',
-            width: '100%',
-          }}
-        >
-          <div className="topbar-title">
-            <span className="logo-mark small">GO</span>
-            <div>
-              <strong>{reader ? t('news.article') : t('news.news')}</strong>
-              <small>{user?.email}</small>
-            </div>
-          </div>
-          <div className="topbar-actions">
-            {!reader ? (
-              <button
-                type="button"
-                className="icon-btn"
-                onClick={handleRefresh}
-                disabled={refreshing}
-                aria-label={t('news.refresh')}
-              >
-                {refreshing ? <span className="spin" /> : '⟳'}
-              </button>
-            ) : null}
-            <button type="button" className="icon-btn" onClick={logout} aria-label={t('app.logout')}>
-              ⎋
-            </button>
-          </div>
-          <DisplayControls />
+    <div className="content">
+      <h1 className="page-title">{t('news.pageTitle')}</h1>
+
+      {error ? (
+        <div className="alert alert-error">
+          {error}
+          <button type="button" className="btn-ghost" onClick={reload}>
+            {t('news.retry')}
+          </button>
         </div>
-      </header>
+      ) : null}
 
-      {readerLoading ? (
-        <main className="content">
-          <p className="muted">{t('reader.loading')}</p>
-        </main>
-      ) : reader ? (
-        <ArticleReader article={reader} onBack={goBack} />
-      ) : (
-        <main className="content">
-          <h1 className="page-title">{t('news.pageTitle')}</h1>
+      {loading ? <p className="muted">{t('news.loading')}</p> : null}
+      {!loading && articles.length === 0 && !error ? (
+        <div className="empty">{t('news.empty')}</div>
+      ) : null}
 
-          {error ? (
-            <div className="alert alert-error">
-              {error}
-              <button type="button" className="btn-ghost" onClick={handleRefresh}>
-                {t('news.retry')}
-              </button>
-            </div>
-          ) : null}
+      <div className="news-list">
+        {articles.map((a) => (
+          <ArticleCard key={a._id || a.url} article={a} onOpen={openArticle} />
+        ))}
+      </div>
 
-          {loading ? <p className="muted">{t('news.loading')}</p> : null}
-          {!loading && articles.length === 0 && !error ? (
-            <div className="empty">{t('news.empty')}</div>
-          ) : null}
-
-          <div className="news-list">
-            {articles.map((a) => (
-              <ArticleCard key={a._id || a.url} article={a} onOpen={openArticle} />
-            ))}
-          </div>
-
-          {!loading && articles.length > 0 ? (
-            <button type="button" className="btn-ghost load-more" onClick={handleRefresh} disabled={refreshing}>
-              {refreshing ? t('news.refreshing') : `⟳ ${t('news.refresh')}`}
-            </button>
-          ) : null}
-        </main>
-      )}
+      {!loading && articles.length > 0 ? (
+        <button type="button" className="btn-ghost load-more" onClick={reload} disabled={refreshing}>
+          {refreshing ? t('news.refreshing') : `⟳ ${t('news.refresh')}`}
+        </button>
+      ) : null}
     </div>
   );
 }

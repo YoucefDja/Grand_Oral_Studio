@@ -8,6 +8,7 @@ import AdminPage from './components/AdminPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import AcceptInvitePage from './components/AcceptInvitePage.jsx';
 import NewsPage from './components/NewsPage.jsx';
+import GlossaryPage from './components/GlossaryPage.jsx';
 import LegalPage from './components/LegalPage.jsx';
 
 /** Sélecteurs langue (FR/EN) + bouton unique thème clair/sombre (lune/soleil). */
@@ -89,6 +90,7 @@ function Header() {
             <>
               <Link to="/">{t('nav.sessions')}</Link>
               <Link to="/news">{t('nav.news')}</Link>
+              <Link to="/glossaire">{t('nav.glossary')}</Link>
               {user.role === 'admin' ? <Link to="/admin">{t('nav.admin')}</Link> : null}
               <span
                 className="role-chip"
@@ -190,6 +192,14 @@ export default function App() {
             element={
               <RequireAuth>
                 <NewsPage />
+              </RequireAuth>
+            }
+          />
+          <Route
+            path="/glossaire"
+            element={
+              <RequireAuth>
+                <GlossaryPage />
               </RequireAuth>
             }
           />

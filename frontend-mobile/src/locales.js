@@ -10,6 +10,7 @@
 export const FR = {
   'app.loading': 'Chargement…',
   'app.logout': 'Déconnexion',
+  'app.tabs': 'Onglets',
 
   'settings.language': 'Langue',
   'settings.theme': 'Thème',
@@ -55,13 +56,22 @@ export const FR = {
   'reader.siteOrigin': 'site d’origine',
   'reader.translatedFrom': 'Traduit automatiquement',
 
-  // ---- Glossaire du jour ----
-  'glossary.title': 'Acronymes & termes du jour',
+  // ---- Glossaire personnel (onglet Glossaire) ----
+  'glossary.title': 'Glossaire',
+  'glossary.pageTitle': 'Mon glossaire',
+  'glossary.subtitle':
+    'Termes & acronymes définis dans les glossaires de vos sessions (étape Glossaire sur le site), cumulés sans doublon : de quoi réviser à tout moment.',
+  'glossary.loading': 'Chargement du glossaire…',
+  'glossary.loadError': 'Impossible de charger le glossaire.',
+  'glossary.empty':
+    'Aucun terme pour le moment. Les termes apparaîtront ici après avoir généré un glossaire dans une session (sur le site web).',
+  'glossary.noDefinition': 'Définition à compléter.',
 };
 
 export const EN = {
   'app.loading': 'Loading…',
   'app.logout': 'Log out',
+  'app.tabs': 'Tabs',
 
   'settings.language': 'Language',
   'settings.theme': 'Theme',
@@ -107,8 +117,16 @@ export const EN = {
   'reader.siteOrigin': 'the original site',
   'reader.translatedFrom': 'Auto-translated',
 
-  // ---- Daily glossary ----
-  'glossary.title': 'Acronyms & terms of the day',
+  // ---- Personal glossary (Glossary tab) ----
+  'glossary.title': 'Glossary',
+  'glossary.pageTitle': 'My glossary',
+  'glossary.subtitle':
+    'Terms & acronyms defined in the glossaries of your sessions (Glossary step on the website), merged with no duplicates: handy for reviewing anytime.',
+  'glossary.loading': 'Loading the glossary…',
+  'glossary.loadError': 'Unable to load the glossary.',
+  'glossary.empty':
+    'No term yet. Terms will appear here after you generate a glossary in a session (on the website).',
+  'glossary.noDefinition': 'Definition to be completed.',
 };
 
 export const LOCALES = { fr: FR, en: EN };
