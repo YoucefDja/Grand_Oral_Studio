@@ -88,6 +88,8 @@ const SUPPORT_STRUCTURE = `
 Le .pptx ajoute automatiquement la page de titre (logo, école, candidat, sujet) : tu ne produis donc PAS de slide de titre.
 Chaque slide doit porter un "type" parmi : contexte | enjeux | problematique | existant | solutions | donnees | exemple_entreprise | conclusion.
 
+VOLUME CIBLE : le fichier final doit compter environ 20 slides AU TOTAL (page de titre comprise, tolérance ±2). Comme la page de titre est ajoutée automatiquement, produis donc 18 à 19 slides de contenu, LA slide de conclusion incluse dans ce nombre. Répartition indicative : contexte & mots-clés 2-3 slides, enjeux 1-2, slide problématique 1, existant / analyse 5-6, solutions / préconisations 4-6, conclusion 1. Ajuste selon la durée et la richesse du plan, sans jamais gonfler artificiellement pour atteindre le chiffre.
+
 Ordre impératif des slides :
 1. « Contexte du sujet & mots-clés » (type contexte) : pourquoi ce sujet compte aujourd'hui ; présente les mots-clés du sujet avec leur définition courte (issus de l'analyse) et 1 à 2 chiffres clés actuels.
 2. « Enjeux » (type enjeux) : les enjeux TOHEE directement au cœur du sujet — pas un inventaire.
