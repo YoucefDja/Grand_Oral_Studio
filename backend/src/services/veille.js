@@ -22,6 +22,7 @@ const NewsArticle = require('../models/NewsArticle');
 const { generateDeepseek } = require('./deepseek');
 const { parseJsonStrict } = require('./anthropic'); // parsing JSON uniquement
 const { collectVeilleCandidates, serperConfigured } = require('./newsScanner');
+const { getThemeVocabulary } = require('./vocabulaire');
 
 const MAX_SELECTION = 4;
 const MAX_CANDIDATES = 24;
@@ -82,14 +83,21 @@ function fallbackKeywords({ sujet, theme, problematique }) {
 }
 
 /** 1) Déduit les mots-clés de recherche (DeepSeek) pour le contexte de la veille. */
-async function buildSearchKeywords(ctx) {
-  const system =
+async function buildSearchKeywords(ctx, vocab = []) {
+  let system =
     "Tu prépares une veille en ligne (recherche d'articles) pour un étudiant ingénieur " +
     'préparant son Grand Oral. À partir du sujet, du thème, de la problématique retenue et de la ' +
     'ligne directrice fournis, propose des mots-clés de recherche courts et précis qui permettront ' +
     "de trouver des articles de presse/veille techniques UTILES pour traiter cette problématique.\n" +
     'Réponds UNIQUEMENT par un objet JSON : {"mots_cles":["…","…"]} avec 8 à 14 mots-clés en français ' +
     '(expressions courtes possibles, ex. "IA générative", "cybersécurité santé"). Aucun commentaire.';
+
+  if (vocab.length) {
+    const terms = vocab.map((v) => `- ${v.terme}`).join('\n');
+    system +=
+      `\n\nVocabulaire habituel du thème, déjà employé par l'étudiant dans ses sessions précédentes sur ce même thème :\n${terms}` +
+      "\nRéutilise ces termes quand ils collent au sujet : certains de tes mots-clés doivent reprendre ce vocabulaire habituel s'il est pertinent. Tu peux aussi en proposer de nouveaux réellement liés au sujet, mais écarte tout terme sans rapport.";
+  }
 
   const user = JSON.stringify({
     sujet: ctx.sujet,
@@ -279,8 +287,15 @@ async function runVeille(session) {
     );
   }
 
-  // 1) Mots-clés ciblés sur thème + sujet + problématique.
-  const keywords = await buildSearchKeywords(ctx);
+  // 1) Mots-clés ciblés sur thème + sujet + problématique, en réutilisant le
+  // vocabulaire habituel déjà construit par l'étudiant sur ce même thème.
+  const themeVocab = await getThemeVocabulary({
+    userId: session.owner,
+    theme: ctx.theme,
+    excludeSessionId: session._id,
+    maxEntries: 30,
+  });
+  const keywords = await buildSearchKeywords(ctx, themeVocab);
 
   // 2) Collecte mécanique des candidats sur les sources actives.
   const { items, sourceResults } = await collectVeilleCandidates({

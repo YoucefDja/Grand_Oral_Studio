@@ -8,8 +8,14 @@
  */
 const MethodologySection = require('../models/MethodologySection');
 const StepSchemaModel = require('../models/StepSchema');
+const { getThemeVocabulary } = require('./vocabulaire');
 
 const STEP_KEYS = ['analyse', 'probleme', 'source', 'recherche', 'glossaire', 'plan', 'support'];
+
+// Étapes où la « base de vocabulaire du thème » est réinjectée : l'analyse
+// (qui fixe les mots-clés) et le glossaire (qui fixe les termes réutilisables).
+// Aux autres étapes, on s'appuie sur les résultats de la session en cours.
+const VOCAB_REUSE_STEPS = new Set(['analyse', 'glossaire']);
 
 const STEP_LABELS = {
   analyse: 'Analyse du sujet',
@@ -53,6 +59,20 @@ function dataBlock(label, obj) {
     '```json',
     JSON.stringify(obj, null, 2),
     '```',
+  ].join('\n');
+}
+
+/** Bloc "vocabulaire habituel du thème" — base de connaissance des sessions passées. */
+function vocabBlock(theme, vocab) {
+  const entries = vocab.map((v) => `- ${v.terme}${v.definition ? ` : ${v.definition}` : ''}`);
+  return [
+    `Vocabulaire habituel du thème « ${theme} » — base de connaissance issue des travaux précédents de l'étudiant sur ce même thème :`,
+    ...entries,
+    '',
+    "Règles d'utilisation (bon sens) :",
+    '- Réutilise ce vocabulaire chaque fois qu’il est pertinent pour le sujet traité : privilégie ces termes habituels aux synonymes que tu inventerais, afin d’assurer une continuité entre les différents sujets de ce même thème.',
+    '- Cette base n’est ni exhaustive ni obligatoire : tu peux toujours introduire de nouveaux termes réellement nécessaires au nouveau sujet (recherches supplémentaires comprises).',
+    '- Écarte tout terme de la base qui n’a rien à voir avec le sujet : ne l’inclus que s’il sert réellement à traiter ce sujet-ci.',
   ].join('\n');
 }
 
@@ -123,6 +143,18 @@ async function buildStepPrompt(session, stepKey) {
       );
       parts.push(bloc.join('\n'));
     }
+  }
+
+  // Base de vocabulaire du thème (sessions précédentes du même thème) : les
+  // étapes analyse & glossaire réutilisent les termes habituels quand ils
+  // collent au sujet, au lieu de tout réinventer à chaque session.
+  if (VOCAB_REUSE_STEPS.has(stepKey)) {
+    const vocab = await getThemeVocabulary({
+      userId: session.owner,
+      theme: session.theme,
+      excludeSessionId: session._id,
+    });
+    if (vocab.length) parts.push(vocabBlock(session.theme, vocab));
   }
 
   // Schéma de sortie attendu pour l'étape.
