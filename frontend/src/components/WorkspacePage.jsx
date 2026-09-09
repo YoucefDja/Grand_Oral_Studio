@@ -4,6 +4,7 @@ import { api } from '../api.js';
 import { useSettings } from '../settings.jsx';
 import { STEPS, ligneDirectriceOf } from '../steps.js';
 import StepTracker from './StepTracker.jsx';
+import SessionTimer from './SessionTimer.jsx';
 import { stepComponents } from './steps/index.js';
 
 export default function WorkspacePage() {
@@ -17,6 +18,7 @@ export default function WorkspacePage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyStep, setBusyStep] = useState(null);
   const [stepError, setStepError] = useState(null);
+  const [chronoBusy, setChronoBusy] = useState(false);
   const firstLoadRef = useRef(true);
 
   const loadSession = useCallback(async () => {
@@ -105,6 +107,22 @@ export default function WorkspacePage() {
     }
   }
 
+  // Lance le chrono d'une session créée avant l'arrivée de cette fonctionnalité
+  // (startedAt absent). Pour les nouvelles sessions, le backend le démarre seul.
+  async function handleStartChrono() {
+    if (chronoBusy || !session || session.startedAt) return;
+    setChronoBusy(true);
+    setStepError(null);
+    try {
+      const updated = await api.post(`/api/sessions/${id}/start-chrono`);
+      setSession(updated);
+    } catch (err) {
+      setStepError(err.message);
+    } finally {
+      setChronoBusy(false);
+    }
+  }
+
   if (loading) {
     return <p className="muted">{t('workspace.loadingSession')}</p>;
   }
@@ -133,9 +151,16 @@ export default function WorkspacePage() {
               : `${t('workspace.nextStep')} ${STEPS[session.currentStep].label}`}
           </div>
         </div>
-        <button type="button" className="btn-danger" onClick={handleDelete}>
-          {t('workspace.deleteSession')}
-        </button>
+        <div style={{ display: 'flex', gap: 14, alignItems: 'center', flexWrap: 'wrap' }}>
+          <SessionTimer
+            startedAt={session.startedAt}
+            onStart={handleStartChrono}
+            startBusy={chronoBusy}
+          />
+          <button type="button" className="btn-danger" onClick={handleDelete}>
+            {t('workspace.deleteSession')}
+          </button>
+        </div>
       </div>
 
       <StepTracker currentStep={session.currentStep} activeIndex={activeIndex} onSelect={goStep} />

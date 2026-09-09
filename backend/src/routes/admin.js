@@ -8,6 +8,11 @@ const { requireAdmin } = require('../middleware/auth');
 const { generateInviteToken } = require('../services/password');
 const { sendInviteEmail } = require('../services/resend');
 const { asyncHandler } = require('../utils/asyncHandler');
+const {
+  lireChronoDureeMinutes,
+  validerChronoDureeMinutes,
+  ecrireChronoDureeMinutes,
+} = require('../services/appSettings');
 
 const router = express.Router();
 
@@ -266,6 +271,31 @@ router.delete(
     const theme = await Theme.findByIdAndDelete(req.params.id);
     if (!theme) throw httpError(404, 'Thème introuvable.');
     res.json({ ok: true, id: req.params.id });
+  })
+);
+
+// ---------------------------------------------------------------------------
+// Réglages applicatifs — durée du chrono de session
+// ---------------------------------------------------------------------------
+router.get(
+  '/settings/chrono',
+  asyncHandler(async (_req, res) => {
+    res.json({ dureeMinutes: await lireChronoDureeMinutes() });
+  })
+);
+
+router.put(
+  '/settings/chrono',
+  asyncHandler(async (req, res) => {
+    const dureeMinutes = validerChronoDureeMinutes(req.body?.dureeMinutes);
+    if (dureeMinutes === null) {
+      throw httpError(
+        400,
+        'La durée du chrono doit être un nombre entier de minutes (entre 1 et 720).'
+      );
+    }
+    await ecrireChronoDureeMinutes(dureeMinutes);
+    res.json({ dureeMinutes });
   })
 );
 

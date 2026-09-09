@@ -304,6 +304,8 @@ export default function AdminPage() {
   const [themes, setThemes] = useState([]);
   const [newsSources, setNewsSources] = useState([]);
   const [addingNews, setAddingNews] = useState(false);
+  const [chronoDuree, setChronoDuree] = useState(null);
+  const [chronoSaving, setChronoSaving] = useState(false);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
   const [notice, setNotice] = useState(null);
@@ -316,18 +318,20 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [u, s, sc, t, ns] = await Promise.all([
+      const [u, s, sc, t, ns, ch] = await Promise.all([
         api.get('/api/admin/users'),
         api.get('/api/admin/methodology'),
         api.get('/api/admin/step-schemas'),
         api.get('/api/admin/themes'),
         api.get('/api/admin/news-sources'),
+        api.get('/api/admin/settings/chrono'),
       ]);
       setUsers(u);
       setSections(s);
       setSchemas(sc);
       setThemes(t);
       setNewsSources(ns);
+      setChronoDuree(Number(ch?.dureeMinutes) || 90);
     } catch (err) {
       setError(err.message);
     } finally {
@@ -431,6 +435,27 @@ export default function AdminPage() {
     }
   }
 
+  async function saveChrono(e) {
+    e.preventDefault();
+    const minutes = Number(e.target.chronoMinutes.value);
+    if (!Number.isInteger(minutes) || minutes < 1 || minutes > 720) {
+      setError(t('admin.chronoInvalid'));
+      return;
+    }
+    setError(null);
+    setNotice(null);
+    setChronoSaving(true);
+    try {
+      const data = await api.put('/api/admin/settings/chrono', { dureeMinutes: minutes });
+      setChronoDuree(Number(data?.dureeMinutes) || minutes);
+      setNotice(t('admin.chronoSaved'));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setChronoSaving(false);
+    }
+  }
+
   function dateFr(value) {
     if (!value) return '—';
     return new Date(value).toLocaleDateString('fr-FR', { day: '2-digit', month: '2-digit', year: 'numeric' });
@@ -456,6 +481,9 @@ export default function AdminPage() {
         </button>
         <button className={`tab ${tab === 'news' ? 'on' : ''}`} onClick={() => setTab('news')}>
           {t('admin.newsTab')} ({newsSources.length})
+        </button>
+        <button className={`tab ${tab === 'chrono' ? 'on' : ''}`} onClick={() => setTab('chrono')}>
+          {t('admin.chronoTab')}
         </button>
       </div>
 
@@ -638,6 +666,34 @@ export default function AdminPage() {
             <div className="empty">{t('admin.emptySources')}</div>
           ) : null}
         </div>
+      ) : null}
+
+      {/* ---------------- Chrono de session (durée par défaut) ---------------- */}
+      {tab === 'chrono' ? (
+        <form
+          className="admin-item"
+          onSubmit={saveChrono}
+          style={{ display: 'grid', gridTemplateColumns: '1fr 160px auto', gap: 12, alignItems: 'end' }}
+        >
+          <div>
+            <strong>{t('admin.chronoTitle')}</strong>
+            <p className="muted" style={{ margin: '4px 0 0' }}>{t('admin.chronoHint')}</p>
+          </div>
+          <label className="field" style={{ marginBottom: 0 }}>
+            {t('admin.chronoMinutesLabel')}
+            <input
+              type="number"
+              name="chronoMinutes"
+              min={1}
+              max={720}
+              defaultValue={chronoDuree ?? 90}
+              required
+            />
+          </label>
+          <button type="submit" className="btn-primary" style={{ height: 42 }} disabled={chronoSaving}>
+            {chronoSaving ? t('admin.saving') : t('common.save')}
+          </button>
+        </form>
       ) : null}
     </div>
   );

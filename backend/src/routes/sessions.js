@@ -122,6 +122,8 @@ router.post(
       contexte: contexte ? String(contexte) : '',
       owner: req.userId,
       currentStep: 0,
+      // « Créer la session et commencer » : le chrono de travail démarre ici.
+      startedAt: new Date(),
     });
     res.status(201).json(session);
   })
@@ -214,6 +216,24 @@ router.delete(
     if (!session) throw httpError(404, 'Session introuvable.');
     await session.deleteOne();
     res.json({ ok: true, id: req.params.id });
+  })
+);
+
+// POST /api/sessions/:id/start-chrono
+// Lance (une seule fois) le compte à rebours d'une session de travail. Les
+// nouvelles sessions démarrent le chrono à leur création ; ce endpoint sert aux
+// sessions créées avant cette fonctionnalité. Idempotent : ne réinitialise
+// jamais un chrono déjà lancé.
+router.post(
+  '/:id/start-chrono',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    if (!session.startedAt) {
+      session.startedAt = new Date();
+      await session.save();
+    }
+    res.json(session);
   })
 );
 

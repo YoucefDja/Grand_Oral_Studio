@@ -17,6 +17,9 @@ const sessionSchema = new mongoose.Schema(
     owner: { type: mongoose.Schema.Types.ObjectId, ref: 'User', index: true },
     currentStep: { type: Number, default: 0 },
     ligneDirectrice: { type: String, default: '' },
+    // Début du chrono de session (compte à rebours) : posé à la création, ou
+    // a posteriori via POST /:id/start-chrono pour les sessions antérieures.
+    startedAt: { type: Date, default: null },
     data: {
       type: Object,
       default: () => ({

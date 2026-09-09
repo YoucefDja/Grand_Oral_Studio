@@ -115,6 +115,11 @@ export const FR = {
   'workspace.nextStep': 'prochaine étape :',
   'workspace.deleteSession': 'Supprimer la session',
   'workspace.ldTag': 'Fil conducteur de la présentation',
+  'workspace.chronoLabel': 'Chrono de session',
+  'workspace.timeLeft': 'Temps restant',
+  'workspace.timeUp': 'Temps écoulé',
+  'workspace.startChrono': 'Démarrer le chrono',
+  'workspace.chronoStarting': 'Démarrage…',
 
   // ---- Étapes (StepShell, StepTracker, JsonViewer, steps/*) ----
   'steps.ariaJourney': 'Étapes du parcours',
@@ -364,6 +369,13 @@ export const FR = {
   'admin.addSource': 'Ajouter une source',
   'admin.emptySources':
     'Aucune source configurée. Cliquez sur « Restaurer les 10 sources par défaut » pour démarrer la veille IA / Big Data.',
+  'admin.chronoTab': 'Chrono de session',
+  'admin.chronoTitle': 'Durée du compte à rebours',
+  'admin.chronoHint':
+    'Durée par défaut (en minutes) du chrono lancé à la création d’une session. Elle s’applique aux sessions créées ensuite.',
+  'admin.chronoMinutesLabel': 'Durée (minutes)',
+  'admin.chronoInvalid': 'La durée doit être un entier entre 1 et 720 minutes.',
+  'admin.chronoSaved': 'Durée du chrono enregistrée.',
 };
 
 export const EN = {
@@ -464,6 +476,11 @@ export const EN = {
   'workspace.nextStep': 'next step:',
   'workspace.deleteSession': 'Delete the session',
   'workspace.ldTag': 'Presentation thread',
+  'workspace.chronoLabel': 'Session timer',
+  'workspace.timeLeft': 'Time left',
+  'workspace.timeUp': "Time's up",
+  'workspace.startChrono': 'Start the timer',
+  'workspace.chronoStarting': 'Starting…',
 
   'steps.ariaJourney': 'Journey steps',
   'steps.previousStepsRequired': 'Previous steps required',
@@ -709,6 +726,13 @@ export const EN = {
   'admin.addSource': 'Add a source',
   'admin.emptySources':
     'No source configured. Click “Restore the 10 default sources” to start the AI / Big Data watch.',
+  'admin.chronoTab': 'Session timer',
+  'admin.chronoTitle': 'Countdown duration',
+  'admin.chronoHint':
+    'Default duration (minutes) of the timer started when a session is created. It applies to sessions created afterwards.',
+  'admin.chronoMinutesLabel': 'Duration (minutes)',
+  'admin.chronoInvalid': 'Duration must be a whole number between 1 and 720 minutes.',
+  'admin.chronoSaved': 'Timer duration saved.',
 };
 
 export const LOCALES = { fr: FR, en: EN };

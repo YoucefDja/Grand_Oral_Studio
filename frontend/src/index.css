@@ -946,3 +946,62 @@ button .spin {
   font-size: 12.5px;
   line-height: 1.5;
 }
+
+/* ============================================================
+   Chrono de session — cercle de compte à rebours (SessionTimer)
+   ============================================================ */
+.session-chrono {
+  display: inline-flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 4px;
+  background: var(--white);
+  border: 1px solid var(--line);
+  border-radius: 14px;
+  box-shadow: var(--shadow);
+  padding: 8px 10px 10px;
+}
+.session-chrono-ring {
+  position: relative;
+  width: 78px;
+  height: 78px;
+}
+.session-chrono-ring svg {
+  display: block;
+}
+.session-chrono-text {
+  position: absolute;
+  inset: 0;
+  display: grid;
+  place-items: center;
+  font-variant-numeric: tabular-nums;
+  font-weight: 700;
+  font-size: 12.5px;
+  letter-spacing: 0.1px;
+  color: var(--ink);
+  line-height: 1.1;
+  white-space: nowrap;
+}
+.session-chrono.is-expired .session-chrono-text {
+  color: var(--danger);
+}
+.session-chrono-label {
+  font-size: 10px;
+  text-transform: uppercase;
+  letter-spacing: 0.4px;
+  color: var(--ink-soft);
+  white-space: nowrap;
+}
+.session-chrono.is-expired .session-chrono-label {
+  color: var(--danger);
+  font-weight: 700;
+}
+.session-chrono-start {
+  padding: 4px 12px;
+  font-size: 12px;
+  border-radius: 8px;
+}
+.session-chrono--loading {
+  width: 92px;
+  height: 92px;
+}
