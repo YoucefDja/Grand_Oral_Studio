@@ -62,7 +62,7 @@ export default function HomePage() {
       const data = await api.post('/api/sessions/ideas', {
         theme: form.theme,
         contexte: form.contexte,
-        nb: 6,
+        nb: 3,
         lang,
       });
       setIdeas(Array.isArray(data.sujets) ? data.sujets : []);

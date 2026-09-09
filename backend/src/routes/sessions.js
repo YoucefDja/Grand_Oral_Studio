@@ -139,7 +139,7 @@ router.post(
     if (!theme) {
       throw httpError(400, 'Choisissez un thème pour générer des idées de sujets.');
     }
-    const nb = Math.min(Math.max(parseInt(req.body?.nb, 10) || 6, 3), 10);
+    const nb = 3; // Nombre de suggestions demandées à l'IA : limité à 3 sujets.
     const lang = req.body?.lang === 'en' ? 'en' : 'fr';
     const langue = lang === 'en' ? 'English' : 'French';
 
