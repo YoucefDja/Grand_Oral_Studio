@@ -4,6 +4,7 @@ const Session = require('../models/Session');
 const { buildStepPrompt, STEP_KEYS, STEP_LABELS } = require('../services/promptBuilder');
 const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
+const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
 const { runVeille } = require('../services/veille');
 const { buildPptx } = require('../services/pptx');
 const { requireAuth } = require('../middleware/auth');
@@ -256,6 +257,14 @@ router.post(
       parsed = await generateAnthropic(system, user);
     }
     validateStepOutput(stepKey, parsed);
+
+    // Filet de qualité sur la problématique : les heuristiques déterministes
+    // signalent structure / reformulation plate / hors-sujet lexical, puis un
+    // second passage du modèle re-vérifie les 5 tests anti-dérive (méthodo
+    // Armelle) et corrige les formulations défaillantes.
+    if (stepKey === 'probleme') {
+      parsed = await verifierEtCorrigerProbleme({ system, session, problemeGenere: parsed });
+    }
 
     let regenereProbleme = false;
     if (stepKey === 'probleme') {
