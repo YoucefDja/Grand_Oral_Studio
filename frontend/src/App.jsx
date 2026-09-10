@@ -78,7 +78,7 @@ function Header() {
     <header className="app-header">
       <div className="app-header-inner">
         <Link to={user ? '/' : '/login'} className="brand">
-          <img src="/logo-cesi.svg" alt="CESI" className="brand-logo" />
+          <img src="/logo-cesi.png" alt="CESI" className="brand-logo" />
           <span>
             <strong>Grand Oral Studio</strong>
             <small>{t('brand.sub')}</small>
@@ -143,7 +143,7 @@ function Footer() {
   const { t } = useSettings();
   return (
     <footer className="app-footer">
-      <img src="/logo-cesi.svg" alt="CESI" className="footer-logo" />
+      <img src="/logo-cesi.png" alt="CESI" className="footer-logo" />
       <nav className="app-footer-nav" aria-label={t('footer.legal')}>
         <Link to="/mentions-legales">{t('footer.mentions')}</Link>
         <Link to="/confidentialite">{t('footer.privacy')}</Link>
