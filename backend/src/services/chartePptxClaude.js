@@ -107,6 +107,57 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
 4. NOTES ORATEUR : le contenu du champ notes_orateur est placé dans les notes du
    présentateur de la slide (panneau « Notes »), jamais sur la slide elle-même.
 
+### SLIDES « exemple_entreprise » — RENDU DÉDIÉ OBLIGATOIRE
+
+Ces slides ne suivent PAS le gabarit ci-dessus : elles doivent montrer
+l'entreprise, pas la décrire. Reproduis cette disposition :
+
+1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
+2. CARTE ENTREPRISE : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 /
+   h 1,5, fond ${COULEURS.LIGHT}, contour ${COULEURS.ACCENT} épaisseur 1 pt.
+   - LOGO RÉEL de l'entreprise, carré de 0,95 pouce, position x 0,85, centré
+     verticalement dans la carte. Télécharge-le toi-même : va sur le site
+     officiel de l'entreprise (le champ "domaine" te donne son adresse exacte)
+     et récupère son logo, ou utilise une API publique de logos de marques
+     (ex. https://www.google.com/s2/favicons?domain=<domaine>&sz=256 , ou
+     https://img.logo.dev/<domaine>?size=256 ). Le logo est posé sur une
+     pastille blanche arrondie (0,95 × 0,95, fond blanc, contour gris clair)
+     avec 0,12 de marge, pour rester lisible quelle que soit la couleur de
+     la marque. Si le logo est introuvable, remplace-le par une pastille
+     ${COULEURS.PRIMARY} portant les initiales de l'entreprise en blanc, 22 pt
+     gras : n'affiche jamais un cadre vide ni une image cassée.
+   - Nom de l'entreprise (champ "nom_entreprise") : à droite du logo, 22 pt,
+     gras, couleur ${COULEURS.PRIMARY}.
+   - Secteur (champ "secteur") : sous le nom, 13 pt, couleur ${COULEURS.GREY}.
+   - Source (champ "source") : sous le secteur, 9 pt, italique, gris, préfixée
+     de « Source : ».
+3. PASTILLES DE CHIFFRES CLÉS : sous la carte (y = 1,3 + 1,5 + 0,25), une
+   pastille par entrée du champ "chiffres_cles" (2 à 3), réparties sur toute la
+   largeur avec 0,25 d'écart, hauteur 1,0. Chaque pastille : rectangle arrondi
+   fond blanc, contour ${COULEURS.ACCENT} 1 pt ; la valeur en 20 pt gras
+   ${COULEURS.PRIMARY} centrée, et le libellé en 10 pt gris centré dessous.
+4. PUCES D'ANALYSE : sous les pastilles, 14 pt, mêmes règles que le corps
+   standard (puces natives, 6 maximum).
+
+### AUTRES VISUELS (champ "visuel" non nul)
+
+Quand une slide porte un objet "visuel", ne te contente pas des puces :
+construis le graphique correspondant dans la zone de corps, en respectant le
+type annoncé, et place la "legende" en titre du graphique :
+
+- "donnees" : histogramme vertical (une barre par entrée "libelle"/"valeur"),
+  barres ${COULEURS.ACCENT}, valeurs affichées au-dessus de chaque barre.
+- "repartition" : anneau (ou camembert) des parts, palette limitée à
+  ${COULEURS.PRIMARY} et ${COULEURS.ACCENT} déclinés, pourcentages affichés.
+- "comparaison" : barres groupées par "critere", deux séries (valeur_a et
+  valeur_b) distinguées par ${COULEURS.PRIMARY} et ${COULEURS.ACCENT}, avec
+  légende reprenant les deux libellés séparés par « | » dans "legende".
+- "chronologie" : frise horizontale d'étapes reliées par des flèches
+  ${COULEURS.ACCENT}, chaque "etape" en gras et sa "description" en dessous.
+
+Les axes et les étiquettes restent sobres : pas de grille lourde, pas de
+couleurs vives, texte en ${COULEURS.GREY} 10-11 pt.
+
 ### BARRE DE PROGRESSION (slides de contenu uniquement)
 
 - Positionnée à l'intérieur du bandeau, en bas de celui-ci : y = 0,86, hauteur 0,09,

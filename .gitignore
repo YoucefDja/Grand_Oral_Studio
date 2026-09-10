@@ -23,3 +23,6 @@ coverage/
 .vscode/
 .idea/
 *.pptx
+
+# Cache des logos d'entreprises téléchargés à la demande
+backend/.cache/

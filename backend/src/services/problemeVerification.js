@@ -44,6 +44,15 @@ const MIN_FORMULATION_LEN = 12;
 const MIN_POLE_LEN = 3;
 const MIN_JUSTIFICATION_LEN = 8;
 
+/**
+ * Bornes de longueur de la question elle-même. Une problématique de soutenance
+ * doit tenir en une phrase courte, mémorisable et rappelable en pied de slide :
+ * au-delà de MAX_FORMULATION_LEN caractères elle devient illisible à l'oral et
+ * ne peut plus servir de fil rouge (critères 2.1 et 2.6 de la grille CESI).
+ */
+const MAX_FORMULATION_LEN = 180;
+const MAX_FORMULATION_MOTS = 26;
+
 // Mots-outils français fréquents : exclus du contrôle de périmètre lexical
 // (on ne signale que des termes « pleins » potentiellement hors-sujet).
 const MOTS_OUTILS = new Set(
@@ -165,6 +174,40 @@ function detecterSignalements({ sujet, theme, analyse, formulations }) {
 
     const question = String(f && f.formulation || '').trim();
     if (question.length < MIN_FORMULATION_LEN) return; // déjà signalé (structure)
+
+    // Longueur : une problématique-fleuve n'est ni mémorisable ni utilisable
+    // comme fil rouge (elle est rappelée en pied de chaque slide suivante).
+    const nbMots = jetons(question).length;
+    if (question.length > MAX_FORMULATION_LEN || nbMots > MAX_FORMULATION_MOTS) {
+      signalements.push(
+        `Formulation n°${numero} — trop longue (${nbMots} mots, ${question.length} caractères ; ` +
+          `maximum admis : ${MAX_FORMULATION_MOTS} mots et ${MAX_FORMULATION_LEN} caractères). ` +
+          'Raccourcis la question sans perdre les deux pôles de la tension : elle doit tenir ' +
+          'en une phrase brève, immédiatement mémorisable et rappelable en pied de slide.'
+      );
+    }
+
+    // Débat d'opinion : « faut-il », « doit-on », « est-ce bien / mal », etc.
+    // Ces tournures appellent un jugement de valeur ou un choix de société, pas
+    // une réponse argumentée et documentée : elles transforment la soutenance en
+    // débat et sortent de la posture d'analyse attendue par le jury.
+    const tournuresDebat = [
+      'faut-il', 'fautil', 'doit-on', 'doiton', 'devrait-on', 'devraiton',
+      'est-ce bien', 'estce bien', 'est-ce mal', 'estce mal', 'est-il legitime',
+      'estil legitime', 'est-ce acceptable', 'estce acceptable', 'peut-on accepter',
+      'peuton accepter', 'est-ce souhaitable', 'estce souhaitable', 'est-ce moral',
+      'estce moral', 'a-t-on raison', 'aton raison',
+    ];
+    const questionNorm = normaliser(question).replace(/[^a-z0-9]+/g, ' ').trim();
+    const tournureTrouvee = tournuresDebat.find((t) => questionNorm.includes(t.replace(/[^a-z ]/g, ' ')));
+    if (tournureTrouvee) {
+      signalements.push(
+        `Formulation n°${numero} — la tournure « ${tournureTrouvee} » ouvre un débat d'opinion ` +
+          '(jugement de valeur) plutôt qu\'un problème à instruire. Reformule autour d\'un ' +
+          'problème réel et analysable, avec une réponse argumentée possible, pas un choix ' +
+          'de société sur lequel on peut seulement être pour ou contre.'
+      );
+    }
 
     // Reformulation plate : si le vocabulaire de la question recouvre presque
     // entièrement celui de l'intitulé, suspicion de sujet recopié + « ? ».

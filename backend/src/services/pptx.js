@@ -19,6 +19,7 @@
 const fs = require('fs');
 const pptxgen = require('pptxgenjs');
 const { NOM, ANNEE, LOGO_PATH, LOGO_DISPO } = require('../config/soutenance');
+const { recupererLogosSupport } = require('./entrepriseLogos');
 
 const COLORS = {
   PRIMARY: '1F4E79', // bleu CESI foncé
@@ -50,6 +51,40 @@ function isProblemeSlide(item) {
   const type = String(item.type || '').toLowerCase();
   const titre = String(item.titre || '').toLowerCase().normalize('NFD').replace(/[\u0300-\u036f]/g, '');
   return type.includes('problematique') || type.includes('problem') || titre.includes('problematique');
+}
+
+/** La slide raconte-t-elle une entreprise réelle (donc : logo + chiffres clés) ? */
+function isExempleEntreprise(item) {
+  const type = String(item.type || '').toLowerCase();
+  return type.includes('exemple') || type.includes('entreprise') || Boolean(item.nom_entreprise);
+}
+
+/** Initiales d'une entreprise, pour la pastille de repli si le logo manque. */
+function initialesEntreprise(nom) {
+  const mots = String(nom || '')
+    .trim()
+    .split(/[\s-]+/)
+    .filter(Boolean);
+  if (!mots.length) return '?';
+  if (mots.length === 1) return mots[0].slice(0, 2).toUpperCase();
+  return (mots[0][0] + mots[1][0]).toUpperCase();
+}
+
+/**
+ * Chiffres clés exploitables de la slide : priorité au visuel chiffré, puis
+ * aux entrées `chiffres_cles` fournies par l'IA.
+ */
+function chiffresCles(item) {
+  const explicites = Array.isArray(item.chiffres_cles) ? item.chiffres_cles : [];
+  const depuisVisuel =
+    item.visuel && Array.isArray(item.visuel.donnees)
+      ? item.visuel.donnees
+          .filter((d) => d && (d.valeur !== undefined && d.valeur !== null))
+          .map((d) => ({ libelle: d.libelle, valeur: d.valeur }))
+      : [];
+  return (explicites.length ? explicites : depuisVisuel)
+    .filter((d) => d && (d.valeur !== undefined && d.valeur !== null))
+    .slice(0, 3);
 }
 
 function slugifyTitre(titre) {
@@ -251,6 +286,229 @@ function addProgressBar(pres, slide, index, total) {
   });
 }
 
+/**
+ * Zone de contenu réutilisable : liste à puces bornée à une zone donnée.
+ * Mutualise le rendu entre la slide standard et la slide « exemple entreprise ».
+ */
+function ajouterPuces(slide, puces, zone) {
+  if (!puces.length) return;
+  slide.addText(
+    puces.map((p) => ({
+      text: p,
+      options: { bullet: true, breakLine: true, paraSpaceAfter: 8 },
+    })),
+    {
+      x: zone.x,
+      y: zone.y,
+      w: zone.w,
+      h: zone.h,
+      fontSize: zone.fontSize || 15,
+      color: COLORS.DARK,
+      valign: 'top',
+      wrap: true,
+    }
+  );
+}
+
+/**
+ * Slide « exemple d'entreprise » : encadré dédié avec le logo réel de la marque
+ * (téléchargé à la demande), chips de chiffres clés mis en avant, puis les
+ * puces d'analyse. Jamais un simple bloc de texte : on identifie l'entreprise
+ * d'un coup d'œil avant de lire.
+ */
+function addExempleSlide(pres, item, showProblem, problematique, progress, logo) {
+  const slide = pres.addSlide();
+  slide.background = { color: COLORS.WHITE };
+  if (showProblem && problematique) slide.problematiqueTexte = problematique;
+
+  // Bandeau d'en-tête
+  slide.addShape(pres.ShapeType.rect, {
+    x: 0,
+    y: 0,
+    w: LAYOUT_W,
+    h: 1.05,
+    fill: { color: COLORS.PRIMARY },
+    line: { color: COLORS.PRIMARY },
+  });
+  slide.addText(item.titre || 'Exemple', {
+    x: 0.5,
+    y: 0.14,
+    w: LAYOUT_W - 2.6,
+    h: 0.8,
+    fontSize: 20,
+    bold: true,
+    color: COLORS.WHITE,
+    valign: 'middle',
+  });
+  if (item.type) {
+    slide.addText(String(item.type).replace(/_/g, ' '), {
+      x: LAYOUT_W - 2.2,
+      y: 0.14,
+      w: 1.8,
+      h: 0.8,
+      fontSize: 10,
+      color: COLORS.LIGHT,
+      align: 'right',
+      valign: 'middle',
+    });
+  }
+  if (progress) addProgressBar(pres, slide, progress.index, progress.total);
+
+  // --- Carte entreprise : logo + nom + secteur ---
+  const carteY = 1.3;
+  const carteH = 1.5;
+  slide.addShape(pres.ShapeType.roundRect, {
+    x: 0.55,
+    y: carteY,
+    w: LAYOUT_W - 1.1,
+    h: carteH,
+    fill: { color: COLORS.LIGHT },
+    line: { color: COLORS.ACCENT, width: 1 },
+    rectRadius: 0.08,
+  });
+
+  const nom = String(item.nom_entreprise || '').trim();
+  const secteur = String(item.secteur || '').trim();
+  const logoBox = 0.95;
+  const logoX = 0.85;
+  const logoY = carteY + (carteH - logoBox) / 2;
+
+  if (logo) {
+    // Le logo est posé sur une pastille blanche : il reste lisible quelle que
+    // soit la couleur d'origine de la marque.
+    slide.addShape(pres.ShapeType.roundRect, {
+      x: logoX,
+      y: logoY,
+      w: logoBox,
+      h: logoBox,
+      fill: { color: COLORS.WHITE },
+      line: { color: COLORS.SOFT, width: 0.75 },
+      rectRadius: 0.06,
+    });
+    const marge = 0.12;
+    slide.addImage({
+      data: logo.data,
+      x: logoX + marge,
+      y: logoY + marge,
+      w: logoBox - marge * 2,
+      h: logoBox - marge * 2,
+    });
+  } else {
+    // Repli : pastille d'initiales aux couleurs CESI (jamais d'image cassée).
+    slide.addShape(pres.ShapeType.roundRect, {
+      x: logoX,
+      y: logoY,
+      w: logoBox,
+      h: logoBox,
+      fill: { color: COLORS.PRIMARY },
+      line: { color: COLORS.PRIMARY },
+      rectRadius: 0.06,
+    });
+    slide.addText(initialesEntreprise(nom), {
+      x: logoX,
+      y: logoY,
+      w: logoBox,
+      h: logoBox,
+      fontSize: 22,
+      bold: true,
+      color: COLORS.WHITE,
+      align: 'center',
+      valign: 'middle',
+    });
+  }
+
+  if (nom) {
+    slide.addText(nom, {
+      x: logoX + logoBox + 0.3,
+      y: carteY + 0.18,
+      w: LAYOUT_W - logoX - logoBox - 1.2,
+      h: 0.5,
+      fontSize: 22,
+      bold: true,
+      color: COLORS.PRIMARY,
+      valign: 'middle',
+    });
+  }
+  if (secteur) {
+    slide.addText(secteur, {
+      x: logoX + logoBox + 0.3,
+      y: carteY + 0.68,
+      w: LAYOUT_W - logoX - logoBox - 1.2,
+      h: 0.4,
+      fontSize: 13,
+      color: COLORS.GREY,
+      valign: 'middle',
+    });
+  }
+  if (String(item.source || '').trim()) {
+    slide.addText(`Source : ${String(item.source).trim()}`, {
+      x: logoX + logoBox + 0.3,
+      y: carteY + 1.05,
+      w: LAYOUT_W - logoX - logoBox - 1.2,
+      h: 0.3,
+      fontSize: 9,
+      italic: true,
+      color: COLORS.GREY,
+      valign: 'middle',
+    });
+  }
+
+  // --- Chips de chiffres clés ---
+  const chiffres = chiffresCles(item);
+  let chipsBottom = carteY + carteH;
+  if (chiffres.length) {
+    const chipsY = carteY + carteH + 0.25;
+    const gap = 0.25;
+    const chipW = (LAYOUT_W - 1.1 - gap * (chiffres.length - 1)) / chiffres.length;
+    const chipH = 1.0;
+    chiffres.forEach((c, i) => {
+      const x = 0.55 + i * (chipW + gap);
+      slide.addShape(pres.ShapeType.roundRect, {
+        x,
+        y: chipsY,
+        w: chipW,
+        h: chipH,
+        fill: { color: COLORS.WHITE },
+        line: { color: COLORS.ACCENT, width: 1 },
+        rectRadius: 0.08,
+      });
+      slide.addText(String(c.valeur), {
+        x,
+        y: chipsY + 0.1,
+        w: chipW,
+        h: 0.5,
+        fontSize: 20,
+        bold: true,
+        color: COLORS.PRIMARY,
+        align: 'center',
+        valign: 'middle',
+      });
+      slide.addText(String(c.libelle || ''), {
+        x: x + 0.1,
+        y: chipsY + 0.58,
+        w: chipW - 0.2,
+        h: 0.34,
+        fontSize: 10,
+        color: COLORS.GREY,
+        align: 'center',
+        valign: 'middle',
+      });
+    });
+    chipsBottom = chipsY + chipH;
+  }
+
+  // --- Puces d'analyse, sous la carte et les chips ---
+  const puces = (Array.isArray(item.puces) ? item.puces : []).map(cleanBullet).filter(Boolean);
+  const bodyY = chipsBottom + 0.25;
+  const bodyH = (showProblem && problematique ? LAYOUT_H - 0.8 : LAYOUT_H - 0.2) - bodyY;
+  if (puces.length && bodyH > 0.5) {
+    ajouterPuces(slide, puces, { x: 0.55, y: bodyY, w: LAYOUT_W - 1.1, h: bodyH, fontSize: 14 });
+  }
+
+  if (item.notes_orateur) slide.addNotes(String(item.notes_orateur).trim());
+  return slide;
+}
+
 /** Slide de contenu standard (bandeau titre + puces + notes orateur). */
 function addContentSlide(pres, item, showProblem, problematique, progress) {
   const slide = pres.addSlide();
@@ -299,22 +557,13 @@ function addContentSlide(pres, item, showProblem, problematique, progress) {
   // Zone de texte réduite quand la problématique occupe le pied de slide.
   const bodyH = showProblem && problematique ? LAYOUT_H - 3.1 : LAYOUT_H - 2.2;
   if (puces.length > 0) {
-    slide.addText(
-      puces.map((p) => ({
-        text: p,
-        options: { bullet: true, breakLine: true, paraSpaceAfter: 8 },
-      })),
-      {
-        x: 0.55,
-        y: 1.3,
-        w: LAYOUT_W - 1.1,
-        h: bodyH,
-        fontSize: 15,
-        color: COLORS.DARK,
-        valign: 'top',
-        wrap: true,
-      }
-    );
+    ajouterPuces(slide, puces, {
+      x: 0.55,
+      y: 1.3,
+      w: LAYOUT_W - 1.1,
+      h: bodyH,
+      fontSize: 15,
+    });
   } else {
     slide.addText('Détail en notes orateur.', {
       x: 0.5,
@@ -365,14 +614,18 @@ async function buildPptx(session) {
   const total = slides.length + 1 + (extraConclusion ? 1 : 0);
   let footerIndex = 1;
 
+  // ---- Logos des entreprises citées (téléchargés à la demande, avec cache).
+  //      Un échec n'interrompt jamais l'export : repli sur pastille d'initiales.
+  const logos = await recupererLogosSupport(slides);
+
   // ---- Slides de contenu ----
   slides.forEach((item, i) => {
     footerIndex += 1;
     const showProblem = i >= showProblemAfter;
-    const slide = addContentSlide(pres, item, showProblem, problematique, {
-      index: footerIndex,
-      total,
-    });
+    const progress = { index: footerIndex, total };
+    const slide = isExempleEntreprise(item)
+      ? addExempleSlide(pres, item, showProblem, problematique, progress, logos.get(i) || null)
+      : addContentSlide(pres, item, showProblem, problematique, progress);
     addFooter(slide, showProblem);
   });
 
