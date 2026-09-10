@@ -21,10 +21,12 @@ const pptxgen = require('pptxgenjs');
 const { NOM, ANNEE, LOGO_PATH, LOGO_DISPO } = require('../config/soutenance');
 const { recupererLogosSupport } = require('./entrepriseLogos');
 
+// Charte CESI : jaune institutionnel #F2D934. Le jaune est très clair, donc
+// les textes posés dessus sont en gris foncé (jamais en blanc, illisible).
 const COLORS = {
-  PRIMARY: '1F4E79', // bleu CESI foncé
-  ACCENT: '2E74B5', // bleu CESI clair
-  LIGHT: 'D9E2F3', // bandeau très clair
+  PRIMARY: 'F2D934', // jaune CESI — bandeaux, carte entreprise, chiffres clés
+  ACCENT: 'E0C200', // jaune CESI assombri — traits, barre de progression
+  LIGHT: '8A7A00', // ocre foncé — rail de progression, textes sur le bandeau jaune
   WHITE: 'FFFFFF',
   DARK: '262626',
   GREY: '595959',
@@ -337,7 +339,7 @@ function addExempleSlide(pres, item, showProblem, problematique, progress, logo)
     h: 0.8,
     fontSize: 20,
     bold: true,
-    color: COLORS.WHITE,
+    color: COLORS.DARK,
     valign: 'middle',
   });
   if (item.type) {
@@ -411,7 +413,7 @@ function addExempleSlide(pres, item, showProblem, problematique, progress, logo)
       h: logoBox,
       fontSize: 22,
       bold: true,
-      color: COLORS.WHITE,
+      color: COLORS.DARK,
       align: 'center',
       valign: 'middle',
     });
@@ -531,7 +533,7 @@ function addContentSlide(pres, item, showProblem, problematique, progress) {
     h: 0.8,
     fontSize: 20,
     bold: true,
-    color: COLORS.WHITE,
+    color: COLORS.DARK,
     valign: 'middle',
   });
   if (item.type) {

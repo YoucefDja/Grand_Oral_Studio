@@ -142,6 +142,23 @@ GESTION DU TEMPS (critère 2.4) : le nombre de slides doit rester compatible ave
 Provenance des chiffres, données et exemples rapportés du web : dès qu'une slide en présente un, ajoute juste en dessous une ligne courte commençant par « Source : » en citant l'une des sources validées fournies plus haut (jamais une source inventée). S'il n'existe pas de source correspondante, présente le chiffre comme « à vérifier » plutôt que de l'affirmer.`.trim();
 
 /**
+ * Charte couleur CESI imposée au support : le jaune institutionnel #F2D934
+ * remplace le bleu historique. Le jaune est très clair — tout texte posé dessus
+ * reste en gris très foncé, jamais en blanc. Le .pptx applique ces couleurs en
+ * dur (voir services/pptx.js) ; ce bloc aligne la génération par l'API Claude.
+ */
+const SUPPORT_CHARTE_COULEUR = `
+### CHARTE COULEUR DU SUPPORT — JAUNE CESI #F2D934 (NON NÉGOCIABLE)
+Le support est aux couleurs CESI : le jaune institutionnel #F2D934 remplace tout bleu.
+- Bandeau d'en-tête de chaque slide de contenu : aplat jaune #F2D934. Le titre posé dessus est en gris très foncé #262626, JAMAIS en blanc (le jaune est trop clair, du texte blanc serait illisible).
+- Barre de progression : rail en ocre foncé #8A7A00, partie remplie en jaune assombri #E0C200.
+- Accents, traits de séparation, contours de cartes et de pastilles : jaune assombri #E0C200.
+- Chiffres clés et noms d'entreprise mis en avant : gris très foncé #262626 sur fond blanc.
+- Corps de texte en gris très foncé #262626 ; mentions secondaires et pied de slide en gris #595959.
+- Aucun bleu, aucune couleur vive, aucun dégradé. La palette se limite à #F2D934, #E0C200, #8A7A00, #262626, #595959, #BFBFBF et le blanc.
+`.trim();
+
+/**
  * Réduit l'objet "probleme" (2 à 4 formulations) à la SEULE formulation retenue
  * pour les étapes suivantes : celle pointée par `recommandation` (choisie par
  * l'étudiant à l'étape 2). Retombe sur la première formulation si le marqueur
@@ -239,6 +256,7 @@ async function buildStepPrompt(session, stepKey) {
   // des slides et la révélation progressive de la problématique.
   if (stepKey === 'support') {
     parts.push(SUPPORT_STRUCTURE);
+    parts.push(SUPPORT_CHARTE_COULEUR);
   }
 
   parts.push(

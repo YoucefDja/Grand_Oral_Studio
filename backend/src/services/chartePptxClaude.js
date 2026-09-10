@@ -14,10 +14,12 @@
 const { NOM, ANNEE } = require('../config/soutenance');
 
 // Couleurs CESI (identiques à COLORS dans pptx.js, sans le '#').
+// Le jaune CESI #F2D934 est une couleur très claire : les textes posés dessus
+// sont en gris foncé, jamais en blanc (illisible).
 const COULEURS = {
-  PRIMARY: '#1F4E79', // bleu CESI foncé — bandeau d'en-tête, page de titre
-  ACCENT: '#2E74B5', // bleu CESI clair — accents, barre de progression
-  LIGHT: '#D9E2F3', // bleu très clair — rail de progression, textes sur bandeau
+  PRIMARY: '#F2D934', // jaune CESI — bandeau d'en-tête, liseré de la page de titre
+  ACCENT: '#E0C200', // jaune CESI assombri — traits, barre de progression
+  LIGHT: '#8A7A00', // ocre foncé — rail de progression, textes sur le bandeau jaune
   WHITE: '#FFFFFF',
   DARK: '#262626', // corps de texte
   GREY: '#595959', // pied de page, mentions secondaires
@@ -49,15 +51,19 @@ inventer d'autres styles, couleurs ou dispositions.
 
 ### Palette (usage strictement limité)
 
-- Bleu CESI foncé ${COULEURS.PRIMARY} : bandeau d'en-tête des slides de contenu,
-  liseré supérieur de la page de titre, nom du candidat. Usage structurel uniquement.
-- Bleu CESI clair ${COULEURS.ACCENT} : traits de séparation, partie remplie de la
+- Jaune CESI ${COULEURS.PRIMARY} : bandeau d'en-tête des slides de contenu, liseré
+  supérieur de la page de titre. Usage structurel uniquement. C'est un jaune très
+  clair : tout texte posé dessus est en gris très foncé ${COULEURS.DARK}, JAMAIS en
+  blanc.
+- Jaune CESI assombri ${COULEURS.ACCENT} : traits de séparation, partie remplie de la
   barre de progression, libellés d'accroche. Accent uniquement, jamais en aplat large.
-- Bleu très clair ${COULEURS.LIGHT} : rail vide de la barre de progression, textes
-  posés sur le bandeau foncé.
+- Ocre foncé ${COULEURS.LIGHT} : rail vide de la barre de progression, type de la
+  slide (petit texte de droite du bandeau). C'est la seule teinte sombre de la
+  famille jaune, réservée aux textes fins posés sur le bandeau.
 - Gris ${COULEURS.GREY} : rappel de la problématique en pied de slide, année
   universitaire, mentions secondaires.
-- Aucune autre couleur. Pas de couleurs vives, pas de dégradés, pas de cliparts.
+- Aucune autre couleur, en particulier aucun bleu. Pas de couleurs vives, pas de
+  dégradés, pas de cliparts.
 
 ### PAGE DE TITRE (1re slide — sans numéro de progression)
 
@@ -66,10 +72,11 @@ Reproduis exactement cette disposition (dimensions en pouces, slide de 13,33 × 
 1. Fond blanc.
 2. Liseré supérieur : rectangle plein de la largeur totale (x 0 / y 0 / w 13,33 /
    h 0,16), couleur ${COULEURS.PRIMARY}, sans bordure visible.
-3. Logo CESI : le fichier logo_cesi.png fourni en pièce jointe du projet, centré
-   horizontalement, position x = (13,33 − largeur) / 2, y = 0,55. Taille maximale
-   2,6 × 1,15 pouces, proportions d'origine respectées (redimensionne selon le
-   côté le plus contraignant, ne déforme jamais).
+3. Logo CESI : le fichier logo_cesi.png se trouve dans les fichiers de ce projet
+   Claude. Récupère-le là et insère-le tel quel, centré horizontalement, position
+   x = (13,33 − largeur) / 2, y = 0,55. Taille maximale 2,6 × 1,15 pouces,
+   proportions d'origine respectées (redimensionne selon le côté le plus
+   contraignant, ne déforme jamais).
 4. Libellé « GRAND ORAL CESI » : centré, y = 2,05, hauteur 0,5, corps 16 pt,
    gras, espacement des caractères large (≈ 6 pt), couleur ${COULEURS.ACCENT}.
 5. LE SUJET SEUL, en grand, centré : y = 2,6, hauteur 1,9, largeur 13,33 − 2,4,
@@ -80,7 +87,7 @@ Reproduis exactement cette disposition (dimensions en pouces, slide de 13,33 × 
 6. Trait de séparation horizontal : largeur 3,2 pouces, centré
    (x = (13,33 − 3,2) / 2, y = 4,75), couleur ${COULEURS.ACCENT}, épaisseur 1,5 pt.
 7. Nom du candidat « ${NOM} » : centré, y = 5,0, hauteur 0,6, corps 24 pt, gras,
-   couleur ${COULEURS.PRIMARY}.
+   couleur ${COULEURS.DARK}.
 8. « Année universitaire ${ANNEE} » : centré, y = 5,7, hauteur 0,45, corps 14 pt,
    couleur ${COULEURS.GREY}.
 
@@ -91,7 +98,7 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
 1. BANDEAU D'EN-TÊTE : rectangle plein de toute la largeur, x 0 / y 0 / w 13,33 /
    h 1,05, couleur ${COULEURS.PRIMARY}, sans bordure.
    - Titre de la slide : x 0,5 / y 0,14 / w 13,33 − 2,6 / h 0,8, corps 20 pt, gras,
-     couleur blanc ${COULEURS.WHITE}, centré verticalement. Aligné à gauche.
+     couleur gris très foncé ${COULEURS.DARK}, centré verticalement. Aligné à gauche.
    - Type de la slide (contexte, enjeux, existant…) : x 13,33 − 2,2 / y 0,14 /
      w 1,8 / h 0,8, corps 10 pt, couleur ${COULEURS.LIGHT}, aligné à droite,
      centré verticalement. Écris-le en minuscules, sans underscore.
@@ -124,10 +131,11 @@ l'entreprise, pas la décrire. Reproduis cette disposition :
      pastille blanche arrondie (0,95 × 0,95, fond blanc, contour gris clair)
      avec 0,12 de marge, pour rester lisible quelle que soit la couleur de
      la marque. Si le logo est introuvable, remplace-le par une pastille
-     ${COULEURS.PRIMARY} portant les initiales de l'entreprise en blanc, 22 pt
-     gras : n'affiche jamais un cadre vide ni une image cassée.
+     ${COULEURS.PRIMARY} portant les initiales de l'entreprise en gris très
+     foncé ${COULEURS.DARK}, 22 pt gras : n'affiche jamais un cadre vide ni une
+     image cassée.
    - Nom de l'entreprise (champ "nom_entreprise") : à droite du logo, 22 pt,
-     gras, couleur ${COULEURS.PRIMARY}.
+     gras, couleur ${COULEURS.DARK}.
    - Secteur (champ "secteur") : sous le nom, 13 pt, couleur ${COULEURS.GREY}.
    - Source (champ "source") : sous le secteur, 9 pt, italique, gris, préfixée
      de « Source : ».
@@ -135,7 +143,7 @@ l'entreprise, pas la décrire. Reproduis cette disposition :
    pastille par entrée du champ "chiffres_cles" (2 à 3), réparties sur toute la
    largeur avec 0,25 d'écart, hauteur 1,0. Chaque pastille : rectangle arrondi
    fond blanc, contour ${COULEURS.ACCENT} 1 pt ; la valeur en 20 pt gras
-   ${COULEURS.PRIMARY} centrée, et le libellé en 10 pt gris centré dessous.
+   ${COULEURS.DARK} centrée, et le libellé en 10 pt gris centré dessous.
 4. PUCES D'ANALYSE : sous les pastilles, 14 pt, mêmes règles que le corps
    standard (puces natives, 6 maximum).
 
@@ -186,7 +194,7 @@ couleurs vives, texte en ${COULEURS.GREY} 10-11 pt.
 
 Vérifie, slide par slide, que :
 - le fond est blanc et les textes lisibles (aucun texte clair sur fond clair) ;
-- chaque slide de contenu possède son bandeau bleu foncé et sa barre de progression ;
+- chaque slide de contenu possède son bandeau jaune CESI et sa barre de progression ;
 - la barre progresse bien d'une slide à l'autre et le compteur « n / total » est exact ;
 - le rappel de la problématique apparaît uniquement après sa slide dédiée ;
 - la page de titre ne mentionne ni le thème, ni la problématique ;
