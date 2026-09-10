@@ -55,12 +55,6 @@ function aUnVisuelExploitable(slide) {
   return Array.isArray(visuel.donnees) && visuel.donnees.length > 0;
 }
 
-/** Nombre présent dans un texte (0 = aucun chiffre détecté). */
-function nombreDansTexte(texte) {
-  const trouves = normaliser(texte).match(/\d/g);
-  return trouves ? Number(trouves.join('')) : 0;
-}
-
 // Mots-clés signalant une donnée chiffrée rapportée (et non un simple numéro
 // de slide ou une année de contexte).
 const MARQUEURS_CHIFFRES = [
@@ -73,6 +67,55 @@ const MARQUEURS_CHIFFRES = [
   'sondage',
   'statistique',
 ];
+
+// Ordre impératif des blocs du support (structure_support_grand_oral_cesi.md) :
+// Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels →
+// Solutions → Conclusion. `null` = bloc facultatif dans une session donnée
+// (ex. un sujet peut n'avoir aucun cas d'entreprise réel à citer).
+const ORDRE_BLOCS = [
+  { cle: 'contexte', libelle: 'Contexte', tester: (t) => t.includes('contexte') },
+  { cle: 'enjeux', libelle: 'Enjeux', tester: (t) => t.includes('enjeux') },
+  { cle: 'problematique', libelle: 'Problématique', tester: (t) => t.includes('problematique') },
+  {
+    cle: 'existant',
+    libelle: 'Existant (fondements & théorie)',
+    tester: (t) => t.includes('existant'),
+    facultatif: true,
+  },
+  { cle: 'donnees', libelle: 'Données statistiques et chiffrées', tester: (t) => t.includes('donnees') },
+  {
+    cle: 'exemple_entreprise',
+    libelle: 'Cas réels d’entreprise',
+    tester: (t) => t.includes('exempleentreprise'),
+    facultatif: true,
+  },
+  { cle: 'solutions', libelle: 'Solutions et préconisations', tester: (t) => t.includes('solutions') },
+  { cle: 'conclusion', libelle: 'Conclusion', tester: (t) => t.includes('conclusion') },
+];
+
+/**
+ * Vérifie que les blocs se succèdent dans l'ordre imposé par la spécification
+ * de structure du support. Un bloc facultatif manquant n'est pas une erreur ;
+ * en revanche un bloc qui apparaît APRÈS un bloc qu'il devrait suivre est une
+ * rupture de l'effet entonnoir, que le jury sanctionne (critère 2.1).
+ */
+function detecterOrdreInvalide(types) {
+  const positions = ORDRE_BLOCS.map((bloc) => ({
+    ...bloc,
+    index: types.findIndex((t) => bloc.tester(t)),
+  }));
+  const presents = positions.filter((p) => p.index !== -1);
+
+  for (let i = 1; i < presents.length; i += 1) {
+    if (presents[i].index < presents[i - 1].index) {
+      return {
+        avant: presents[i - 1].libelle,
+        apres: presents[i].libelle,
+      };
+    }
+  }
+  return null;
+}
 
 /**
  * Analyse le support et renvoie les manques structurels au regard de la grille
@@ -95,6 +138,15 @@ function detecterManquesSupport(session) {
 
   const textes = slides.map(texteSlide);
   const types = slides.map(typeDe);
+
+  // ---- Ordre structurel imposé par la spécification du support ----
+  const ordreInvalide = detecterOrdreInvalide(types);
+  if (ordreInvalide) {
+    ajouter(
+      '2.1',
+      `L’enchaînement des blocs ne respecte pas la structure imposée : « ${ordreInvalide.apres} » apparaît avant « ${ordreInvalide.avant} », alors que l’ordre attendu est Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels → Solutions → Conclusion.`
+    );
+  }
 
   const aSlide = (predicat) => slides.some((slide, i) => predicat(slide, textes[i], types[i]));
   const aTexte = (regex) => textes.some((t) => regex.test(t));
