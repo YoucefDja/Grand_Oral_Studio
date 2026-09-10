@@ -82,6 +82,13 @@ function vocabBlock(theme, vocab) {
  * pose sur une slide dédiée, puis chaque slide qui suit sert à y répondre sans
  * sortir du sujet. Les sources sont citées sous les chiffres/exemples, sans
  * slide « Sources » dédiée.
+ *
+ * Cette structure prépare explicitement les critères de la grille d'évaluation
+ * du jury CESI (contexte et positionnement stratégique 1.1 ; enjeux TOHEE 1.2 ;
+ * concepts théoriques nommés 1.3 ; benchmark d'entreprises réelles nuancé 1.4 ;
+ * prise de position 1.5 ; champ applicatif avant/pendant/après 1.6 ; fil
+ * directeur visible 2.1 ; prise de position affirmée 2.3 ; impact visuel et
+ * gestion du temps 2.4 ; synthèse 2.6 ; ouverture 2.7).
  */
 const SUPPORT_STRUCTURE = `
 ### Structure narrative du support de présentation — à appliquer STRICTEMENT
@@ -91,14 +98,22 @@ Chaque slide doit porter un "type" parmi : contexte | enjeux | problematique | e
 VOLUME CIBLE : le fichier final doit compter environ 20 slides AU TOTAL (page de titre comprise, tolérance ±2). Comme la page de titre est ajoutée automatiquement, produis donc 18 à 19 slides de contenu, LA slide de conclusion incluse dans ce nombre. Répartition indicative : contexte & mots-clés 2-3 slides, enjeux 1-2, slide problématique 1, existant / analyse 5-6, solutions / préconisations 4-6, conclusion 1. Ajuste selon la durée et la richesse du plan, sans jamais gonfler artificiellement pour atteindre le chiffre.
 
 Ordre impératif des slides :
-1. « Contexte du sujet & mots-clés » (type contexte) : pourquoi ce sujet compte aujourd'hui ; présente les mots-clés du sujet avec leur définition courte (issus de l'analyse) et 1 à 2 chiffres clés actuels.
-2. « Enjeux » (type enjeux) : les enjeux TOHEE directement au cœur du sujet — pas un inventaire.
+1. « Contexte du sujet & mots-clés » (type contexte) : pourquoi ce sujet compte aujourd'hui, son positionnement stratégique clair au sein de l'entreprise ou du secteur (critère 1.1 du jury) ; présente les mots-clés du sujet avec leur définition courte (issus de l'analyse) et 1 à 2 chiffres clés actuels.
+2. « Enjeux » (type enjeux) : les enjeux TOHEE directement au cœur du sujet — pas un inventaire. Couvre les dimensions pertinentes parmi technique, organisationnelle, humaine, économique, environnementale (critère 1.2).
 3. UNE slide dédiée « Problématique » (type problematique) : la tension sous-jacente, puis la question formulée en une phrase et mise en avant.
    RÈGLE : ne formule JAMAIS la problématique avant cette slide ; les slides précédentes ne font que préparer sa venue.
 4. À partir de cette slide et jusqu'à la fin, chaque slide doit faire progresser la réponse à CETTE problématique, sans jamais sortir du sujet :
-   - l'existant / l'analyse (type existant), illustré si utile par des slides données ou exemples d'entreprises réelles (types donnees / exemple_entreprise) ;
-   - les solutions / préconisations (type solutions), posture consultant contextualisée par la taille d'entreprise.
-5. « Conclusion » (type conclusion) : synthèse qui répond explicitement à la problématique, rappelle la ligne directrice, puis une ouverture prospective (question) sans y répondre.
+   - l'existant / l'analyse (type existant) : mobilise NOMMÉMENT les concepts, modèles, normes ou cadres théoriques issus de l'analyse et de la recherche documentaire — le jury note la rigueur académique (critère 1.3) ; illustre par des slides données ou exemples d'entreprises réelles (types donnees / exemple_entreprise) ;
+   - le benchmark (type exemple_entreprise) : des entreprises réelles et identifiables, chacune avec sa source ; présente au moins un échec ou une limite, pas seulement des réussites — un plaidoyer à sens unique est pénalisé (critère 1.4) ;
+   - les solutions / préconisations (type solutions), posture consultant contextualisée par la taille d'entreprise : structure-les selon le champ applicatif avant / pendant / après la démarche, et rends-les concrètement actionnables (critère 1.6) ;
+   - sur au moins une slide, assume une prise de position explicite (« je préconise… parce que… ») avec la condition de sa réussite (critères 1.5 et 2.3).
+5. « Conclusion » (type conclusion) : synthèse qui répond explicitement à la problématique (critère 2.6), rappelle la ligne directrice ou le fil directeur du plan (critère 2.1), puis se termine par la question d'ouverture prospective du plan, POSÉE SANS Y RÉPONDRE (critère 2.7).
+
+FIL DIRECTEUR : chaque titre de slide doit pouvoir se lire comme une étape du même raisonnement. Le jury doit pouvoir reformuler en une phrase le fil qui relie l'introduction, chaque partie et la conclusion (critère 2.1). Si une slide ne fait pas avancer la réponse à la problématique, elle est hors sujet : supprime-la.
+
+IMPACT VISUEL (critère 2.4) : le support est noté sur son impact visuel et oral. Aucune slide ne se réduit à un bloc de texte. Pour chaque slide, choisis une "forme_visuelle" adaptée ("puces", "chiffre_cle", "deux_colonnes", "carte", "frise", "question") et, quand la slide gagne à être illustrée, renseigne l'objet "visuel" (histogramme de données, répartition, comparaison de deux séries, chronologie d'étapes) avec des chiffres réels et sourcés. Limite chaque puce à une ligne (6 puces maximum) : le détail argumentatif reste dans les notes orateur.
+
+GESTION DU TEMPS (critère 2.4) : le nombre de slides doit rester compatible avec la durée totale de l'oral et la répartition issues du plan. Ne dépasse pas le temps imparti : en cas d'arbitrage, coupe une slide plutôt que de la surcharger.
 
 Provenance des chiffres, données et exemples rapportés du web : dès qu'une slide en présente un, ajoute juste en dessous une ligne courte commençant par « Source : » en citant l'une des sources validées fournies plus haut (jamais une source inventée). S'il n'existe pas de source correspondante, présente le chiffre comme « à vérifier » plutôt que de l'affirmer.`.trim();
 

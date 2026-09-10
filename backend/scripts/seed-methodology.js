@@ -31,6 +31,40 @@ const raw = require('../methodology-content.json');
 // Section "glossaire" absente de methodologie-grand-oral.md (nouvelle étape
 // intermédiaire entre recherche et plan) : rédigée à partir du principe
 // `principe_glossaire_sources`, appliqué concrètement.
+// L'évaluation du Grand Oral ne dépend pas d'une appréciation globale : le jury
+// note 14 critères (2 blocs de 7, chacun sur 28 points, total /56). Ce bloc est
+// injecté à TOUTES les étapes pour que chaque livrable prépare explicitement un
+// ou plusieurs critères, au lieu d'espérer qu'ils soient satisfaits par accident.
+const GRILLE_EVALUATION_CESI = `L'étudiant est évalué par un jury sur une grille officielle CESI de 14 critères (deux blocs de 7, chacun noté sur 28 points, total sur 56). Chaque livrable que tu produis doit préparer explicitement les critères ci-dessous : ce ne sont pas des recommandations générales, ce sont les points sur lesquels l'étudiant sera noté.
+
+BLOC 1 — Qualité de la réponse sur le fond (28 points) :
+1.1 Présentation du contexte : intérêt du sujet, positionnement stratégique clair au sein de l'entreprise ou du secteur.
+1.2 Enjeux dégagés : pertinence des enjeux et ancrage dans le questionnement actuel des entreprises, sur les cinq dimensions technique, organisationnelle, humaine, économique, environnementale (TOHEE).
+1.3 Concepts et connaissances théoriques : mobilisation rigoureuse de concepts académiques et théoriques inhérents au sujet (auteurs, modèles, normes, cadres de référence nommés — pas seulement des notions de sens commun).
+1.4 Benchmark et pratiques professionnelles : exemples d'entreprises réelles, retours d'expérience, comparaison de pratiques du marché (au moins un succès et un échec ou une limite, pour éviter le plaidoyer à sens unique).
+1.5 Réponse stratégique aux enjeux : prise de position claire, hauteur de vue, propositions de solutions argumentées.
+1.6 Professionnalisme et pragmatisme : opérationnalité et applicabilité concrète de la solution, vision globale du champ applicatif (avant, pendant, après le projet ou la démarche).
+1.7 Pertinence des réponses aux questions du jury : capacité à argumenter, rebondir et convaincre (anticiper les objections et questions prévisibles du jury, avec les éléments de réponse).
+
+BLOC 2 — Aptitudes générales et qualité de la forme (28 points) :
+2.1 Structure de la présentation : organisation logique, clarté du plan, fil directeur visible.
+2.2 Communication : qualité de l'expression orale, aptitude à la relation, sens de l'écoute, capacité de remise en cause.
+2.3 Dynamisme de l'argumentation : prise de position affirmée, illustration par des exemples percutants, force de conviction.
+2.4 Maîtrise de l'exercice : impact visuel et oral, gestion du stress, respect strict du temps imparti, aisance dans le jeu de questions/réponses.
+2.5 Capacités d'analyse : finesse dans le décryptage de la problématique et des situations professionnelles exposées.
+2.6 Capacités de synthèse : aptitude à aller à l'essentiel, structurer la pensée, restituer clairement les points clés.
+2.7 Prise de recul et ouverture d'esprit : capacité à élargir la perspective, questionner l'avenir du sujet (questions d'ouverture) et nuancer le propos.
+
+Exigences générales qui découlent de cette grille :
+- Chaque affirmation quantitative doit être chiffrée et attribuée à une source identifiable ; une généralité non sourcée est notée comme une faiblesse sur 1.1, 1.2 et 1.6.
+- Les concepts théoriques mobilisés doivent être nommés explicitement (modèle, norme, auteur, cadre d'analyse), pas seulement décrits en langage courant (critère 1.3).
+- Les exemples d'entreprise doivent être réels, identifiables et datés ; ne jamais inventer un cas, un chiffre ou une source (critères 1.4 et 1.6).
+- La démonstration doit être nuancée : reconnaître les limites, les contre-exemples et les conditions de réussite, plutôt que défendre une thèse unique (critères 2.3, 2.5, 2.7).
+- Le temps imparti est évalué (critère 2.4) : toute production doit rester compatible avec la durée totale de l'oral fixée dans le plan, sans surcharge de contenu.
+- Le support visuel est noté sur son impact (critère 2.4) : slides lisibles et structurées, jamais des blocs de texte dense.
+
+Quand tu produis une étape, demande-toi explicitement quels critères cette étape prépare, et produis les éléments correspondants. Si une information manque pour satisfaire un critère, signale-le à l'étudiant au lieu de combler le vide par une généralité.`;
+
 const ETAPE_4_GLOSSAIRE = `Produis le glossaire et les résumés de sources demandés avant toute mise en slides, en t'appuyant sur les résultats de la recherche documentaire fournis plus haut.
 
 Contenu attendu :
@@ -87,6 +121,13 @@ const METHODOLOGY_SECTIONS = [
     order: 5,
     appliesToSteps: ['recherche', 'glossaire', 'support'],
     from: 'principe_glossaire_sources',
+  },
+  {
+    sectionId: 'grille_evaluation_cesi',
+    title: 'Grille d’évaluation du jury CESI (14 critères, /56)',
+    order: 5,
+    appliesToSteps: ['all'],
+    content: GRILLE_EVALUATION_CESI,
   },
   {
     sectionId: 'etape_1_analyse_sujet',
@@ -147,10 +188,12 @@ const STEP_SCHEMAS = [
       'Objet JSON avec les clés suivantes (toutes en snake_case) :',
       '- "reformulation" : chaîne — reformulation fidèle du sujet en une phrase.',
       '- "mots_cles" : tableau d\'objets { "mot": chaîne, "definition": chaîne } — chaque mot-clé du sujet avec sa définition contextualisée (pas une définition de dictionnaire).',
-      '- "notions_a_maitriser" : tableau de chaînes — notions techniques ou de gestion à maîtriser.',
+      '- "notions_a_maitriser" : tableau d\'objets { "notion": chaîne, "reference_theorique": chaîne, "apport" : chaîne } — chaque notion à maîtriser avec le modèle, la norme, l\'auteur ou le cadre académique qui la fonde (reference_theorique) et ce qu\'elle apporte à la démonstration (apport). C\'est ce qui permet de satisfaire le critère 1.3 de la grille jury (mobilisation de connaissances théoriques), et ces références doivent ensuite être réutilisées explicitement dans les slides et les notes orateur, pas seulement listées ici.',
       '- "questions_ouvertes" : tableau de chaînes — questions ouvertes soulevées par le sujet.',
       '- "tensions" : tableau d\'objets { "pole_a": chaîne, "pole_b": chaîne, "description": chaîne } — tensions/contradictions repérables à ce stade, même provisoires.',
       '- "angles_approche" : tableau de chaînes — angles d\'approche possibles pour la suite.',
+      '- "positionnement_strategique" : chaîne — en quoi ce sujet est stratégique pour l\'entreprise ou le secteur, et pour qui (grille jury, critère 1.1 « présentation du contexte »).',
+      'Les enjeux et tensions doivent couvrir les cinq dimensions TOHEE quand elles sont pertinentes : technique, organisationnelle, humaine, économique, environnementale (grille jury, critère 1.2 « enjeux dégagés »).',
       'Ne choisis pas encore de problématique à cette étape : elle doit rester exploratoire.',
     ].join('\n'),
   },
@@ -173,7 +216,9 @@ const STEP_SCHEMAS = [
       '- "types_sources" : tableau de chaînes — types de sources à mobiliser.',
       '- "organismes_exemples" : tableau d\'objets { "nom": chaîne, "type": chaîne, "pourquoi": chaîne } — organismes, revues, cabinets ou rapports réels et identifiables.',
       '- "donnees_a_rechercher" : tableau de chaînes — données chiffrées et pourcentages à rechercher en priorité.',
-      '- "exemples_entreprises" : tableau d\'objets { "nom": chaîne, "contexte": chaîne, "resultat": chaîne, "apport": chaîne } — exemples réels (succès et échecs), avec leur apport pour l\'analyse.',
+      '- "exemples_entreprises" : tableau d\'objets { "nom": chaîne, "contexte": chaîne, "resultat": chaîne, "apport": chaîne, "issue": chaîne, "source": chaîne } — exemples réels, avec leur apport pour l\'analyse. "issue" vaut "succes" ou "echec_ou_limite" : la grille jury (critère 1.4, benchmark et pratiques professionnelles) exige une comparaison de pratiques du marché, donc au moins un exemple de chaque nature si le sujet le permet. "source" identifie précisément d\'où vient le cas (rapport, article, étude) : un exemple non sourcé ne compte pas dans le benchmark.',
+      '- "references_theoriques" : tableau d\'objets { "reference": chaîne, "concept": chaîne, "usage": chaîne } — modèle, norme, auteur ou cadre académique à mobiliser, le concept qu\'il fonde et l\'usage qu\'en fera la présentation (critère 1.3). Il doit y en avoir au moins deux, cohérents avec les notions de l\'analyse du sujet.',
+      '- "questions_du_jury" : tableau d\'objets { "question": chaîne, "angle_de_reponse": chaîne } — questions ou objections prévisibles du jury, avec l\'élément de réponse à mobiliser (critère 1.7 « pertinence des réponses aux questions du jury »). Couvre au moins une objection de fond, une question technique et une question de mise en œuvre.',
       '- "consignes_fiches_lecture" : tableau de chaînes — consignes pour constituer des fiches de lecture par source.',
       '- "pieges_a_eviter" : tableau de chaînes — pièges méthodologiques à éviter.',
       'Rappelle-toi qu\'une IA seule ne suffit pas comme source : le but est de guider des recherches réelles et vérifiables.',
@@ -195,21 +240,28 @@ const STEP_SCHEMAS = [
       '- "duree_totale_minutes" : nombre — durée totale de l\'oral (20 par défaut).',
       '- "sections" : tableau d\'objets { "partie": chaîne, "role": chaîne, "minutes": nombre, "points": [chaînes] } — au minimum une section par grande partie : Introduction, Contexte (données chiffrées actuelles), Enjeux (TOHEE restreints au cœur de la problématique), Existant (état de l\'art + retours d\'expérience), Solutions / préconisations (posture consultant, contextualisées par taille d\'entreprise), Conclusion (réponse à la problématique + ouverture prospective sans y répondre).',
       '- "repartition_temps" : objet { "introduction": nombre, "contexte": nombre, "enjeux": nombre, "existant": nombre, "solutions": nombre, "conclusion": nombre } dont la somme égale duree_totale_minutes.',
-      'Chaque partie doit faire progresser explicitement la réponse à la problématique et renforcer la ligne directrice. Le minutage doit être réaliste (introduction/conclusion courtes).',
+      '- "fil_directeur" : chaîne — la phrase unique qui relie l\'introduction, chaque partie et la conclusion et que le jury doit pouvoir reformuler (critère 2.1 « structure de la présentation, fil directeur visible »). Elle découle de la ligne directrice déjà établie, sans la contredire.',
+      '- "objections_et_reponses" : tableau d\'objets { "objection": chaîne, "reponse": chaîne } — les objections prévisibles du jury et la réponse à y apporter (critère 1.7). Reprends et complète les questions du jury issues de la recherche documentaire.',
+      '- "ouverture" : objet { "question": chaîne, "pourquoi_elle_reste_ouverte": chaîne } — la question prospective finale (critère 2.7 « prise de recul et ouverture d\'esprit »). Elle doit rester explicitement sans réponse dans la conclusion.',
+      'Chaque partie doit faire progresser explicitement la réponse à la problématique et renforcer la ligne directrice. Le minutage doit être réaliste (introduction/conclusion courtes) et le total respecté à la minute près, la gestion du temps étant notée par le jury (critère 2.4).',
     ].join('\n'),
   },
   {
     stepKey: 'support',
     jsonSchemaDescription: [
-      'Objet JSON avec une clé "slides" : tableau d\'objets { "titre": chaîne, "type": chaîne, "puces": [chaînes], "notes_orateur": chaîne }, PLUS une clé "notes_globales" (chaîne optionnelle).',
+      'Objet JSON avec une clé "slides" : tableau d\'objets { "titre": chaîne, "type": chaîne, "forme_visuelle": chaîne, "puces": [chaînes], "visuel": objet|null, "notes_orateur": chaîne }, PLUS une clé "notes_globales" (chaîne optionnelle).',
       '- "type" parmi : "contexte" | "enjeux" | "problematique" | "existant" | "solutions" | "donnees" | "exemple_entreprise" | "conclusion".',
-      '- "puces" : phrases courtes (le détail argumentatif va dans les notes orateur, jamais sur la slide).',
+      '- "forme_visuelle" : chaîne OBLIGATOIRE décrivant la mise en forme de la slide, choisie dans cette liste : "puces" (liste à puces sobre), "chiffre_cle" (un grand chiffre mis en avant avec son explication), "deux_colonnes" (comparaison, ex. pôle A / pôle B, avant / après, succès / échec), "carte" (un encadré par idée, 2 à 4 encadrés), "frise" (étapes chronologiques, ex. avant / pendant / après), "question" (la question mise en grand au centre). Varie les formes d\'une slide à l\'autre : un enchaînement de slides toutes en "puces" est pénalisé par le jury sur l\'impact visuel (critère 2.4).',
+      '- "puces" : phrases courtes (le détail argumentatif va dans les notes orateur, jamais sur la slide). Maximum 6 puces par slide, chaque puce tenant en une ligne : une slide surchargée est pénalisée sur les critères 2.4 (impact visuel) et 2.6 (capacités de synthèse).',
+      '- "visuel" : objet { "type": chaîne, "legende": chaîne, "donnees": tableau } ou null. Utilise-le quand la slide gagne à être illustrée : "type" vaut "donnees" (donnees = tableau d\'objets { "libelle": chaîne, "valeur": nombre } → histogramme), "repartition" (donnees = même structure → anneau/parts), "comparaison" (donnees = tableau d\'objets { "critere": chaîne, "valeur_a": nombre, "valeur_b": nombre } → barres groupées, avec les libellés des deux séries dans "legende" séparés par " | ") ou "chronologie" (donnees = tableau d\'objets { "etape": chaîne, "description": chaîne } → frise d\'étapes). "legende" titre le visuel. Les valeurs doivent être des chiffres réels, cohérents avec les puces et sourcés ; n\'invente jamais un graphique décoratif.',
       '- "notes_orateur" : argumentation complète en français oral fluide, prête à être dite à voix haute.',
       'Ordre narratif imposé des slides : contexte & mots-clés → enjeux → UNE slide dédiée "problematique" → développement qui répond à la question (existant, solutions, données, exemples d\'entreprises réelles) → conclusion. Ne formule jamais la problématique avant sa slide dédiée.',
       'Cible de volume : environ 20 slides au total dans le fichier final, page de titre comprise (elle est ajoutée automatiquement à l\'export) : génère donc 18 à 19 slides de contenu, la slide de conclusion incluse, tolérance ±2. Répartition indicative : contexte & mots-clés 2-3, enjeux 1-2, slide problématique 1, existant/analyse 5-6, solutions/préconisations 4-6, conclusion 1. Ne gonfle jamais artificiellement le contenu pour atteindre le chiffre.',
-      'Exigences : une slide "contexte" qui présente le sujet, ses mots-clés et un ou deux chiffres clés ; au moins une slide "donnees" (chiffres) dans le développement ; au moins une slide "exemple_entreprise" réelle ; une slide "conclusion" qui répond explicitement à la problématique, rappelle la ligne directrice et s\'ouvre sur une question prospective sans y répondre.',
-      'Provenance : quand une slide présente un chiffre, une donnée ou un exemple rapporté du web, ajouter en dessous une ligne courte « Source : … » citant une source validée fournie dans le glossaire (jamais une source inventée).',
-      'RÈGLE ABSOLUE : aucun acronyme ou terme technique absent du glossaire fourni ne doit apparaître dans les puces ou les notes orateur.',
+      'Exigences de fond imposées par la grille du jury (chaque exigence doit être visible sur au moins une slide) : une slide "contexte" qui présente le sujet, ses mots-clés, un ou deux chiffres clés et le positionnement stratégique (critère 1.1) ; les enjeux couvrant les dimensions TOHEE pertinentes (critère 1.2) ; au moins une slide "existant" qui mobilise NOMMÉMENT les références théoriques fournies dans l\'analyse et la recherche documentaire (critère 1.3) ; au moins une slide "exemple_entreprise" présentant une entreprise réelle avec sa source, et au moins une slide rapportant un échec ou une limite, pas uniquement des réussites (critère 1.4, benchmark nuancé) ; les slides "solutions" structurées selon le champ applicatif avant / pendant / après (critère 1.6, pragmatisme) ; une slide "conclusion" qui répond explicitement à la problématique, rappelle la ligne directrice ou le fil directeur et se termine par la question d\'ouverture du plan, posée sans y répondre (critères 2.1 et 2.7) ; sur au moins une slide, une prise de position affirmée formulée comme telle, avec la condition de sa réussite (critères 1.5 et 2.3).',
+      'Exigence visuelle (critère 2.4 « impact visuel ») : au moins 6 slides doivent porter un objet "visuel" non nul, réparties sur la présentation, dont au moins une dans la partie contexte. Les autres slides utilisent une "forme_visuelle" autre que "puces". Aucune slide ne doit se réduire à un bloc de texte.',
+      'Provenance : quand une slide présente un chiffre, une donnée ou un exemple rapporté du web, ajouter en dessous une ligne courte « Source : … » citant une source validée fournie dans le glossaire (jamais une source inventée). Cette règle est notée par le jury : toute donnée chiffrée non sourcée affaiblit les critères 1.1, 1.2 et 1.6.',
+      'Un paragraphe d\'une puce ne doit jamais dépasser une ligne ; si une idée demande plus, elle va dans les notes orateur (critères 2.4 et 2.6).',
+      'RÈGLE ABSOLUE : aucun acronyme ou terme technique absent du glossaire fourni ne doit apparaître dans les puces, les visuels ou les notes orateur.',
     ].join('\n'),
   },
 ];

@@ -7,6 +7,7 @@ const { generateDeepseek } = require('../services/deepseek');
 const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
 const { runVeille } = require('../services/veille');
 const { buildPptx } = require('../services/pptx');
+const { assertConformiteSupport } = require('../services/conformiteSupport');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -533,6 +534,12 @@ router.post(
     if (slides.length === 0) {
       throw httpError(400, 'Le support de présentation n’a pas encore été généré (étape Support).');
     }
+
+    // Règle produit : le support exporté doit matérialiser les attendus
+    // structurels de la grille d'évaluation du jury (slide problématique,
+    // benchmark d'entreprise, données chiffrées sourcées, ouverture, visuels…).
+    // Un manque bloque l'export avec la liste précise des points à corriger.
+    assertConformiteSupport(session);
 
     const { buffer, fileName } = await buildPptx(session);
 
