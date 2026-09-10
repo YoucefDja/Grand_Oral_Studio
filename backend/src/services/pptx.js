@@ -200,21 +200,59 @@ function addProblemFooter(slide, problematique) {
   });
 }
 
-function addFooter(slide, index, total, withProblem) {
+/** Pied de slide : rappel de la problématique après sa slide dédiée. */
+function addFooter(slide, withProblem) {
   if (withProblem) addProblemFooter(slide, slide.problematiqueTexte || '');
+}
+
+/**
+ * Barre de progression fine intégrée au bandeau d'en-tête : matérialise
+ * l'avancement dans la présentation (curseur rempli jusqu'à la slide courante)
+ * et affiche « n / total » juste en dessous, pour que le jury et l'étudiant
+ * situent immédiatement le temps restant (critère 2.4, gestion du temps).
+ */
+function addProgressBar(pres, slide, index, total) {
+  const barY = 0.86;
+  const barH = 0.09;
+  const barX = 0.5;
+  const barW = LAYOUT_W - 1.0;
+
+  // Rail vide (fond clair, discret).
+  slide.addShape(pres.ShapeType.rect, {
+    x: barX,
+    y: barY,
+    w: barW,
+    h: barH,
+    fill: { color: COLORS.LIGHT },
+    line: { color: COLORS.LIGHT },
+  });
+
+  // Partie remplie proportionnelle à la position de la slide.
+  const ratio = total > 0 ? Math.min(Math.max(index / total, 0), 1) : 0;
+  if (ratio > 0) {
+    slide.addShape(pres.ShapeType.rect, {
+      x: barX,
+      y: barY,
+      w: barW * ratio,
+      h: barH,
+      fill: { color: COLORS.ACCENT },
+      line: { color: COLORS.ACCENT },
+    });
+  }
+
   slide.addText(`${index} / ${total}`, {
-    x: LAYOUT_W - 1.6,
-    y: LAYOUT_H - 0.38,
+    x: LAYOUT_W - 1.7,
+    y: barY + barH + 0.02,
     w: 1.2,
-    h: 0.3,
+    h: 0.24,
     fontSize: 9,
-    color: COLORS.GREY,
+    color: COLORS.LIGHT,
     align: 'right',
   });
 }
 
 /** Slide de contenu standard (bandeau titre + puces + notes orateur). */
-function addContentSlide(pres, item, showProblem, problematique) {
+function addContentSlide(pres, item, showProblem, problematique, progress) {
   const slide = pres.addSlide();
   slide.background = { color: COLORS.WHITE };
   if (showProblem && problematique) slide.problematiqueTexte = problematique;
@@ -250,6 +288,9 @@ function addContentSlide(pres, item, showProblem, problematique) {
       valign: 'middle',
     });
   }
+
+  // Barre de progression fine, intégrée sous le bandeau.
+  if (progress) addProgressBar(pres, slide, progress.index, progress.total);
 
   const puces = (Array.isArray(item.puces) ? item.puces : [])
     .map(cleanBullet)
@@ -328,8 +369,11 @@ async function buildPptx(session) {
   slides.forEach((item, i) => {
     footerIndex += 1;
     const showProblem = i >= showProblemAfter;
-    const slide = addContentSlide(pres, item, showProblem, problematique);
-    addFooter(slide, footerIndex, total, showProblem);
+    const slide = addContentSlide(pres, item, showProblem, problematique, {
+      index: footerIndex,
+      total,
+    });
+    addFooter(slide, showProblem);
   });
 
   // ---- Slide de conclusion ajoutée si absente (rappelle le fil rouge) ----
@@ -347,8 +391,11 @@ async function buildPptx(session) {
       conclusionItem.puces.push(`La démonstration a répondu à : « ${problematique} ».`);
     }
     const withProblemFooter = Boolean(problematique);
-    const slide = addContentSlide(pres, conclusionItem, withProblemFooter, problematique);
-    addFooter(slide, footerIndex, total, withProblemFooter);
+    const slide = addContentSlide(pres, conclusionItem, withProblemFooter, problematique, {
+      index: footerIndex,
+      total,
+    });
+    addFooter(slide, withProblemFooter);
   }
 
   const buffer = await pres.write({ outputType: 'nodebuffer' });

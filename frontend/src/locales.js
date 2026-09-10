@@ -185,6 +185,9 @@ export const FR = {
   'steps.claudeNeedsGlossaire':
     'Cette option nécessite un glossaire validé (étape 4) avant le support.',
   'steps.claudeExportPrompt': '⬇ Exporter le prompt .md (à coller dans Claude)',
+  'steps.claudeExportPptxPrompt': '⬇ Exporter le .md « Claude génère le .pptx »',
+  'steps.claudePptxHint':
+    'Ce second fichier contient la charte visuelle complète : Claude Desktop fabrique directement le .pptx, sans réimport. Le premier fichier sert au mode JSON à réimporter.',
   'steps.claudeJsonLabel': 'JSON renvoyé par Claude (objet avec une clé "slides")',
   'steps.importing': 'Validation…',
   'steps.importValidate': 'Importer et valider le support',
@@ -475,6 +478,9 @@ export const EN = {
   'steps.claudeNeedsGlossaire':
     'This option requires a validated glossary (step 4) before the presentation.',
   'steps.claudeExportPrompt': '⬇ Export the .md prompt (to paste into Claude)',
+  'steps.claudeExportPptxPrompt': '⬇ Export the ".md — Claude builds the .pptx"',
+  'steps.claudePptxHint':
+    'This second file contains the full visual charter: Claude Desktop builds the .pptx directly, with no re-import. The first file is for the JSON re-import mode.',
   'steps.claudeJsonLabel': 'JSON returned by Claude (object with a "slides" key)',
   'steps.importing': 'Validating…',
   'steps.importValidate': 'Import and validate the presentation',

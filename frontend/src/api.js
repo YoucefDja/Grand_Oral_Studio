@@ -77,12 +77,21 @@ export const api = {
   del: (path) => request(path, { method: 'DELETE' }).then((r) => r.json()),
 };
 
-/** Télécharge le prompt .md de l'étape 6 (à coller dans Claude sans consommer de tokens). */
-export async function downloadSupportPrompt(sessionId, fallbackName = 'support-etape-6-prompt-claude.md') {
+/**
+ * Télécharge un prompt .md de l'étape 6.
+ *  - `support-prompt`      : réponse JSON à réimporter dans l'app ;
+ *  - `support-pptx-prompt` : Claude Desktop fabrique directement le .pptx
+ *    (le document embarque la charte visuelle complète).
+ */
+export async function downloadSupportPrompt(
+  sessionId,
+  fallbackName = 'support-etape-6-prompt-claude.md',
+  endpoint = 'support-prompt'
+) {
   const auth = getAuth();
   let res;
   try {
-    res = await fetch(apiUrl(`/api/sessions/${sessionId}/support-prompt`), {
+    res = await fetch(apiUrl(`/api/sessions/${sessionId}/${endpoint}`), {
       method: 'GET',
       headers: auth && auth.token ? { Authorization: `Bearer ${auth.token}` } : {},
     });

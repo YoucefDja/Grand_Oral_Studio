@@ -39,6 +39,7 @@ function SlideCard({ slide, index, t }) {
 function ClaudeModeCard({ session, onSessionRefresh }) {
   const { t } = useSettings();
   const [exporting, setExporting] = useState(false);
+  const [exportingPptx, setExportingPptx] = useState(false);
   const [json, setJson] = useState('');
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -56,6 +57,24 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       setError(err.message);
     } finally {
       setExporting(false);
+    }
+  }
+
+  async function handleExportPptxPrompt() {
+    setExportingPptx(true);
+    setError(null);
+    setMsg(null);
+    try {
+      const fileName = await downloadSupportPrompt(
+        session._id,
+        'support-etape-6-generation-pptx-claude.md',
+        'support-pptx-prompt'
+      );
+      setMsg(t('steps.claudePptxPromptDownloaded').replace('{file}', fileName));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExportingPptx(false);
     }
   }
 
@@ -93,9 +112,17 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
         <div className="alert alert-info">{t('steps.claudeNeedsGlossaire')}</div>
       ) : (
         <>
-          <button type="button" className="btn-ghost" disabled={exporting} onClick={handleExport}>
-            {exporting ? t('steps.preparing') : t('steps.claudeExportPrompt')}
-          </button>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+            <button type="button" className="btn-ghost" disabled={exporting} onClick={handleExport}>
+              {exporting ? t('steps.preparing') : t('steps.claudeExportPrompt')}
+            </button>
+            <button type="button" className="btn-ghost" disabled={exportingPptx} onClick={handleExportPptxPrompt}>
+              {exportingPptx ? t('steps.preparing') : t('steps.claudeExportPptxPrompt')}
+            </button>
+          </div>
+          <p className="muted" style={{ marginTop: 8 }}>
+            {t('steps.claudePptxHint')}
+          </p>
           <label className="field" style={{ marginTop: 14 }}>
             {t('steps.claudeJsonLabel')}
             <textarea

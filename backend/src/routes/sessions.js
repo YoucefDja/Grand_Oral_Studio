@@ -6,6 +6,7 @@ const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
 const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
 const { buildPptx } = require('../services/pptx');
+const { buildChartePptxClaude } = require('../services/chartePptxClaude');
 const { assertConformiteSupport } = require('../services/conformiteSupport');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -418,6 +419,61 @@ router.get(
     ].join('\n');
 
     const fileName = 'support-etape-6-prompt-claude.md';
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
+    res.send(md);
+  })
+);
+
+// GET /api/sessions/:id/support-pptx-prompt
+// Exporte un fichier .md destiné à Claude Desktop : contrairement à
+// /support-prompt (qui attend un JSON à réimporter dans l'app), ce document
+// demande à Claude de fabriquer DIRECTEMENT le .pptx. Il contient donc, en plus
+// de la méthodologie et du schéma de contenu, la charte visuelle complète
+// (chartePptxClaude) que Claude doit appliquer lui-même.
+router.get(
+  '/:id/support-pptx-prompt',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    assertGlossaireValide(session, 'support');
+
+    const { system, user } = await buildStepPrompt(session, 'support');
+    const md = [
+      '# Grand Oral Studio — Génération DIRECTE du .pptx par Claude Desktop',
+      '',
+      "> Mode « Claude Desktop » : joins ce document à une conversation Claude puis demande-lui de produire le .pptx. Claude fabrique lui-même le fichier PowerPoint en appliquant la charte visuelle décrite en fin de document — aucun réimport dans l'application n'est nécessaire.",
+      '> Pour le mode « réponse JSON à réimporter dans l’app », utilise plutôt l’export « Prompt Claude » de l’étape 6.',
+      '',
+      '---',
+      '',
+      '## CE QUE TU DOIS PRODUIRE',
+      '',
+      "Tu produis un fichier PowerPoint (.pptx) binaire téléchargeable, prêt à présenter devant un jury, à partir du contenu ci-dessous. N'écris pas un JSON, n'écris pas un texte : fabrique le fichier .pptx lui-même (compétence PowerPoint / python-pptx).",
+      "Le contenu des slides (titres, types, puces, visuels, notes orateur) suit la structure narrative et le format décrits dans les instructions ci-après : ce sont les données à mettre en forme. La mise en page, elle, est décrite dans la section « CHARTE VISUELLE ET MISE EN PAGE » en fin de document — applique-la à la lettre.",
+      '',
+      '---',
+      '',
+      '## INSTRUCTIONS À SUIVRE (méthodologie, glossaire, structure, format du contenu)',
+      '',
+      system,
+      '',
+      '---',
+      '',
+      '## CONTEXTE ET DONNÉES DE L’ÉTUDIANT',
+      '',
+      user,
+      '',
+      '---',
+      '',
+      buildChartePptxClaude(),
+      '',
+    ].join('\n');
+
+    const fileName = 'support-etape-6-generation-pptx-claude.md';
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.setHeader(
       'Content-Disposition',
