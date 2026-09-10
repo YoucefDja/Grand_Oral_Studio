@@ -10,7 +10,7 @@ const MethodologySection = require('../models/MethodologySection');
 const StepSchemaModel = require('../models/StepSchema');
 const { getThemeVocabulary } = require('./vocabulaire');
 
-const STEP_KEYS = ['analyse', 'probleme', 'source', 'recherche', 'glossaire', 'plan', 'support'];
+const STEP_KEYS = ['analyse', 'probleme', 'recherche', 'glossaire', 'plan', 'support'];
 
 // Étapes où la « base de vocabulaire du thème » est réinjectée : l'analyse
 // (qui fixe les mots-clés) et le glossaire (qui fixe les termes réutilisables).
@@ -20,7 +20,6 @@ const VOCAB_REUSE_STEPS = new Set(['analyse', 'glossaire']);
 const STEP_LABELS = {
   analyse: 'Analyse du sujet',
   probleme: 'Problématique',
-  source: 'Source en ligne',
   recherche: 'Recherche documentaire',
   glossaire: 'Glossaire et résumés des sources',
   plan: 'Plan détaillé',

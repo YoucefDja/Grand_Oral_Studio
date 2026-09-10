@@ -5,7 +5,6 @@ const { buildStepPrompt, STEP_KEYS, STEP_LABELS } = require('../services/promptB
 const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
 const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
-const { runVeille } = require('../services/veille');
 const { buildPptx } = require('../services/pptx');
 const { assertConformiteSupport } = require('../services/conformiteSupport');
 const { requireAuth } = require('../middleware/auth');
@@ -18,9 +17,8 @@ const router = express.Router();
 router.use(requireAuth);
 
 // Routage des providers selon l'étape IA :
-//  - étapes génératives 1,2,4,5,6 → DeepSeek (deepseek-v4-flash, non-thinking)
-//  - étape support          → Anthropic Claude (inchangée)
-// L'étape « source » (3, veille manuelle) n'utilise PAS generate/:step.
+//  - étapes génératives 1,2,3,4,5 → DeepSeek (deepseek-v4-flash, non-thinking)
+//  - étape support               → Anthropic Claude (inchangée)
 const DEEPSEEK_STEPS = ['analyse', 'probleme', 'recherche', 'glossaire', 'plan'];
 const CLAUDE_STEPS = ['support'];
 
@@ -240,7 +238,6 @@ router.post(
 
 // POST /api/sessions/:id/generate/:step
 // step = analyse | probleme | recherche | glossaire | plan | support
-// (l'étape « source » — veille en ligne — est déclenchée par /source-veille)
 router.post(
   '/:id/generate/:step',
   asyncHandler(async (req, res) => {
@@ -249,12 +246,6 @@ router.post(
       throw httpError(
         400,
         `Étape inconnue "${stepKey}". Attendue : ${STEP_KEYS.join(' | ')}.`
-      );
-    }
-    if (stepKey === 'source') {
-      throw httpError(
-        400,
-        'L’étape « Source en ligne » ne se génère pas par IA : utilisez le bouton de récupération des articles.'
       );
     }
 
@@ -293,9 +284,9 @@ router.post(
       regenereProbleme = isNonEmptyObject(session.data && session.data.probleme);
       session.ligneDirectrice = String(parsed.ligne_directrice).trim();
       if (regenereProbleme) {
-        // Les étapes 3 à 7 étaient bâties sur l'ancienne problématique : elles
-        // doivent être re-générées (source, recherche, glossaire, plan, support).
-        ['source', 'recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
+        // Les étapes 3 à 6 étaient bâties sur l'ancienne problématique : elles
+        // doivent être re-générées (recherche, glossaire, plan, support).
+        ['recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
           if (session.data && session.data[k]) session.data[k] = {};
         });
       }
@@ -313,52 +304,6 @@ router.post(
     if (regenereProbleme) {
       session.currentStep = Math.min(session.currentStep, nextIndex);
     }
-
-    await session.save();
-    res.json(session);
-  })
-);
-
-// POST /api/sessions/:id/source-veille
-// Étape « Source en ligne » : récupération MANUELLE (bouton) de 4 articles
-// ciblés sur le thème + le sujet + la problématique de la session. Les articles
-// retenus sont archivés dans l'onglet News puis référencés dans session.data.source.
-router.post(
-  '/:id/source-veille',
-  asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id, req.userId);
-    if (!session) throw httpError(404, 'Session introuvable.');
-
-    const payload = await runVeille(session);
-    session.data.source = payload;
-    session.markModified('data');
-
-    const nextIndex = STEP_KEYS.indexOf('source') + 1;
-    session.currentStep = Math.max(session.currentStep || 0, nextIndex);
-
-    await session.save();
-    res.json(session);
-  })
-);
-
-// POST /api/sessions/:id/skip-source
-// L'étape « Source en ligne » est FACULTATIVE : l'étudiant peut la passer et
-// continuer la préparation. La veille reste possible à tout moment ensuite.
-router.post(
-  '/:id/skip-source',
-  asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id, req.userId);
-    if (!session) throw httpError(404, 'Session introuvable.');
-
-    session.data.source = {
-      ...(session.data && session.data.source ? session.data.source : {}),
-      skipped: true,
-      skippedAt: new Date().toISOString(),
-    };
-    session.markModified('data');
-
-    const nextIndex = STEP_KEYS.indexOf('source') + 1;
-    session.currentStep = Math.max(session.currentStep || 0, nextIndex);
 
     await session.save();
     res.json(session);
@@ -422,15 +367,15 @@ router.post(
     }
 
     // Si la formulation retenue OU la ligne directrice CHANGE, les étapes aval
-    // (source → support) sont basées sur l'ancienne problématique / l'ancien
+    // (recherche → support) sont basées sur l'ancienne problématique / l'ancien
     // fil rouge : elles doivent être re-faites (elles ne sont plus valides).
     const changementProbleme = ancienneRecommandation && ancienneRecommandation !== nouvelleRecommandation;
     const changementLD = nouvelleLD && nouvelleLD !== ancienneLD;
     if (changementProbleme || changementLD) {
-      ['source', 'recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
+      ['recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
         if (session.data && session.data[k]) session.data[k] = {};
       });
-      const seuil = STEP_KEYS.indexOf('probleme') + 1; // bloque à l'étape « Source en ligne » (étape 3)
+      const seuil = STEP_KEYS.indexOf('probleme') + 1; // bloque à l'étape « Recherche documentaire » (étape 3)
       session.currentStep = Math.min(session.currentStep || 0, seuil);
     }
 

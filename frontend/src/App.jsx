@@ -7,7 +7,6 @@ import WorkspacePage from './components/WorkspacePage.jsx';
 import AdminPage from './components/AdminPage.jsx';
 import LoginPage from './components/LoginPage.jsx';
 import AcceptInvitePage from './components/AcceptInvitePage.jsx';
-import NewsPage from './components/NewsPage.jsx';
 import GlossaryPage from './components/GlossaryPage.jsx';
 import LegalPage from './components/LegalPage.jsx';
 
@@ -89,7 +88,6 @@ function Header() {
           {user ? (
             <>
               <Link to="/">{t('nav.sessions')}</Link>
-              <Link to="/news">{t('nav.news')}</Link>
               <Link to="/glossaire">{t('nav.glossary')}</Link>
               {user.role === 'admin' ? <Link to="/admin">{t('nav.admin')}</Link> : null}
               <span
@@ -184,14 +182,6 @@ export default function App() {
             element={
               <RequireAuth admin>
                 <AdminPage />
-              </RequireAuth>
-            }
-          />
-          <Route
-            path="/news"
-            element={
-              <RequireAuth>
-                <NewsPage />
               </RequireAuth>
             }
           />

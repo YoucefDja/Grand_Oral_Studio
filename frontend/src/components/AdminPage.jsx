@@ -216,82 +216,6 @@ function ThemeEditorItem({ item, onSaved, onDeleted }) {
 }
 
 /* ------------------------------------------------------------------ */
-/* Éditeur : Source News (veille IA / Big Data)                        */
-/* ------------------------------------------------------------------ */
-
-function NewsSourceEditor({ item, onSaved, onDeleted }) {
-  const { t } = useSettings();
-  const [name, setName] = useState(item.name || '');
-  const [url, setUrl] = useState(item.url || '');
-  const [active, setActive] = useState(item.active !== false);
-  const [busy, setBusy] = useState(false);
-  const [error, setError] = useState(null);
-
-  async function save() {
-    setBusy(true);
-    setError(null);
-    try {
-      const saved = item
-        ? await api.put(`/api/admin/news-sources/${item._id}`, { name: name.trim(), url: url.trim(), active })
-        : await api.post('/api/admin/news-sources', { name: name.trim(), url: url.trim(), active });
-      onSaved(saved);
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  }
-
-  async function remove() {
-    if (!item) return;
-    if (!window.confirm(t('admin.sourceConfirmDelete').replace('{name}', item.name))) return;
-    setBusy(true);
-    setError(null);
-    try {
-      await api.del(`/api/admin/news-sources/${item._id}`);
-      onDeleted(item._id);
-    } catch (err) {
-      setError(err.message);
-      setBusy(false);
-    }
-  }
-
-  return (
-    <div className={`admin-item ${busy ? 'saving' : ''}`} style={{ padding: 14 }}>
-      <div className="row-2">
-        <label className="field">
-          {t('admin.sourceNameLabel')}
-          <input type="text" value={name} onChange={(e) => setName(e.target.value)} />
-        </label>
-        <label className="field">
-          {t('admin.sourceUrlLabel')}
-          <input type="url" value={url} onChange={(e) => setUrl(e.target.value)} placeholder="https://…" />
-        </label>
-      </div>
-      <label className="field" style={{ display: 'flex', alignItems: 'center', gap: 8, marginTop: 4 }}>
-        <input
-          type="checkbox"
-          checked={active}
-          onChange={(e) => setActive(e.target.checked)}
-          style={{ width: 'auto' }}
-        />
-        {t('admin.sourceActiveLabel')}
-      </label>
-      {error ? <div className="alert alert-error">{error}</div> : null}
-      <div className="actions">
-        <button type="button" className="btn-primary" onClick={save} disabled={busy || !name.trim() || !url.trim()}>
-          {busy ? '…' : item ? t('common.save') : t('admin.addButton')}
-        </button>
-        {item ? (
-          <button type="button" className="btn-danger" onClick={remove} disabled={busy}>
-            {t('common.delete')}
-          </button>
-        ) : null}
-      </div>
-    </div>
-  );
-}
-
-/* ------------------------------------------------------------------ */
 /* Page Admin                                                          */
 /* ------------------------------------------------------------------ */
 
@@ -302,8 +226,6 @@ export default function AdminPage() {
   const [sections, setSections] = useState([]);
   const [schemas, setSchemas] = useState([]);
   const [themes, setThemes] = useState([]);
-  const [newsSources, setNewsSources] = useState([]);
-  const [addingNews, setAddingNews] = useState(false);
   const [chronoDuree, setChronoDuree] = useState(null);
   const [chronoSaving, setChronoSaving] = useState(false);
   const [loading, setLoading] = useState(false);
@@ -318,19 +240,17 @@ export default function AdminPage() {
     setLoading(true);
     setError(null);
     try {
-      const [u, s, sc, t, ns, ch] = await Promise.all([
+      const [u, s, sc, t, ch] = await Promise.all([
         api.get('/api/admin/users'),
         api.get('/api/admin/methodology'),
         api.get('/api/admin/step-schemas'),
         api.get('/api/admin/themes'),
-        api.get('/api/admin/news-sources'),
         api.get('/api/admin/settings/chrono'),
       ]);
       setUsers(u);
       setSections(s);
       setSchemas(sc);
       setThemes(t);
-      setNewsSources(ns);
       setChronoDuree(Number(ch?.dureeMinutes) || 90);
     } catch (err) {
       setError(err.message);
@@ -342,26 +262,6 @@ export default function AdminPage() {
   useEffect(() => {
     loadAll();
   }, []);
-
-  async function refreshNewsSources() {
-    try {
-      setNewsSources(await api.get('/api/admin/news-sources'));
-    } catch (err) {
-      setError(err.message);
-    }
-  }
-
-  async function resetNewsSources() {
-    if (!window.confirm(t('admin.confirmResetSources'))) return;
-    setError(null);
-    try {
-      const data = await api.post('/api/admin/news-sources/reset');
-      setNotice(data.message || t('admin.sourcesReset'));
-      await refreshNewsSources();
-    } catch (err) {
-      setError(err.message);
-    }
-  }
 
   async function refreshUsers() {
     try {
@@ -478,9 +378,6 @@ export default function AdminPage() {
         </button>
         <button className={`tab ${tab === 'themes' ? 'on' : ''}`} onClick={() => setTab('themes')}>
           {t('admin.themesTab')} ({themes.length})
-        </button>
-        <button className={`tab ${tab === 'news' ? 'on' : ''}`} onClick={() => setTab('news')}>
-          {t('admin.newsTab')} ({newsSources.length})
         </button>
         <button className={`tab ${tab === 'chrono' ? 'on' : ''}`} onClick={() => setTab('chrono')}>
           {t('admin.chronoTab')}
@@ -629,42 +526,6 @@ export default function AdminPage() {
               onDeleted={(id) => setThemes((prev) => prev.filter((x) => x._id !== id))}
             />
           ))}
-        </div>
-      ) : null}
-
-      {/* ---------------- News : sites sources des veilles ---------------- */}
-      {tab === 'news' ? (
-        <div>
-          <div style={{ display: 'flex', justifyContent: 'flex-end', gap: 10, marginBottom: 12 }}>
-            <button type="button" className="btn-ghost" onClick={resetNewsSources}>
-              {t('admin.resetSourcesButton')}
-            </button>
-            {!addingNews ? (
-              <button type="button" className="btn-primary" onClick={() => setAddingNews(true)}>
-                + {t('admin.addSource')}
-              </button>
-            ) : null}
-          </div>
-          {addingNews ? (
-            <NewsSourceEditor
-              item={null}
-              onSaved={(saved) => {
-                setNewsSources((prev) => [saved, ...prev]);
-                setAddingNews(false);
-              }}
-            />
-          ) : null}
-          {newsSources.map((src) => (
-            <NewsSourceEditor
-              key={src._id}
-              item={src}
-              onSaved={(saved) => setNewsSources((prev) => prev.map((x) => (x._id === saved._id ? saved : x)))}
-              onDeleted={(id) => setNewsSources((prev) => prev.filter((x) => x._id !== id))}
-            />
-          ))}
-          {newsSources.length === 0 ? (
-            <div className="empty">{t('admin.emptySources')}</div>
-          ) : null}
         </div>
       ) : null}
 

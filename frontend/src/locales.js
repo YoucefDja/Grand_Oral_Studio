@@ -13,7 +13,6 @@ export const FR = {
   // ---- Marque / navigation ----
   'brand.sub': 'Préparation au Grand Oral CESI',
   'nav.sessions': 'Mes sessions',
-  'nav.news': 'News',
   'nav.glossary': 'Glossaire',
   'nav.admin': 'Administration',
   'nav.login': 'Se connecter',
@@ -245,29 +244,6 @@ export const FR = {
   'steps.jv.notes_globales': 'Notes globales',
   'steps.jv.entreprise': 'Entreprise',
 
-  // ---- Étape « Source en ligne » (veille ciblée dans la session) ----
-  'source.doneBadge': 'Veille générée',
-  'source.needProblem':
-    'Choisissez d’abord votre problématique (étape Problématique) avant de lancer la veille.',
-  'source.recapLine': 'Veille sur le thème « {theme} » pour le sujet : {sujet}',
-  'source.selectedProblem': 'Problématique retenue :',
-  'source.run': 'Récupérer jusqu’à 4 articles ciblés',
-  'source.running': 'Récupération en cours (recherche + lecture + sélection IA)…',
-  'source.runHint':
-    'DeepSeek déduit les mots-clés du sujet et de la problématique, les sources autorisées sont interrogées, puis les 4 articles les plus utiles sont sélectionnés et archivés dans l’onglet News.',
-  'source.contextLabel': 'Contexte de la veille',
-  'source.keywordsLabel': 'Mots-clés utilisés',
-  'source.selectedArticles': 'Articles retenus (sélection IA)',
-  'source.reRun': 'Relancer une veille',
-  'source.goNext': 'Continuer vers',
-  'source.skip': 'Passer cette étape',
-  'source.skipping': 'Passage…',
-  'source.skippedNote':
-    'Vous avez choisi de passer cette étape sans lancer de veille. La suite du parcours est débloquée : vous pouvez continuer, ou lancer la veille plus tard quand vous le souhaitez.',
-  'source.archiveHint':
-    'Ces articles sont visibles par tous dans l’onglet News, avec leur thème, leur sujet et leur problématique d’origine.',
-  'source.errorGeneric': 'La veille a échoué. Réessayez.',
-
   // ---- Glossaire personnel (GlossaryPage) ----
   'glossary.pageTitle': 'Mon glossaire',
   'glossary.subtitle':
@@ -283,29 +259,6 @@ export const FR = {
   'glossary.fromSession': 'Issu de la session',
   'glossary.fromSessions': 'Issu de {n} sessions :',
 
-  // ---- News (NewsPage : articles issus des veilles de session) ----
-  'news.title': 'News — Veille IA & Big Data',
-  'news.subtitle':
-    'Articles récupérés lors des veilles de vos sessions (étape « Source en ligne »), reliés au thème, au sujet et à la problématique de chaque session. Lecture intégrale dans l’app, traduisible à la demande.',
-  'news.veilleFor': 'Généré pour la session',
-  'news.readInApp': 'Lire dans l’app →',
-  'news.sourceLabel': 'Source :',
-  'news.glossaryTitle': 'Acronymes & termes techniques du jour',
-  'news.glossarySubA': 'Généré quotidiennement par IA à partir de la veille du jour',
-  'news.glossarySubB': 'glossaire du',
-  'news.loadingArticles': 'Chargement des articles…',
-  'news.loadingArticle': 'Chargement de l’article…',
-  'news.emptyArticles':
-    'Aucun article pour le moment. Lancez une veille depuis une session (étape « Source en ligne », après le choix de la problématique) : les articles récupérés arriveront ici.',
-
-  // ---- Lecteur d’article (NewsPage : ArticleReader) ----
-  'reader.backToList': 'Retour aux articles',
-  'reader.translatedFrom': 'Traduit automatiquement',
-  'reader.contentUnavailable':
-    'Le contenu complet de cet article n’a pas pu être récupéré. Vous pouvez consulter la source d’origine ci-dessous.',
-  'reader.tagsLabel': 'Tags :',
-  'reader.originalSourceLabel': 'Source d’origine :',
-
   // ---- Administration (AdminPage) ----
   'admin.title': 'Administration',
   'admin.intro':
@@ -314,7 +267,6 @@ export const FR = {
   'admin.methodologyTab': 'Méthodologie',
   'admin.schemasTab': 'Schémas de sortie',
   'admin.themesTab': 'Thèmes',
-  'admin.newsTab': 'Sites sources (veille)',
   'admin.inviteTitle': 'Inviter un utilisateur',
   'admin.inviteHint':
     'Un e-mail (Resend) sera envoyé avec un lien de configuration du mot de passe, valable 48 h.',
@@ -347,28 +299,6 @@ export const FR = {
   'admin.themePlaceholder': 'Ex. Mobilité & transports',
   'admin.addButton': 'Ajouter',
   'admin.themeConfirmDelete': 'Supprimer le thème « {label} » ?',
-  'admin.sourceNameLabel': 'Nom de la source',
-  'admin.sourceUrlLabel': 'URL (page, flux RSS ou catégorie)',
-  'admin.sourceActiveLabel': 'Source active (interrogée par l’étape « Source en ligne » des sessions)',
-  'admin.sourceConfirmDelete': 'Supprimer la source « {name} » ?',
-  'admin.scanTitle': 'Collecte quotidienne des articles',
-  'admin.scanHint':
-    'Le cron quotidien interroge automatiquement les sources actives (6h30, Europe/Paris). Ce bouton déclenche immédiatement le même processus (collecte + glossaire du jour), sans attendre le cron.',
-  'admin.scanning': 'Scraping en cours…',
-  'admin.scanButton': 'Lancer le scraping manuellement',
-  'admin.scanReport':
-    'Dernière collecte ({date}) : {n} nouvel(le)(s) article(s) récupéré(s), {d} doublon(s) ignoré(s) sur {f} lien(s) trouvé(s).',
-  'admin.scanGlossaireDone': 'Glossaire du jour généré.',
-  'admin.linksUnit': 'lien(s)',
-  'admin.newUnit': 'nouveau(x)',
-  'admin.errorLabel': 'erreur',
-  'admin.resetSourcesButton': 'Restaurer les 10 sources par défaut',
-  'admin.confirmResetSources':
-    'Rétablir les 10 sources par défaut (sans toucher aux existantes) ?',
-  'admin.sourcesReset': 'Sources par défaut restaurées.',
-  'admin.addSource': 'Ajouter une source',
-  'admin.emptySources':
-    'Aucune source configurée. Cliquez sur « Restaurer les 10 sources par défaut » pour démarrer la veille IA / Big Data.',
   'admin.chronoTab': 'Chrono de session',
   'admin.chronoTitle': 'Durée du compte à rebours',
   'admin.chronoHint':
@@ -381,7 +311,6 @@ export const FR = {
 export const EN = {
   'brand.sub': 'Prep for the CESI Grand Oral',
   'nav.sessions': 'My sessions',
-  'nav.news': 'News',
   'nav.glossary': 'Glossary',
   'nav.admin': 'Administration',
   'nav.login': 'Sign in',
@@ -605,28 +534,6 @@ export const EN = {
   'steps.jv.notes_globales': 'Global notes',
   'steps.jv.entreprise': 'Company',
 
-  'source.doneBadge': 'Veille generated',
-  'source.needProblem':
-    'Choose your research question first (Problématique step) before launching the veille.',
-  'source.recapLine': 'Veille on theme “{theme}” for the subject: {sujet}',
-  'source.selectedProblem': 'Selected research question:',
-  'source.run': 'Fetch up to 4 targeted articles',
-  'source.running': 'Fetching in progress (search + reading + AI selection)…',
-  'source.runHint':
-    'DeepSeek infers keywords from the subject and the research question, the approved sources are queried, then the 4 most useful articles are selected and archived in the News tab.',
-  'source.contextLabel': 'Veille context',
-  'source.keywordsLabel': 'Keywords used',
-  'source.selectedArticles': 'Selected articles (AI pick)',
-  'source.reRun': 'Run the veille again',
-  'source.goNext': 'Continue to',
-  'source.skip': 'Skip this step',
-  'source.skipping': 'Skipping…',
-  'source.skippedNote':
-    'You chose to skip this step without running a veille. The rest of the journey is unlocked: you can continue, or run the veille later whenever you want.',
-  'source.archiveHint':
-    'These articles are visible to everyone in the News tab, with their original theme, subject and research question.',
-  'source.errorGeneric': 'The veille failed. Please retry.',
-
   // ---- Personal glossary (GlossaryPage) ----
   'glossary.pageTitle': 'My glossary',
   'glossary.subtitle':
@@ -642,27 +549,6 @@ export const EN = {
   'glossary.fromSession': 'From the session',
   'glossary.fromSessions': 'From {n} sessions:',
 
-  'news.title': 'News — AI & Big Data watch',
-  'news.subtitle':
-    'Articles gathered during your session veilles (Source en ligne step), linked to each session’s theme, subject and research question. Full in-app reading, translatable on demand.',
-  'news.veilleFor': 'Generated for session',
-  'news.readInApp': 'Read in the app →',
-  'news.sourceLabel': 'Source:',
-  'news.glossaryTitle': 'Acronyms & technical terms of the day',
-  'news.glossarySubA': "Generated daily by AI from the day's news",
-  'news.glossarySubB': 'glossary for',
-  'news.loadingArticles': 'Loading articles…',
-  'news.loadingArticle': 'Loading article…',
-  'news.emptyArticles':
-    'No article right now. Run a veille from a session (Source en ligne step, after choosing the research question): the fetched articles will land here.',
-
-  'reader.backToList': 'Back to the articles',
-  'reader.translatedFrom': 'Auto-translated',
-  'reader.contentUnavailable':
-    'The full content of this article could not be retrieved. You can view the original source below.',
-  'reader.tagsLabel': 'Tags:',
-  'reader.originalSourceLabel': 'Original source:',
-
   'admin.title': 'Administration',
   'admin.intro':
     'Invite users by e-mail (they will set their password through the received link) and manage the methodology, the output schemas and the themes.',
@@ -670,7 +556,6 @@ export const EN = {
   'admin.methodologyTab': 'Methodology',
   'admin.schemasTab': 'Output schemas',
   'admin.themesTab': 'Themes',
-  'admin.newsTab': 'Source sites (veille)',
   'admin.inviteTitle': 'Invite a user',
   'admin.inviteHint':
     'An e-mail (Resend) will be sent with a password set-up link, valid for 48 hours.',
@@ -704,28 +589,6 @@ export const EN = {
   'admin.themePlaceholder': 'e.g. Mobility & transport',
   'admin.addButton': 'Add',
   'admin.themeConfirmDelete': 'Delete the theme “{label}”?',
-  'admin.sourceNameLabel': 'Source name',
-  'admin.sourceUrlLabel': 'URL (page, RSS feed or category)',
-  'admin.sourceActiveLabel': 'Active source (queried by the “Source en ligne” step of sessions)',
-  'admin.sourceConfirmDelete': 'Delete the source “{name}”?',
-  'admin.scanTitle': 'Daily article collection',
-  'admin.scanHint':
-    'The daily cron automatically queries the active sources (6:30 AM, Europe/Paris). This button immediately triggers the same process (collection + glossary of the day), without waiting for the cron.',
-  'admin.scanning': 'Scraping in progress…',
-  'admin.scanButton': 'Launch the scraping manually',
-  'admin.scanReport':
-    'Last collection ({date}): {n} new article(s) fetched, {d} duplicate(s) ignored out of {f} link(s) found.',
-  'admin.scanGlossaireDone': 'Glossary of the day generated.',
-  'admin.linksUnit': 'link(s)',
-  'admin.newUnit': 'new',
-  'admin.errorLabel': 'error',
-  'admin.resetSourcesButton': 'Restore the 10 default sources',
-  'admin.confirmResetSources':
-    'Restore the 10 default sources (without touching the existing ones)?',
-  'admin.sourcesReset': 'Default sources restored.',
-  'admin.addSource': 'Add a source',
-  'admin.emptySources':
-    'No source configured. Click “Restore the 10 default sources” to start the AI / Big Data watch.',
   'admin.chronoTab': 'Session timer',
   'admin.chronoTitle': 'Countdown duration',
   'admin.chronoHint':

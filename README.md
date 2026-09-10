@@ -1,10 +1,10 @@
 # Grand Oral Studio
 
 Assistant de préparation au **Grand Oral CESI** : il guide l'étudiant ingénieur à
-travers **7 étapes méthodologiques** — analyse du sujet, problématique,
-**Source en ligne** (veille d'articles ciblés), recherche documentaire,
-**glossaire & résumés de sources**, plan détaillé, support de présentation —
-jusqu'à l'export d'un **.pptx** sobre aux couleurs CESI.
+travers **6 étapes méthodologiques** — analyse du sujet, problématique,
+recherche documentaire, **glossaire & résumés de sources**, plan détaillé,
+support de présentation — jusqu'à l'export d'un **.pptx** sobre aux couleurs
+CESI.
 
 La méthodologie, les schémas JSON de sortie et les thèmes sont **stockés en base
 de données** et modifiables via un **panneau admin** (page `/admin`) : rien n'est
@@ -25,13 +25,12 @@ sessions**.
 
 ## Architecture
 
-L'application est découpée en **4 services Railway** :
+L'application est découpée en **3 services Railway** :
 
 | Service | Dossier | Techno | Rôle |
 | --- | --- | --- | --- |
 | `grand-oral-studio-backend` | `/backend` | Node.js + Express + MongoDB (Mongoose) | API, génération Anthropic, export .pptx, admin JWT |
 | `grand-oral-studio-frontend` | `/frontend` | React (Vite) — build statique servi par un mini-serveur SPA | Interface étudiant + page `/admin` |
-| `grand-oral-studio-news-mobile` | `/frontend-mobile` | React (Vite) — **PWA** installable | Version mobile de la veille News (connexion utilisateur) |
 | MongoDB | plugin Railway | MongoDB managé | Base de données |
 
 ```
@@ -41,10 +40,9 @@ L'application est découpée en **4 services Railway** :
 │   │   └── seed-methodology.js   # Seed idempotent (méthodologie + schémas + thèmes)
 │   ├── /src
 │   │   ├── /middleware           # auth : requireAuth / requireAdmin (JWT)
-│   │   ├── /models               # User, MethodologySection, StepSchema, Theme, Session, News*
-│   │   ├── /routes               # themes, sessions, admin, adminNews, auth, news
-│   │   ├── /services             # promptBuilder, anthropic, deepseek, pptx, password, resend, news*
-│   │   ├── /data                 # defaultNewsSources (10 sources de départ)
+│   │   ├── /models               # User, MethodologySection, StepSchema, Theme, Session
+│   │   ├── /routes               # themes, sessions, admin, auth, glossaire, settings
+│   │   ├── /services             # promptBuilder, anthropic, deepseek, pptx, password, resend
 │   │   ├── bootstrap.js          # création du compte admin initial + migration des sessions
 │   │   ├── db.js
 │   │   └── index.js
@@ -57,8 +55,6 @@ L'application est découpée en **4 services Railway** :
 │   ├── static-server.js        # sert dist/ avec fallback SPA (deep links /admin)
 │   ├── package.json
 │   └── .env.example
-├── /frontend-mobile           # Service Railway "grand-oral-studio-news-mobile"
-│   └── …                       # PWA News (voir son README) — même backend
 ├── methodologie-grand-oral.md  # Document métier (source du seed)
 ├── prompt-ide-architecture.md  # Spec d'architecture
 └── README.md
@@ -66,15 +62,14 @@ L'application est découpée en **4 services Railway** :
 
 ---
 
-## Les 7 étapes du parcours
+## Les 6 étapes du parcours
 
 1. **Analyse du sujet** — reformulation, mots-clés contextualisés, tensions provisoires.
 2. **Problématique** — 2 à 4 formulations issues de tensions réelles + **ligne directrice** (le « fil rouge »).
-3. **Source en ligne** — veille manuelle : récupération d'au plus **4 articles ciblés** sur le thème, le sujet et la problématique, archivés dans l'onglet News (voir section dédiée).
-4. **Recherche documentaire** — axes, sources réelles, données chiffrées à chercher.
-5. **Glossaire & résumés de sources** — à valider **avant** le plan.
-6. **Plan détaillé** — sections minutées reliées à la problématique et au fil conducteur.
-7. **Support de présentation** — slides + notes orateur + **export .pptx**.
+3. **Recherche documentaire** — axes, sources réelles, données chiffrées à chercher.
+4. **Glossaire & résumés de sources** — à valider **avant** le plan.
+5. **Plan détaillé** — sections minutées reliées à la problématique et au fil conducteur.
+6. **Support de présentation** — slides + notes orateur + **export .pptx**.
 
 Deux règles produit sont appliquées de bout en bout (backend et interface) :
 
@@ -92,11 +87,9 @@ prompt est strictement identique, seul l'appel change) :
   **API DeepSeek**, modèle `deepseek-v4-flash` en mode non-thinking ;
 - `support` → **API Anthropic Claude** (alimente l'export .pptx).
 
-L'étape **« Source en ligne »** est déclenchée **manuellement** (bouton dans la
-session) : DeepSeek sert aux mots-clés et à la sélection des articles, et Serper
-à la découverte. `ANTHROPIC_API_KEY` reste nécessaire pour le support, et
-`DEEPSEEK_API_KEY` pour le reste. Un solde DeepSeek insuffisant renvoie une
-erreur explicite (402).
+`ANTHROPIC_API_KEY` est nécessaire pour le support, et `DEEPSEEK_API_KEY` pour
+les autres étapes. Un solde DeepSeek insuffisant renvoie une erreur explicite
+(402).
 
 ### Comptes & connexion
 
@@ -120,52 +113,11 @@ admin au démarrage.
 
 ---
 
-## Veille « Source en ligne » & onglet News
-
-Les articles de veille ne sont **plus récupérés automatiquement** (pas de cron,
-pas de collecte globale admin) : ils sont générés **à la demande, session par
-session**, via la nouvelle étape du parcours **« Source en ligne »** (placée
-après l'Analyse du sujet et le choix de la Problématique).
-
-- **Étape « Source en ligne »** : l'étudiant clique sur
-  « Récupérer jusqu'à 4 articles ciblés ». DeepSeek déduit des **mots-clés** du
-  thème + du sujet + de la problématique retenue, puis les **sites sources
-  actifs** configurés dans l'admin sont interrogés via **Serper.dev** et leur
-  contenu est récupéré. DeepSeek sélectionne ensuite **au plus 4 articles** qui
-  nourrissent réellement cette problématique.
-- **Archivage immédiat dans l'onglet News** : chaque article retenu est publié
-  dans l'onglet **News** (visible par tous les utilisateurs connectés) **en
-  précisant le thème, le sujet et la problématique** de la session de veille
-  dont il provient (`contexts`).
-- **Lecture intégrée + traduction** : les lecteurs web et mobile ouvrent le
-  contenu complet dans l'app ; si la langue de l'interface diffère de celle de
-  l'article, DeepSeek traduit à la lecture (titre + résumé + contenu), avec
-  cache.
-- **Sites sources dynamiques** : table `NewsSource` (nom, URL, active), gérée
-  dans **Administration → Sites sources (veille)**. Les 10 sites de départ sont
-  insérés au premier démarrage (`data/defaultNewsSources.js`).
-
-Schémas associés : `NewsSource`, `NewsArticle`
-(fichiers `backend/src/models/`).
-
-### Application mobile (PWA) — `/frontend-mobile`
-
-Une version mobile installable de la veille News vit dans
-[`/frontend-mobile`](frontend-mobile/) (PWA React/Vite, dossier à déployer sur
-Railway comme service dédié `grand-oral-studio-news-mobile`). Elle réutilise le
-**même backend** : connexion avec les comptes utilisateur existants
-(`POST /api/auth/login`) puis lecture de `GET /api/news`. Déployez-la avec
-`VITE_API_URL` = URL du backend et **ajoutez son domaine à la variable
-`FRONTEND_URL` du backend** (origines séparées par des virgules) pour le CORS.
-Détails dans [frontend-mobile/README.md](frontend-mobile/README.md).
-
----
-
 ## Prérequis
 
 - Node.js ≥ 18
 - Une base MongoDB (locale, Docker, ou le plugin Railway)
-- Une clé API **DeepSeek** (étapes IA + veille « Source en ligne » + traduction des articles) et une clé API **Anthropic** (étape support)
+- Une clé API **DeepSeek** (étapes IA) et une clé API **Anthropic** (étape support)
 
 ---
 
@@ -177,13 +129,9 @@ Détails dans [frontend-mobile/README.md](frontend-mobile/README.md).
 | --- | --- |
 | `MONGO_URL` | URI MongoDB (auto-fournie par Railway via le plugin ; renseignée en local) |
 | `ANTHROPIC_API_KEY` | Clé API Anthropic — **étape 6 (support)** uniquement (jamais exposée au frontend) |
-| `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes IA** + veille « Source en ligne » + traduction des articles |
+| `DEEPSEEK_API_KEY` | Clé API DeepSeek — **requise pour les étapes IA** |
 | `DEEPSEEK_MODEL` | Modèle DeepSeek (défaut : `deepseek-v4-flash`, mode non-thinking) |
 | `DEEPSEEK_MAX_TOKENS` | Budget de sortie par génération DeepSeek (défaut : `8192`) |
-| `SERPER_API_KEY` | Clé API **Serper.dev** (Google Search JSON) — **requise pour la veille « Source en ligne »** |
-| `NEWS_CONTENT_MAX` | Longueur max du contenu stocké par article (lecture intégrée, défaut : `8000`) |
-| `NEWS_AI_TEXT_LIMIT` | Caractères d'article envoyés à DeepSeek pour la sélection (défaut : `1600`) |
-| `NEWS_GL` / `NEWS_HL` | Pays / langue des résultats Google renvoyés par Serper (défaut : `fr`) |
 | `ANTHROPIC_MODEL` | Modèle Anthropic (défaut : `claude-sonnet-4-6`) |
 | `ANTHROPIC_MAX_TOKENS` | Budget de sortie par génération Anthropic (défaut : `8192`) |
 | `JWT_SECRET` | Secret de signature des JWT (auth utilisateur + admin) |
@@ -321,7 +269,6 @@ GET    /api/sessions/:id
 PATCH  /api/sessions/:id
 DELETE /api/sessions/:id
 POST   /api/sessions/:id/generate/:step      # analyse | probleme | recherche | glossaire | plan | support
-POST   /api/sessions/:id/source-veille       # étape « Source en ligne » : récupération manuelle (≤ 4 articles)
 GET    /api/sessions/:id/support-prompt      # .md complet à coller dans Claude (sans tokens API)
 POST   /api/sessions/:id/import-support      # ré-importe le JSON de slides produit par Claude → .pptx
 POST   /api/sessions/:id/export-pptx         # refuse (400) si glossaire absent ou support non généré
@@ -332,19 +279,12 @@ POST            /api/admin/users/:id/resend-invite
 GET|PUT|POST|DELETE /api/admin/methodology[/:id]
 GET|PUT             /api/admin/step-schemas[/:id]
 GET|POST|DELETE     /api/admin/themes[/:id]
-GET|POST|PUT|DELETE /api/admin/news-sources[/:id]   # gestion des sites sources des veilles
-POST                /api/admin/news-sources/reset    # restaure les 10 sources par défaut
-
-# News (auth requise — tout utilisateur connecté)
-GET    /api/news                       # articles issus des veilles de sessions (+ contexte thème/sujet/problématique)
-GET    /api/news/articles              # liste d'articles
-GET    /api/news/articles/:id?lang=fr|en # détail complet ; traduit à la lecture par DeepSeek si besoin (cache)
+GET|PUT             /api/admin/settings/chrono
 ```
 
-Toutes les routes `/api/sessions/*`, `/api/admin/*` et `/api/news*` exigent un
-token JWT (`Authorization: Bearer …`) émis par `/api/auth/login` ou
-`/api/auth/accept-invite` ; `/api/admin/*` est réservée au rôle `admin`,
-`/api/news*` est ouverte à tout utilisateur connecté. Les
+Toutes les routes `/api/sessions/*` et `/api/admin/*` exigent un token JWT
+(`Authorization: Bearer …`) émis par `/api/auth/login` ou
+`/api/auth/accept-invite` ; `/api/admin/*` est réservée au rôle `admin`. Les
 sessions renvoyées sont filtrées par propriétaire : un utilisateur ne voit que
 les siennes.
 

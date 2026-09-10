@@ -25,7 +25,6 @@ const sessionSchema = new mongoose.Schema(
       default: () => ({
         analyse: {},
         probleme: {},
-        source: {},
         recherche: {},
         glossaire: {},
         plan: {},

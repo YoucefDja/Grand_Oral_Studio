@@ -14,13 +14,9 @@ if (fs.existsSync(envPath)) {
 const themesRouter = require('./routes/themes');
 const sessionsRouter = require('./routes/sessions');
 const adminRouter = require('./routes/admin');
-const adminNewsRouter = require('./routes/adminNews');
 const authRouter = require('./routes/auth');
-const newsRouter = require('./routes/news');
 const glossaireRouter = require('./routes/glossaire');
 const settingsRouter = require('./routes/settings');
-const NewsSource = require('./models/NewsSource');
-const { DEFAULT_NEWS_SOURCES } = require('./data/defaultNewsSources');
 const { ensureInitialAdmin, migrateOwnerlessSessions } = require('./bootstrap');
 
 const app = express();
@@ -65,9 +61,7 @@ app.get('/health', (_req, res) => res.json({ status: 'ok' }));
 app.use('/api/themes', themesRouter);
 app.use('/api/sessions', sessionsRouter);
 app.use('/api/admin', adminRouter);
-app.use('/api/admin', adminNewsRouter);
 app.use('/api/auth', authRouter);
-app.use('/api/news', newsRouter);
 app.use('/api/glossaire', glossaireRouter);
 app.use('/api/settings', settingsRouter);
 
@@ -97,16 +91,6 @@ app.use((err, _req, res, _next) => {
 
 const PORT = Number(process.env.PORT || 4000);
 
-/** Insère les sources News par défaut si la collection est vide (premier boot). */
-async function seedDefaultNewsSources() {
-  const count = await NewsSource.countDocuments();
-  if (count > 0) return;
-  const inserted = await NewsSource.insertMany(
-    DEFAULT_NEWS_SOURCES.map((s) => ({ ...s, active: true }))
-  );
-  console.log(`[news] ${inserted.length} sources News par défaut ajoutées en base.`);
-}
-
 async function start() {
   await connectDb();
 
@@ -114,12 +98,9 @@ async function start() {
   // créées avant l'authentification vers ce compte.
   const admin = await ensureInitialAdmin();
   await migrateOwnerlessSessions(admin);
-  await seedDefaultNewsSources();
 
   app.listen(PORT, () => {
     console.log(`Grand Oral Studio backend démarré sur le port ${PORT}.`);
-    // Plus aucun cron : les articles sont récupérés à la demande dans les
-    // sessions (étape « Source en ligne ») via les sources configurées.
   });
 }
 
