@@ -154,7 +154,7 @@ export default function WorkspacePage() {
 
       <StepTracker currentStep={session.currentStep} activeIndex={activeIndex} onSelect={goStep} />
 
-      {ld && ['recherche', 'glossaire', 'plan'].includes(activeStep.key) ? (
+      {ld && ['plan', 'glossaire'].includes(activeStep.key) ? (
         <div className="ld-banner" style={{ marginTop: 0 }}>
           <span className="ld-tag">{t('workspace.ldTag')}</span>
           <p className="ld-text">« {ld} »</p>

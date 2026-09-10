@@ -25,9 +25,10 @@ const sessionSchema = new mongoose.Schema(
       default: () => ({
         analyse: {},
         probleme: {},
+        // Produit automatiquement en arrière-plan, jamais montré à l'étudiant.
         recherche: {},
-        glossaire: {},
         plan: {},
+        glossaire: {},
         support: {},
       }),
     },

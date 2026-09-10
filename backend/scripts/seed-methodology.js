@@ -9,7 +9,9 @@
  * Insère (upsert) :
  *  - les MethodologySection, dont le contenu est copié TEL QUEL depuis
  *    methodologie-grand-oral.md (extrait au build dans methodology-content.json) ;
- *  - les 6 StepSchema (analyse, probleme, recherche, glossaire, plan, support) ;
+ *  - les 5 StepSchema du parcours visible (analyse, probleme, plan, glossaire,
+ *    support) + le StepSchema "recherche" conservé pour la génération
+ *    automatique en arrière-plan ;
  *  - les 5 thèmes du Grand Oral CESI.
  *
  * Idempotent : peut être relancé sans risque.
@@ -65,20 +67,22 @@ Exigences générales qui découlent de cette grille :
 
 Quand tu produis une étape, demande-toi explicitement quels critères cette étape prépare, et produis les éléments correspondants. Si une information manque pour satisfaire un critère, signale-le à l'étudiant au lieu de combler le vide par une généralité.`;
 
-const ETAPE_4_GLOSSAIRE = `Produis le glossaire et les résumés de sources demandés avant toute mise en slides, en t'appuyant sur les résultats de la recherche documentaire fournis plus haut.
+const ETAPE_4_GLOSSAIRE = `Produis le glossaire et les résumés de sources APRÈS le plan détaillé, en t'appuyant sur le plan fourni plus haut et sur les résultats de la recherche documentaire.
+
+Objectif : ne définir que les termes que l'étudiant est SÛR d'employer dans sa présentation. Le plan fait autorité : c'est lui qui détermine quels termes entrent au glossaire.
 
 Contenu attendu :
-- une liste « sources » : pour CHAQUE source retenue lors de la recherche documentaire, un objet avec :
-  - titre : nom précis et identifiable de la source (rapport, article, organisme, livre, site…),
-  - resume : résumé en 2-3 phrases indiquant ce que dit la source, pourquoi elle est pertinente pour la problématique, et quelle donnée chiffrée ou exemple concret elle apporte.
-- une liste « termes » : glossaire des acronymes et termes techniques qui seront effectivement utilisés dans la présentation (slides ET notes orateur), avec pour chacun :
+- une liste « termes » : parcours le plan section par section et relève tous les acronymes et termes techniques qui y figurent effectivement (dans les points clés comme dans les notes) ; pour chacun :
   - terme : l'acronyme ou le terme technique,
   - definition : une définition en langage clair, simple, qu'un étudiant peut se réapproprier et redire à l'oral sans hésitation devant un jury (pas une définition savante).
+- une liste « sources » : pour chaque source réellement mobilisée (issue de la recherche documentaire), un objet avec :
+  - titre : nom précis et identifiable de la source (rapport, article, organisme, livre, site…),
+  - resume : résumé en 2-3 phrases indiquant ce que dit la source, pourquoi elle est pertinente pour la problématique, et quelle donnée chiffrée ou exemple concret elle apporte.
 
 Contraintes :
-- N'inclus dans le glossaire que les termes réellement nécessaires à la présentation — pas un inventaire de cours.
+- N'inclus dans le glossaire que les termes réellement présents dans le plan — pas un inventaire de cours, pas de termes « au cas où ».
 - Aucun acronyme ou terme technique ne devra ensuite apparaître dans le support de présentation s'il ne figure pas dans cette liste.
-- Tout terme nouveau qui émergerait à une étape ultérieure devra y être ajouté au préalable, jamais utilisé sans définition.`;
+- Tout terme nouveau qui émergerait à l'étape support devra y être ajouté au préalable, jamais utilisé sans définition.`;
 
 /**
  * Liste canonique des sections en base. Les contenus sont copiés tels quels
@@ -145,10 +149,17 @@ const METHODOLOGY_SECTIONS = [
   },
   {
     sectionId: 'etape_3_recherche_documentaire',
-    title: 'Étape 3 — Recherche documentaire',
+    title: 'Recherche documentaire — produite en arrière-plan',
     order: 10,
     appliesToSteps: ['recherche'],
     from: 'etape_3_recherche_documentaire',
+  },
+  {
+    sectionId: 'etape_3_plan_detaille',
+    title: 'Étape 3 — Plan détaillé',
+    order: 10,
+    appliesToSteps: ['plan'],
+    from: 'etape_4_plan_detaille',
   },
   {
     sectionId: 'etape_4_glossaire',
@@ -158,15 +169,8 @@ const METHODOLOGY_SECTIONS = [
     content: ETAPE_4_GLOSSAIRE,
   },
   {
-    sectionId: 'etape_5_plan_detaille',
-    title: 'Étape 5 — Plan détaillé',
-    order: 10,
-    appliesToSteps: ['plan'],
-    from: 'etape_4_plan_detaille',
-  },
-  {
-    sectionId: 'etape_6_support_visuel',
-    title: 'Étape 6 — Support de présentation',
+    sectionId: 'etape_5_support_visuel',
+    title: 'Étape 5 — Support de présentation',
     order: 10,
     appliesToSteps: ['support'],
     from: 'etape_5_support_visuel',
@@ -214,6 +218,7 @@ const STEP_SCHEMAS = [
   {
     stepKey: 'recherche',
     jsonSchemaDescription: [
+      'Cette étape est produite automatiquement par le système, en arrière-plan, juste avant le plan détaillé : l\'étudiant ne la voit jamais. Le résultat sert de socle documentaire au plan, au glossaire et au support. Produis donc un socle factuel directement exploitable.',
       'Objet JSON avec les clés suivantes :',
       '- "axes_recherche" : tableau de chaînes — axes déduits de la problématique retenue.',
       '- "types_sources" : tableau de chaînes — types de sources à mobiliser.',

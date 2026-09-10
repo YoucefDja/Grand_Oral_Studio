@@ -1,10 +1,12 @@
 # Grand Oral Studio
 
 Assistant de préparation au **Grand Oral CESI** : il guide l'étudiant ingénieur à
-travers **6 étapes méthodologiques** — analyse du sujet, problématique,
-recherche documentaire, **glossaire & résumés de sources**, plan détaillé,
-support de présentation — jusqu'à l'export d'un **.pptx** sobre aux couleurs
-CESI.
+travers **5 étapes méthodologiques** — analyse du sujet, problématique, plan
+détaillé, **glossaire**, support de présentation — jusqu'à l'export d'un
+**.pptx** sobre aux couleurs CESI. La **recherche documentaire** (axes, sources
+réelles, données chiffrées) reste produite, mais **automatiquement en
+arrière-plan** : elle n'apparaît pas dans le parcours et alimente le plan, le
+glossaire et le support.
 
 La méthodologie, les schémas JSON de sortie et les thèmes sont **stockés en base
 de données** et modifiables via un **panneau admin** (page `/admin`) : rien n'est
@@ -62,29 +64,36 @@ L'application est découpée en **3 services Railway** :
 
 ---
 
-## Les 6 étapes du parcours
+## Les 5 étapes du parcours
 
 1. **Analyse du sujet** — reformulation, mots-clés contextualisés, tensions provisoires.
 2. **Problématique** — 2 à 4 formulations issues de tensions réelles + **ligne directrice** (le « fil rouge »).
-3. **Recherche documentaire** — axes, sources réelles, données chiffrées à chercher.
-4. **Glossaire & résumés de sources** — à valider **avant** le plan.
-5. **Plan détaillé** — sections minutées reliées à la problématique et au fil conducteur.
-6. **Support de présentation** — slides + notes orateur + **export .pptx**.
+3. **Plan détaillé** — sections minutées reliées à la problématique et au fil conducteur.
+4. **Glossaire** — définitions des termes et acronymes **réellement employés dans le plan** (et donc dans le pptx).
+5. **Support de présentation** — slides + notes orateur + **export .pptx**.
+
+> La **recherche documentaire** n'est plus une étape visible : au clic « Générer »
+> du **plan**, le backend lance en tâche de fond la recherche (axes, sources
+> réelles, données chiffrées), la stocke dans `data.recherche`, puis génère le
+> plan. Les références et données produites sont réinjectées dans les prompts du
+> plan, du glossaire et du support — l'étudiant ne voit jamais cette étape.
 
 Deux règles produit sont appliquées de bout en bout (backend et interface) :
 
 - la **ligne directrice** formulée à l'étape 2 est réinjectée dans le prompt de toutes
   les étapes suivantes ;
-- le **glossaire est obligatoire avant le plan et l'export .pptx** : les routes refusent
-  explicitement (400) une génération `plan`/`support` ou un export sans glossaire validé.
+- le **glossaire est obligatoire avant l'export .pptx** (et se base sur le plan) : les
+  routes refusent explicitement (400) une génération `support` ou un export sans
+  glossaire validé.
 
 ### Routage des modèles d'IA
 
 Le provider est sélectionné selon l'étape de **génération** (la construction du
 prompt est strictement identique, seul l'appel change) :
 
-- étapes génératives `analyse`, `probleme`, `recherche`, `glossaire`, `plan` →
-  **API DeepSeek**, modèle `deepseek-v4-flash` en mode non-thinking ;
+- étapes génératives `analyse`, `probleme`, `plan`, `glossaire` → **API DeepSeek**,
+  modèle `deepseek-v4-flash` en mode non-thinking ; la `recherche` (arrière-plan)
+  passe par le même provider ;
 - `support` → **API Anthropic Claude** (alimente l'export .pptx).
 
 `ANTHROPIC_API_KEY` est nécessaire pour le support, et `DEEPSEEK_API_KEY` pour
@@ -268,7 +277,8 @@ GET    /api/sessions
 GET    /api/sessions/:id
 PATCH  /api/sessions/:id
 DELETE /api/sessions/:id
-POST   /api/sessions/:id/generate/:step      # analyse | probleme | recherche | glossaire | plan | support
+POST   /api/sessions/:id/generate/:step      # analyse | probleme | plan | glossaire | support
+                                             # (le plan déclenche aussi la recherche en arrière-plan)
 GET    /api/sessions/:id/support-prompt      # .md complet à coller dans Claude (sans tokens API)
 POST   /api/sessions/:id/import-support      # ré-importe le JSON de slides produit par Claude → .pptx
 POST   /api/sessions/:id/export-pptx         # refuse (400) si glossaire absent ou support non généré
@@ -297,7 +307,8 @@ les siennes.
   tolérées par défaut en dev si la variable est absente).
 - **Appels d'IA** exclusivement côté backend (`/api/sessions/:id/generate/:step`) :
   DeepSeek (`deepseek-v4-flash`, non-thinking, `temperature: 1.0`, `top_p: 1.0`)
-  pour les étapes 1 à 5, Anthropic Claude pour le support. Les réponses doivent
+  pour les étapes `analyse`, `probleme`, `plan`, `glossaire` et pour la recherche
+  d'arrière-plan, Anthropic Claude pour le support. Les réponses doivent
   être du JSON strict — les balises ```json``` résiduelles sont nettoyées, les
   réponses invalides renvoient une erreur explicite (jamais d'échec silencieux),
   avec gestion des timeouts et du solde DeepSeek insuffisant (402).
@@ -309,5 +320,6 @@ les siennes.
   lien unique expirant (48 h), sessions d'API privées par propriétaire (`owner`).
 - Le seed insère **12 sections de méthodologie** (contenu copié du .md tel quel,
   section `glossaire` rédigée à partir du principe `principe_glossaire_sources`),
-  **6 StepSchema** (dont `glossaire` et le champ `ligne_directrice` obligatoire sur
-  `probleme`) et **5 thèmes** CESI — tous modifiables ensuite dans `/admin`.
+  **6 StepSchema** (dont `recherche`, produite en arrière-plan, et le champ
+  `ligne_directrice` obligatoire sur `probleme`) et **5 thèmes** CESI — tous
+  modifiables ensuite dans `/admin`.

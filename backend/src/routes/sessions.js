@@ -1,7 +1,7 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Session = require('../models/Session');
-const { buildStepPrompt, STEP_KEYS, STEP_LABELS } = require('../services/promptBuilder');
+const { buildStepPrompt, STEP_KEYS, STEP_LABELS, HIDDEN_STEPS } = require('../services/promptBuilder');
 const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
 const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
@@ -18,9 +18,9 @@ const router = express.Router();
 router.use(requireAuth);
 
 // Routage des providers selon l'étape IA :
-//  - étapes génératives 1,2,3,4,5 → DeepSeek (deepseek-v4-flash, non-thinking)
-//  - étape support               → Anthropic Claude (inchangée)
-const DEEPSEEK_STEPS = ['analyse', 'probleme', 'recherche', 'glossaire', 'plan'];
+//  - étapes DeepSeek : parcours visible + recherche d'arrière-plan (deepseek-v4-flash, non-thinking)
+//  - étape support  : Anthropic Claude (inchangée)
+const DEEPSEEK_STEPS = [...STEP_KEYS.filter((k) => k !== 'support'), ...HIDDEN_STEPS];
 const CLAUDE_STEPS = ['support'];
 
 function getProviderForStep(step) {
@@ -96,6 +96,26 @@ function assertGlossaireValide(session, pourEtape) {
       400,
       `L'étape « ${STEP_LABELS[pourEtape]} » exige un glossaire validé (étapes précédentes). Générez d'abord le glossaire.`
     );
+  }
+}
+
+/**
+ * Produit la recherche documentaire en arrière-plan (sources, références
+ * théoriques, exemples d'entreprises) et la stocke dans session.data.recherche.
+ * L'étudiant ne voit jamais cette étape : elle alimente le plan et le glossaire.
+ * Best-effort : en cas d'échec, on laisse data.recherche vide et on continue.
+ */
+async function genererRechercheArrierePlan(session) {
+  try {
+    const { system, user } = await buildStepPrompt(session, 'recherche');
+    const raw = await generateDeepseek(system, user);
+    const parsed = parseJsonStrict(raw);
+    if (isNonEmptyObject(parsed)) {
+      session.data.recherche = parsed;
+      session.markModified('data');
+    }
+  } catch (err) {
+    // Non bloquant : le plan et le glossaire restent générables sans recherche.
   }
 }
 
@@ -238,12 +258,12 @@ router.post(
 );
 
 // POST /api/sessions/:id/generate/:step
-// step = analyse | probleme | recherche | glossaire | plan | support
+// step = analyse | probleme | plan | glossaire | support
 router.post(
   '/:id/generate/:step',
   asyncHandler(async (req, res) => {
     const stepKey = String(req.params.step || '').trim().toLowerCase();
-    if (!STEP_KEYS.includes(stepKey)) {
+    if (![...STEP_KEYS, ...HIDDEN_STEPS].includes(stepKey)) {
       throw httpError(
         400,
         `Étape inconnue "${stepKey}". Attendue : ${STEP_KEYS.join(' | ')}.`
@@ -253,9 +273,17 @@ router.post(
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
-    // Règle produit : glossaire obligatoire avant plan et support.
-    if (stepKey === 'plan' || stepKey === 'support') {
+    // Règle produit : glossaire obligatoire avant le support.
+    if (stepKey === 'support') {
       assertGlossaireValide(session, stepKey);
+    }
+
+    // La recherche documentaire n'est plus une étape visible : elle est produite
+    // automatiquement en arrière-plan juste avant le plan, pour que le plan (puis
+    // le glossaire) s'appuient sur des sources réelles. Un échec n'est pas
+    // bloquant : le plan sera simplement généré sans socle documentaire.
+    if (stepKey === 'plan' && !isNonEmptyObject(session.data && session.data.recherche)) {
+      await genererRechercheArrierePlan(session);
     }
 
     const { system, user } = await buildStepPrompt(session, stepKey);
@@ -285,9 +313,10 @@ router.post(
       regenereProbleme = isNonEmptyObject(session.data && session.data.probleme);
       session.ligneDirectrice = String(parsed.ligne_directrice).trim();
       if (regenereProbleme) {
-        // Les étapes 3 à 6 étaient bâties sur l'ancienne problématique : elles
-        // doivent être re-générées (recherche, glossaire, plan, support).
-        ['recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
+        // Les étapes aval étaient bâties sur l'ancienne problématique : elles
+        // doivent être re-générées (recherche d'arrière-plan, plan, glossaire,
+        // support).
+        ['recherche', 'plan', 'glossaire', 'support'].forEach((k) => {
           if (session.data && session.data[k]) session.data[k] = {};
         });
       }
@@ -368,15 +397,15 @@ router.post(
     }
 
     // Si la formulation retenue OU la ligne directrice CHANGE, les étapes aval
-    // (recherche → support) sont basées sur l'ancienne problématique / l'ancien
-    // fil rouge : elles doivent être re-faites (elles ne sont plus valides).
+    // (recherche d'arrière-plan → support) sont basées sur l'ancienne
+    // problématique / l'ancien fil rouge : elles doivent être re-faites.
     const changementProbleme = ancienneRecommandation && ancienneRecommandation !== nouvelleRecommandation;
     const changementLD = nouvelleLD && nouvelleLD !== ancienneLD;
     if (changementProbleme || changementLD) {
-      ['recherche', 'glossaire', 'plan', 'support'].forEach((k) => {
+      ['recherche', 'plan', 'glossaire', 'support'].forEach((k) => {
         if (session.data && session.data[k]) session.data[k] = {};
       });
-      const seuil = STEP_KEYS.indexOf('probleme') + 1; // bloque à l'étape « Recherche documentaire » (étape 3)
+      const seuil = STEP_KEYS.indexOf('probleme') + 1; // bloque à l'étape « Plan détaillé » (étape 3)
       session.currentStep = Math.min(session.currentStep || 0, seuil);
     }
 

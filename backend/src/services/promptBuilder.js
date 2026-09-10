@@ -10,7 +10,13 @@ const MethodologySection = require('../models/MethodologySection');
 const StepSchemaModel = require('../models/StepSchema');
 const { getThemeVocabulary } = require('./vocabulaire');
 
-const STEP_KEYS = ['analyse', 'probleme', 'recherche', 'glossaire', 'plan', 'support'];
+// Parcours visible de l'étudiant. La recherche documentaire n'y figure plus :
+// elle est produite automatiquement en arrière-plan (voir HIDDEN_STEPS).
+const STEP_KEYS = ['analyse', 'probleme', 'plan', 'glossaire', 'support'];
+
+// Étapes techniques produites sans intervention de l'étudiant, déclenchées par
+// une étape visible (la recherche alimente le plan puis le glossaire).
+const HIDDEN_STEPS = ['recherche'];
 
 // Étapes où la « base de vocabulaire du thème » est réinjectée : l'analyse
 // (qui fixe les mots-clés) et le glossaire (qui fixe les termes réutilisables).
@@ -21,22 +27,24 @@ const STEP_LABELS = {
   analyse: 'Analyse du sujet',
   probleme: 'Problématique',
   recherche: 'Recherche documentaire',
-  glossaire: 'Glossaire et résumés des sources',
   plan: 'Plan détaillé',
+  glossaire: 'Glossaire et résumés des sources',
   support: 'Support de présentation',
 };
 
 // La ligne directrice est formulée à l'étape "probleme", puis réinjectée à
 // toutes les étapes suivantes pour garantir le fil conducteur.
-const LINE_DIRECTRICE_STEPS = new Set(['recherche', 'glossaire', 'plan', 'support']);
+const LINE_DIRECTRICE_STEPS = new Set(['recherche', 'plan', 'glossaire', 'support']);
 
 // Données des étapes précédentes réinjectées dans le prompt utilisateur.
 const STEP_DEPENDENCIES = {
   analyse: [],
   probleme: ['analyse'],
-  recherche: ['analyse', 'probleme'],
-  glossaire: ['probleme', 'recherche'],
-  plan: ['probleme', 'glossaire'],
+  // Le plan est produit après la recherche d'arrière-plan : il s'appuie dessus.
+  plan: ['probleme', 'recherche'],
+  // Le glossaire vient après le plan et ne définit que les termes réellement
+  // mobilisés par ce plan (plus les sources trouvées en arrière-plan).
+  glossaire: ['probleme', 'recherche', 'plan'],
   support: ['probleme', 'plan', 'glossaire'],
 };
 
@@ -265,4 +273,4 @@ async function buildStepPrompt(session, stepKey) {
   return { system, user };
 }
 
-module.exports = { buildStepPrompt, STEP_KEYS, STEP_LABELS };
+module.exports = { buildStepPrompt, STEP_KEYS, STEP_LABELS, HIDDEN_STEPS };

@@ -74,7 +74,7 @@ export default function StepGlossaire({ session, busy, error, onGenerate, goStep
       next={{
         label: `${valide ? '✓ ' : ''}${t('steps.validateGlossaire')}`,
         disabled: !valide,
-        onClick: () => goStep(STEPS.findIndex((s) => s.key === 'plan')),
+        onClick: () => goStep(STEPS.findIndex((s) => s.key === 'support')),
       }}
     />
   );

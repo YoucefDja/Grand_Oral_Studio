@@ -142,8 +142,9 @@ export default function StepProbleme({ session, busy, error, onGenerate, goStep,
       const updated = await onChoisirProbleme(payload);
       // On enchaîne sur la prochaine étape à faire (backend : currentStep = nombre
       // d'étapes terminées). Après un changement de formulation, le backend a
-      // re-vidé recherche → support et ramené currentStep à 2 : on retombe sur la
-      // recherche. Si le parcours est terminé (6), on reste sur place.
+      // re-vidé la recherche d'arrière-plan, le plan, le glossaire et le support,
+      // et ramené currentStep à 2 : on retombe sur le plan. Si le parcours est
+      // terminé, on reste sur place.
       const next = Number(updated?.currentStep) || 0;
       if (next >= 2 && next < STEPS.length) goStep(next);
     };

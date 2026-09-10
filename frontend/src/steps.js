@@ -1,14 +1,14 @@
 /**
- * Métadonnées des 6 étapes du parcours Grand Oral.
- * Ordre imposé par la méthodologie : analyse → problématique → recherche
- * documentaire → glossaire → plan → support.
+ * Métadonnées des 5 étapes visibles du parcours Grand Oral.
+ * Ordre imposé par la méthodologie : analyse → problématique → plan →
+ * glossaire → support. La recherche documentaire n'est plus une étape : elle
+ * est produite automatiquement en arrière-plan avant le plan.
  */
 export const STEPS = [
   { key: 'analyse', label: 'Analyse du sujet', short: 'Analyse' },
   { key: 'probleme', label: 'Problématique', short: 'Problématique' },
-  { key: 'recherche', label: 'Recherche documentaire', short: 'Recherche' },
-  { key: 'glossaire', label: 'Glossaire & résumés de sources', short: 'Glossaire' },
   { key: 'plan', label: 'Plan détaillé', short: 'Plan' },
+  { key: 'glossaire', label: 'Glossaire & résumés de sources', short: 'Glossaire' },
   { key: 'support', label: 'Support de présentation', short: 'Support' },
 ];
 
@@ -21,12 +21,10 @@ export const STEP_EXPLANATIONS = {
     'Produit une analyse ouverte du sujet (mots-clés, tensions provisoires) — socle de toute la suite.',
   probleme:
     'Formule 2 à 4 problématiques issues de tensions réelles + la ligne directrice (fil rouge) propagée ensuite.',
-  recherche:
-    'Définit les axes, les sources réelles à consulter et les données chiffrées à chercher.',
-  glossaire:
-    'Résume chaque source retenue et établit le glossaire des termes — à valider avant le plan.',
   plan:
-    'Découpe la démonstration en parties minutées, reliées à la problématique et à la ligne directrice.',
+    'Découpe la démonstration en parties minutées, reliées à la problématique et à la ligne directrice. La recherche documentaire est lancée automatiquement en arrière-plan pour l’étayer.',
+  glossaire:
+    'Définit les termes et acronymes réellement employés dans le plan, en résumant les sources trouvées en arrière-plan — à valider avant le support.',
   support:
     'Transforme le plan en slides concises + notes orateur, puis permet l’export .pptx.',
 };

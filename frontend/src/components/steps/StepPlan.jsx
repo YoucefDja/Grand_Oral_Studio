@@ -46,6 +46,9 @@ export default function StepPlan({ session, busy, error, onGenerate, goStep }) {
               {t('steps.planTotalDuration')} {session.data.plan.duree_totale_minutes} {t('steps.minutesUnit')}.
             </div>
           ) : null}
+          <p className="muted" style={{ marginTop: 0 }}>
+            {t('steps.planRechercheHint')}
+          </p>
         </div>
       }
       renderData={(data) => {
