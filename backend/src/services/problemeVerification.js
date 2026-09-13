@@ -17,10 +17,11 @@
  *
  * 2. SECOND PASSAGE D'AUTO-VÉRIFICATION PAR LE MODÈLE (systématique) :
  *    on soumet la problématique générée à une relecture indépendante avec les
- *    cinq tests anti-dérive (reformulation plate, réponse évidente, périmètre,
- *    tension, argumentation possible) + les signalements automatiques. Le modèle
- *    renvoie l'objet « probleme » final complet, formulations valides conservées
- *    mot pour mot et formulations défaillantes corrigées.
+ *    sept tests anti-dérive (reformulation plate, réponse évidente, périmètre,
+ *    tension, argumentation possible, problème réel, solution apportable) + les
+ *    signalements automatiques. Le modèle renvoie l'objet « probleme » final
+ *    complet, formulations valides conservées mot pour mot et formulations
+ *    défaillantes corrigées.
  *
  * Décision finale : si après ce passage il reste moins de 2 formulations
  * structurellement exploitables, on renvoie une erreur explicite (502) invitant
@@ -46,12 +47,14 @@ const MIN_JUSTIFICATION_LEN = 8;
 
 /**
  * Bornes de longueur de la question elle-même. Une problématique de soutenance
- * doit tenir en une phrase courte, mémorisable et rappelable en pied de slide :
- * au-delà de MAX_FORMULATION_LEN caractères elle devient illisible à l'oral et
- * ne peut plus servir de fil rouge (critères 2.1 et 2.6 de la grille CESI).
+ * doit rester une phrase unique, mémorisable et rappelable en pied de slide :
+ * au-delà de MAX_FORMULATION_LEN caractères elle devient lourde à l'oral et ne
+ * peut plus servir de fil rouge (critères 2.1 et 2.6 de la grille CESI). La
+ * borne est volontairement souple pour autoriser une question un peu riche
+ * (deux pôles de tension + contexte) sans tomber dans la problématique-fleuve.
  */
-const MAX_FORMULATION_LEN = 180;
-const MAX_FORMULATION_MOTS = 26;
+const MAX_FORMULATION_LEN = 240;
+const MAX_FORMULATION_MOTS = 35;
 
 // Mots-outils français fréquents : exclus du contrôle de périmètre lexical
 // (on ne signale que des termes « pleins » potentiellement hors-sujet).
@@ -209,6 +212,44 @@ function detecterSignalements({ sujet, theme, analyse, formulations }) {
       );
     }
 
+    // Question purement constatative : « Pourquoi X existe-t-il ? », « Quelles sont
+    // les causes de… ? », « En quoi consiste… ? ». Ces questions décrivent ou
+    // expliquent un phénomène sans appeler de réponse actionnable : l'étudiant
+    // décrirait le problème au lieu de proposer une solution, alors que la
+    // soutenance doit aboutir à des préconisations.
+    const tournuresConstat = [
+      'quelles sont les causes', 'quelle est la cause', 'en quoi consiste',
+      'qu est ce que', 'quels sont les freins', 'quels sont les obstacles',
+      'pourquoi existe', 'd ou vient', 'quels sont les enjeux de',
+    ];
+    const tournureConstat = tournuresConstat.find((t) => questionNorm.includes(t.replace(/[^a-z ]/g, ' ')));
+    if (tournureConstat) {
+      signalements.push(
+        `Formulation n°${numero} — la tournure « ${tournureConstat} » mène à une question ` +
+          'purement descriptive ou explicative : elle constate le problème au lieu d\'appeler ' +
+          'une réponse. Or la soutenance doit déboucher sur des préconisations concrètes. ' +
+          'Reformule autour du levier de résolution (comment concilier / dans quelle mesure ' +
+          'faire évoluer / quelles conditions pour…), en conservant les deux pôles de la tension.'
+      );
+    }
+
+    // Absence de levier de solution : aucune trace de comment agir / résoudre /
+    // concilier. Combinée à un constat, c'est le signe d'une problématique sans
+    // réponse apportable possible. Signalement indicatif (le second passage tranche).
+    const leviers = [
+      'comment', 'dans quelle mesure', 'quelles conditions', 'par quels leviers',
+      'quel role', 'quelle place', 'quelles pratiques', 'de quelle maniere',
+    ];
+    const aLevier = leviers.some((l) => questionNorm.includes(l.replace(/[^a-z ]/g, ' ')));
+    if (!aLevier) {
+      signalements.push(
+        `Formulation n°${numero} — aucun levier de résolution n'est visible (pas de « comment », ` +
+          '« dans quelle mesure », « quelles conditions »…). Vérifie que la question invite bien ' +
+          'à apporter une SOLUTION argumentée, et non à décrire le problème ou à en constater ' +
+          'l\'existence.'
+      );
+    }
+
     // Reformulation plate : si le vocabulaire de la question recouvre presque
     // entièrement celui de l'intitulé, suspicion de sujet recopié + « ? ».
     const jetonsQuestion = jetons(question);
@@ -339,10 +380,14 @@ async function verifierEtCorrigerProbleme({ system, session, problemeGenere }) {
   const user = JSON.stringify({
     tache:
       'Relecture INDÉPENDANTE de la problématique produite par un premier passage. ' +
-      'Applique les cinq tests anti-dérive (reformulation plate, réponse évidente, périmètre ' +
+      'Applique les sept tests anti-dérive (reformulation plate, réponse évidente, périmètre ' +
       'borné par le sujet, tension réelle à deux pôles, argumentation possible en plusieurs ' +
-      'parties) à CHAQUE formulation, puis au signalement des contrôles automatiques ci-dessous. ' +
-      'Conserve MOT POUR MOT toute formulation qui passe les cinq tests (ne reformule jamais ' +
+      'parties, PROBLÈME RÉEL rencontré par des organisations, SOLUTION APPORTABLE par des ' +
+      'préconisations concrètes) à CHAQUE formulation, puis au signalement des contrôles ' +
+      'automatiques ci-dessous. Exige un problème réel : écarte toute formulation purement ' +
+      'descriptive ou explicative (« pourquoi X existe-t-il ? ») qui ne débouche sur aucune ' +
+      'réponse actionnable, c\'est un critère éliminatoire. ' +
+      'Conserve MOT POUR MOT toute formulation qui passe les sept tests (ne reformule jamais ' +
       'gratuitement une formulation valide). Corrige toute formulation défaillante — question ' +
       'recentrée, tension renforcée, justification mise à jour pour rester vraie. ' +
       'Renvoie l’objet « probleme » FINAL complet, au format de sortie exact attendu : ' +
