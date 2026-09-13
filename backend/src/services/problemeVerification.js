@@ -130,7 +130,7 @@ function formulationCompletes(f) {
 
 /**
  * Vocabulaire de référence (périmètre) du sujet : intitulé + thème + analyse
- * (mots-clés, définitions, notions, tensions, angles). Un terme de formulation
+ * (mots-clés, définitions, notions, tensions). Un terme de formulation
  * absent de ce vocabulaire est un suspect de hors-sujet (simple signalement).
  */
 function vocabulairePerimetre(sujet, theme, analyse) {
@@ -145,13 +145,16 @@ function vocabulairePerimetre(sujet, theme, analyse) {
     ajouter(m && m.mot);
     ajouter(m && m.definition);
   });
-  (Array.isArray(an.notions_a_maitriser) ? an.notions_a_maitriser : []).forEach(ajouter);
+  (Array.isArray(an.notions_a_maitriser) ? an.notions_a_maitriser : []).forEach((n) => {
+    ajouter(n && n.notion);
+    ajouter(n && n.definition);
+    ajouter(n && n.reference_theorique);
+  });
   (Array.isArray(an.tensions) ? an.tensions : []).forEach((t) => {
     ajouter(t && t.pole_a);
     ajouter(t && t.pole_b);
     ajouter(t && t.description);
   });
-  (Array.isArray(an.angles_approche) ? an.angles_approche : []).forEach(ajouter);
   return mots;
 }
 
@@ -401,7 +404,6 @@ async function verifierEtCorrigerProbleme({ system, session, problemeGenere }) {
       mots_cles: analyse.mots_cles || [],
       notions_a_maitriser: analyse.notions_a_maitriser || [],
       tensions: analyse.tensions || [],
-      angles_approche: analyse.angles_approche || [],
     },
     problematique_candidate: original,
     signalements_automatiques: signalements,

@@ -38,27 +38,12 @@ function SlideCard({ slide, index, t }) {
 /** Mode alternatif : générer le support dans Claude (chat) sans consommer de tokens API. */
 function ClaudeModeCard({ session, onSessionRefresh }) {
   const { t } = useSettings();
-  const [exporting, setExporting] = useState(false);
   const [exportingPptx, setExportingPptx] = useState(false);
   const [json, setJson] = useState('');
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
   const valide = glossaireValide(session);
-
-  async function handleExport() {
-    setExporting(true);
-    setError(null);
-    setMsg(null);
-    try {
-      const fileName = await downloadSupportPrompt(session._id);
-      setMsg(t('steps.claudePromptDownloaded').replace('{file}', fileName));
-    } catch (err) {
-      setError(err.message);
-    } finally {
-      setExporting(false);
-    }
-  }
 
   async function handleExportPptxPrompt() {
     setExportingPptx(true);
@@ -113,9 +98,6 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       ) : (
         <>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
-            <button type="button" className="btn-ghost" disabled={exporting} onClick={handleExport}>
-              {exporting ? t('steps.preparing') : t('steps.claudeExportPrompt')}
-            </button>
             <button type="button" className="btn-ghost" disabled={exportingPptx} onClick={handleExportPptxPrompt}>
               {exportingPptx ? t('steps.preparing') : t('steps.claudeExportPptxPrompt')}
             </button>

@@ -279,7 +279,7 @@ PATCH  /api/sessions/:id
 DELETE /api/sessions/:id
 POST   /api/sessions/:id/generate/:step      # analyse | probleme | plan | glossaire | support
                                              # (le plan déclenche aussi la recherche en arrière-plan)
-GET    /api/sessions/:id/support-prompt      # .md complet à coller dans Claude (sans tokens API)
+GET    /api/sessions/:id/support-pptx-prompt # .md complet à coller dans Claude Desktop (charte incluse, sans tokens API)
 POST   /api/sessions/:id/import-support      # ré-importe le JSON de slides produit par Claude → .pptx
 POST   /api/sessions/:id/export-pptx         # refuse (400) si glossaire absent ou support non généré
 

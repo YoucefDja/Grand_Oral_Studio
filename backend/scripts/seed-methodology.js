@@ -74,10 +74,11 @@ Objectif : ne définir que les termes que l'étudiant est SÛR d'employer dans s
 Contenu attendu :
 - une liste « termes » : parcours le plan section par section et relève tous les acronymes et termes techniques qui y figurent effectivement (dans les points clés comme dans les notes) ; pour chacun :
   - terme : l'acronyme ou le terme technique,
-  - definition : une définition en langage clair, simple, qu'un étudiant peut se réapproprier et redire à l'oral sans hésitation devant un jury (pas une définition savante).
+  - definition : une définition COURTE — une seule phrase, 20 mots maximum — en langage clair, qu'un étudiant peut se réapproprier et redire à l'oral sans hésitation devant un jury (pas une définition savante). Va à l'essentiel : ce que le terme désigne dans le contexte du sujet, rien de plus. Pas d'exemple, pas d'historique, pas de développement, pas de seconde phrase.
+  - theme : le thème auquel ce terme se rattache. Utilise en priorité le thème de la session fourni en contexte (le sujet traité). Si le terme relève manifestement d'un domaine distinct et identifiable, indique ce domaine ; sinon reprends le thème de la session. Un seul thème par terme, court (2 à 4 mots).
 - une liste « sources » : pour chaque source réellement mobilisée (issue de la recherche documentaire), un objet avec :
   - titre : nom précis et identifiable de la source (rapport, article, organisme, livre, site…),
-  - resume : résumé en 2-3 phrases indiquant ce que dit la source, pourquoi elle est pertinente pour la problématique, et quelle donnée chiffrée ou exemple concret elle apporte.
+  - resume : résumé en 2 phrases maximum indiquant ce que dit la source et quelle donnée chiffrée ou exemple concret elle apporte.
 
 Contraintes :
 - N'inclus dans le glossaire que les termes réellement présents dans le plan — pas un inventaire de cours, pas de termes « au cas où ».
@@ -192,10 +193,8 @@ const STEP_SCHEMAS = [
       'Objet JSON avec les clés suivantes (toutes en snake_case) :',
       '- "reformulation" : chaîne — reformulation fidèle du sujet en une phrase.',
       '- "mots_cles" : tableau d\'objets { "mot": chaîne, "definition": chaîne } — chaque mot-clé du sujet avec sa définition contextualisée (pas une définition de dictionnaire).',
-      '- "notions_a_maitriser" : tableau d\'objets { "notion": chaîne, "reference_theorique": chaîne, "apport" : chaîne } — chaque notion à maîtriser avec le modèle, la norme, l\'auteur ou le cadre académique qui la fonde (reference_theorique) et ce qu\'elle apporte à la démonstration (apport). C\'est ce qui permet de satisfaire le critère 1.3 de la grille jury (mobilisation de connaissances théoriques), et ces références doivent ensuite être réutilisées explicitement dans les slides et les notes orateur, pas seulement listées ici.',
-      '- "questions_ouvertes" : tableau de chaînes — questions ouvertes soulevées par le sujet.',
+      '- "notions_a_maitriser" : tableau d\'objets { "notion": chaîne, "definition": chaîne, "reference_theorique": chaîne } — chaque notion technique ou de gestion à maîtriser est présentée en DEUX temps : (1) "definition" = une définition COURTE (une phrase, 25 mots maximum) et contextualisée au sujet traité — pas une définition de dictionnaire, elle dit ce que la notion recouvre concrètement dans le cadre de ce sujet ; (2) "reference_theorique" = le modèle, la norme, l\'auteur ou le cadre académique qui fonde la notion, en quelques mots. La référence théorique est conservée en arrière-plan : elle sert à satisfaire le critère 1.3 de la grille jury (mobilisation de connaissances théoriques) et sera réutilisée explicitement dans les slides et les notes orateur. La définition courte, elle, n\'est PAS reprise telle quelle dans les slides : elle sert à l\'étudiant pour comprendre la notion.',
       '- "tensions" : tableau d\'objets { "pole_a": chaîne, "pole_b": chaîne, "description": chaîne } — tensions/contradictions repérables à ce stade, même provisoires.',
-      '- "angles_approche" : tableau de chaînes — angles d\'approche possibles pour la suite.',
       '- "positionnement_strategique" : chaîne — en quoi ce sujet est stratégique pour l\'entreprise ou le secteur, et pour qui (grille jury, critère 1.1 « présentation du contexte »).',
       'Les enjeux et tensions doivent couvrir les cinq dimensions TOHEE quand elles sont pertinentes : technique, organisationnelle, humaine, économique, environnementale (grille jury, critère 1.2 « enjeux dégagés »).',
       'Ne choisis pas encore de problématique à cette étape : elle doit rester exploratoire.',
@@ -238,8 +237,8 @@ const STEP_SCHEMAS = [
     stepKey: 'glossaire',
     jsonSchemaDescription: [
       'Objet JSON avec exactement deux clés :',
-      '- "sources" : tableau d\'objets { "titre": chaîne, "resume": chaîne } — UN objet par source retenue ; resume = 2-3 phrases : ce que dit la source, pourquoi elle est pertinente pour la problématique, quelle donnée ou exemple concret elle apporte.',
-      '- "termes" : tableau d\'objets { "terme": chaîne, "definition": chaîne } — glossaire des acronymes et termes techniques réellement utilisés, définition en langage clair et réutilisable à l\'oral.',
+      '- "sources" : tableau d\'objets { "titre": chaîne, "resume": chaîne } — UN objet par source retenue ; resume = 2 phrases maximum : ce que dit la source et quelle donnée ou exemple concret elle apporte. Ce tableau n\'est PAS montré à l\'étudiant : il est conservé en base pour être réinjecté dans le support.',
+      '- "termes" : tableau d\'objets { "terme": chaîne, "definition": chaîne, "theme": chaîne } — glossaire des acronymes et termes techniques réellement utilisés. "definition" est COURTE : une seule phrase, 20 mots maximum, langage clair et réutilisable à l\'oral, sans exemple ni développement. "theme" est le thème de rattachement du terme (2 à 4 mots) : reprends le thème de la session fourni en contexte, sauf si le terme relève manifestement d\'un domaine distinct et identifiable.',
       'Les deux tableaux doivent être non vides. Ne liste que des termes et sources réellement utiles à la présentation.',
     ].join('\n'),
   },

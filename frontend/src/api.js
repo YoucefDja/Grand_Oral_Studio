@@ -78,15 +78,14 @@ export const api = {
 };
 
 /**
- * Télécharge un prompt .md de l'étape 6.
- *  - `support-prompt`      : réponse JSON à réimporter dans l'app ;
+ * Télécharge le prompt .md de l'étape 6.
  *  - `support-pptx-prompt` : Claude Desktop fabrique directement le .pptx
  *    (le document embarque la charte visuelle complète).
  */
 export async function downloadSupportPrompt(
   sessionId,
-  fallbackName = 'support-etape-6-prompt-claude.md',
-  endpoint = 'support-prompt'
+  fallbackName = 'support-etape-6-generation-pptx-claude.md',
+  endpoint = 'support-pptx-prompt'
 ) {
   const auth = getAuth();
   let res;

@@ -217,7 +217,10 @@ async function buildStepPrompt(session, stepKey) {
       }
       if (termes.length) {
         bloc.push('', 'Termes / acronymes autorisés :');
-        termes.forEach((t) => bloc.push(`- ${t.terme} : ${t.definition}`));
+        termes.forEach((t) => {
+          const theme = t && t.theme ? ` [${t.theme}]` : '';
+          bloc.push(`- ${t.terme}${theme} : ${t.definition}`);
+        });
       }
       bloc.push(
         '',
