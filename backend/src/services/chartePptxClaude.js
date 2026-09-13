@@ -113,13 +113,14 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
      « Détail en notes orateur. » (x 0,5 / y 1,4 / corps 14 pt).
 4. NOTES ORATEUR : le contenu du champ notes_orateur est placé dans les notes du
    présentateur de la slide (panneau « Notes »), jamais sur la slide elle-même.
-   Ces notes sont COURTES (3 à 5 phrases, 40 à 90 mots) et NON THÉORIQUES : elles
-   ne présentent QUE ce qui figure sur la slide (reprendre chaque puce, le
-   chiffre ou l'exemple cité, dans le même ordre), dans un style oral et
-   personnel, pour permettre à l'orateur de s'approprier sa slide d'un coup
-   d'œil. Interdits : paragraphe fleuve, développement théorique, données
-   absentes de la slide, recopie mot pour mot des puces. La page de titre n'a
-   pas de note.
+   Ces notes sont COURTES et calquées sur la slide : une ligne par puce de la
+   slide (reprise dans le même ordre), 5 lignes et 60 mots MAXIMUM par slide,
+   chaque ligne en une phrase courte de 10-15 mots. Ce ne sont JAMAIS des
+   paragraphes : le champ est un texte à lignes courtes séparées par des retours
+   à la ligne, pas un bloc de prose. Elles ne contiennent QUE ce qui figure sur
+   la slide (aucune théorie, aucune donnée absente). Interdits : plusieurs
+   paragraphes, plus de 5 lignes, recopie mot pour mot des puces. La page de
+   titre n'a pas de note.
 
 ### SLIDES « exemple_entreprise » — RENDU DÉDIÉ OBLIGATOIRE
 
@@ -205,8 +206,8 @@ Vérifie, slide par slide, que :
 - la barre progresse bien d'une slide à l'autre et le compteur « n / total » est exact ;
 - le rappel de la problématique apparaît uniquement après sa slide dédiée ;
 - la page de titre ne mentionne ni le thème, ni la problématique ;
-- les notes du présentateur sont remplies pour chaque slide de contenu, courtes
-  (3 à 5 phrases) et adossées à ce qui figure sur la slide ;
+- les notes du présentateur sont remplies pour chaque slide de contenu, avec une
+  ligne par puce (5 lignes et 60 mots maximum), jamais un paragraphe ;
 - aucune slide n'est un bloc de texte brut : au moins une forme, un encadré, un
   schéma ou un visuel structure l'information ;
 - total entre 22 et 25 slides, page de titre comprise (fourchette stricte).
