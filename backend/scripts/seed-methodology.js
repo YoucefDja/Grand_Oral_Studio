@@ -294,11 +294,11 @@ const STEP_SCHEMAS = [
 
 /** Les 5 thèmes du Grand Oral CESI (modifiables ensuite dans le panneau admin). */
 const THEMES = [
-  { label: 'Numérique, IA & transformation digitale', order: 1 },
-  { label: 'Industrie du futur & robotique', order: 2 },
-  { label: 'Transition écologique & énergie', order: 3 },
-  { label: 'Santé & biotechnologies', order: 4 },
-  { label: 'Société, éthique & responsabilité', order: 5 },
+  { label: 'Gestion de la sécurité', order: 1 },
+  { label: 'Architecture du SI', order: 2 },
+  { label: 'Management du SI', order: 3 },
+  { label: 'Virtualisation, cloud & IoT', order: 4 },
+  { label: 'Big data & IA', order: 5 },
 ];
 
 async function seedMethodology() {
@@ -356,6 +356,12 @@ async function seedMethodology() {
     for (let i = 1; i < matches.length; i += 1) {
       await matches[i].deleteOne();
     }
+  }
+  // Supprime les thèmes qui ne font plus partie de la liste canonique.
+  const labels = THEMES.map((theme) => theme.label);
+  const retires = await Theme.deleteMany({ label: { $nin: labels } });
+  if (retires.deletedCount) {
+    console.log(`Theme : ${retires.deletedCount} thème(s) obsolète(s) supprimé(s).`);
   }
   const themeCount = await Theme.countDocuments();
   console.log(`Theme : ${THEMES.length} thèmes garantis (total en base : ${themeCount}).`);
