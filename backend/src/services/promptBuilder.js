@@ -108,7 +108,7 @@ Référence absolue : la spécification de structure du support Grand Oral CESI.
 Le .pptx ajoute automatiquement la page de titre (logo, école, candidat, sujet) : tu ne produis donc PAS de slide de titre.
 Chaque slide doit porter un "type" parmi : contexte | enjeux | problematique | existant | donnees | exemple_entreprise | solutions | conclusion.
 
-VOLUME CIBLE : le fichier final doit compter environ 20 slides AU TOTAL (page de titre comprise, tolérance ±2). Comme la page de titre est ajoutée automatiquement, produis donc 18 à 19 slides de contenu, LA slide de conclusion incluse dans ce nombre. Répartition indicative : contexte & accroche 2, enjeux 1-2, slide problématique 1, existant / état de l'art 4-5, statistiques chiffrées 2-3, cas réels d'entreprise 3-4, solutions & préconisations 4-5, conclusion 1. Ajuste selon la durée et la richesse du plan, sans jamais gonfler artificiellement pour atteindre le chiffre.
+VOLUME CIBLE : le fichier final doit compter entre 22 et 25 slides AU TOTAL (page de titre comprise) — c'est une fourchette stricte à respecter précisément. Comme la page de titre est ajoutée automatiquement, produis donc 21 à 24 slides de contenu, LA slide de conclusion incluse dans ce nombre. Répartition indicative : contexte & accroche 2, enjeux 1-2, slide problématique 1, existant / état de l'art 6-8, statistiques chiffrées 2-3, cas réels d'entreprise 3-4, solutions & préconisations 5-7, conclusion 1. Si le contenu naturel tombe sous 22 slides, développe les parties existant et solutions (chiffres supplémentaires, cas d'entreprise, schémas) plutôt que de dupliquer des slides ; ne dépasse jamais 25 slides.
 
 Ordre impératif des slides (6 blocs, dans cet ordre exact) :
 BLOC 1 — Introduction & Contextualisation

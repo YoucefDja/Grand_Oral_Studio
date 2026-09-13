@@ -201,7 +201,7 @@ Vérifie, slide par slide, que :
 - les notes du présentateur sont remplies pour chaque slide de contenu ;
 - aucune slide n'est un bloc de texte brut : au moins une forme, un encadré, un
   schéma ou un visuel structure l'information ;
-- total ≈ 20 slides, page de titre comprise (tolérance ±2).
+- total entre 22 et 25 slides, page de titre comprise (fourchette stricte).
 `.trim();
 }
 
