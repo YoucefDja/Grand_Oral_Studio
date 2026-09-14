@@ -136,6 +136,8 @@ FIL DIRECTEUR : chaque titre de slide doit se lire comme une étape du même rai
 
 IMPACT VISUEL (critère 2.4) : le support est noté sur son impact visuel et oral. Aucune slide ne se réduit à un bloc de texte. Pour chaque slide, choisis une "forme_visuelle" adaptée ("puces", "chiffre_cle", "deux_colonnes", "carte", "frise", "question") et, quand la slide gagne à être illustrée, renseigne l'objet "visuel" (histogramme de données, répartition, comparaison de deux séries, chronologie d'étapes) avec des chiffres réels et sourcés. Limite chaque puce à une ligne (6 puces maximum) : le détail argumentatif reste dans les notes orateur.
 
+SIMPLIFICATION TECHNIQUE ET VULGARISATION : le niveau de technicité des slides doit rester accessible à un jury professionnel de non-spécialistes. Évite l'accumulation de normes, de référentiels techniques et d'acronymes complexes si cela n'est pas strictement indispensable à la démonstration. Priorise la clarté et la concision pour éviter de susciter des questions pièges sur le jargon en fin de présentation.
+
 VOCABULAIRE : tout terme ou acronyme présent sur une slide ou dans les notes orateur doit provenir du glossaire validé en amont. Aucune exception.
 
 GESTION DU TEMPS (critère 2.4) : le nombre de slides doit rester compatible avec la durée totale de l'oral et la répartition issues du plan. Ne dépasse pas le temps imparti : en cas d'arbitrage, coupe une slide plutôt que de la surcharger.

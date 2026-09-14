@@ -103,6 +103,7 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
      sans verbe conjugué, sans point, sans sous-titre (« Contexte », « Enjeux »,
      « Problématique », « Existant », « Cas d'entreprise », « Solutions »,
      « Conclusion »). Le détail va dans les puces et les notes du présentateur.
+   - SIMPLIFICATION TECHNIQUE ET VULGARISATION : le niveau de technicité des slides doit rester accessible à un jury professionnel de non-spécialistes. Évite l'accumulation de normes, de référentiels techniques et d'acronymes complexes si cela n'est pas strictement indispensable à la démonstration. Priorise la clarté et la concision pour éviter de susciter des questions pièges sur le jargon en fin de présentation.
    - Type de la slide (contexte, enjeux, existant…) : x 13,33 − 2,2 / y 0,14 /
      w 1,8 / h 0,8, corps 10 pt, couleur ${COULEURS.LIGHT}, aligné à droite,
      centré verticalement. Écris-le en minuscules, sans underscore.
