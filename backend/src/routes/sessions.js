@@ -427,7 +427,9 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
-    const { system, user } = await buildStepPrompt(session, 'support');
+    const { system, user } = await buildStepPrompt(session, 'support', {
+      pourPptxClaude: true,
+    });
     const md = [
       '# Grand Oral Studio — Génération DIRECTE du .pptx par Claude Desktop',
       '',

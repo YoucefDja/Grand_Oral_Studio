@@ -182,7 +182,8 @@ function problemeRetenuPourSuite(probleme) {
   };
 }
 
-async function buildStepPrompt(session, stepKey) {
+async function buildStepPrompt(session, stepKey, options = {}) {
+  const pourPptxClaude = options.pourPptxClaude === true;
   const sections = await MethodologySection.find({
     appliesToSteps: { $in: [stepKey, 'all'] },
   })
@@ -251,9 +252,18 @@ async function buildStepPrompt(session, stepKey) {
     err.status = 500;
     throw err;
   }
-  parts.push(
-    `Format de sortie attendu pour l'étape « ${STEP_LABELS[stepKey] || stepKey} » :\n${stepDoc.jsonSchemaDescription}`
-  );
+  if (pourPptxClaude) {
+    // Export « Claude Desktop fabrique le .pptx » : on ne demande PAS de JSON.
+    // Le schéma de sortie reste utile comme description des champs de contenu,
+    // mais la consigne finale impose la fabrication du fichier .pptx.
+    parts.push(
+      `Description des champs de contenu de chaque slide (à mettre en forme, PAS à renvoyer en JSON) :\n${stepDoc.jsonSchemaDescription}`
+    );
+  } else {
+    parts.push(
+      `Format de sortie attendu pour l'étape « ${STEP_LABELS[stepKey] || stepKey} » :\n${stepDoc.jsonSchemaDescription}`
+    );
+  }
 
   // Structure narrative du diaporama (étape Support) — fait autorité sur l'ordre
   // des slides et la révélation progressive de la problématique.
@@ -262,9 +272,15 @@ async function buildStepPrompt(session, stepKey) {
     parts.push(SUPPORT_CHARTE_COULEUR);
   }
 
-  parts.push(
-    'Tu réponds UNIQUEMENT avec un objet JSON valide correspondant exactement au format de sortie attendu : aucune balise markdown de code, aucun texte avant ou après le JSON.'
-  );
+  if (pourPptxClaude) {
+    parts.push(
+      "Tu ne réponds PAS en JSON : tu fabriques directement le fichier PowerPoint (.pptx) binaire, téléchargeable, en appliquant la charte visuelle et la mise en page décrites plus bas dans ce document. Les sections ci-dessus décrivent le CONTENU et la STRUCTURE des slides à produire, jamais un format de réponse."
+    );
+  } else {
+    parts.push(
+      'Tu réponds UNIQUEMENT avec un objet JSON valide correspondant exactement au format de sortie attendu : aucune balise markdown de code, aucun texte avant ou après le JSON.'
+    );
+  }
 
   const system = parts.filter(Boolean).join('\n\n---\n\n').trim();
 
