@@ -99,6 +99,10 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
    h 1,05, couleur ${COULEURS.PRIMARY}, sans bordure.
    - Titre de la slide : x 0,5 / y 0,14 / w 13,33 − 2,6 / h 0,8, corps 20 pt, gras,
      couleur gris très foncé ${COULEURS.DARK}, centré verticalement. Aligné à gauche.
+     Le titre est un MOT-CLÉ, jamais une phrase : deux ou trois mots maximum,
+     sans verbe conjugué, sans point, sans sous-titre (« Contexte », « Enjeux »,
+     « Problématique », « Existant », « Cas d'entreprise », « Solutions »,
+     « Conclusion »). Le détail va dans les puces et les notes du présentateur.
    - Type de la slide (contexte, enjeux, existant…) : x 13,33 − 2,2 / y 0,14 /
      w 1,8 / h 0,8, corps 10 pt, couleur ${COULEURS.LIGHT}, aligné à droite,
      centré verticalement. Écris-le en minuscules, sans underscore.
