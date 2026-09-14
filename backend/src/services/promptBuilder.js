@@ -136,7 +136,7 @@ FIL DIRECTEUR : chaque titre de slide doit se lire comme une étape du même rai
 
 IMPACT VISUEL (critère 2.4) : le support est noté sur son impact visuel et oral. Aucune slide ne se réduit à un bloc de texte. Pour chaque slide, choisis une "forme_visuelle" adaptée ("puces", "chiffre_cle", "deux_colonnes", "carte", "frise", "question") et, quand la slide gagne à être illustrée, renseigne l'objet "visuel" (histogramme de données, répartition, comparaison de deux séries, chronologie d'étapes) avec des chiffres réels et sourcés. Limite chaque puce à une ligne (6 puces maximum) : le détail argumentatif reste dans les notes orateur.
 
-SIMPLIFICATION TECHNIQUE ET VULGARISATION : le niveau de technicité des slides doit rester accessible à un jury professionnel de non-spécialistes. Évite l'accumulation de normes, de référentiels techniques et d'acronymes complexes si cela n'est pas strictement indispensable à la démonstration. Priorise la clarté et la concision pour éviter de susciter des questions pièges sur le jargon en fin de présentation.
+ÉQUILIBRE TECHNIQUE ET VULGARISATION : utilise un vocabulaire RICHE, précis et professionnel, mais qui reste simple à comprendre et facile à prendre en main par l'étudiant à l'oral. Évite la pauvreté lexicale tout en fuyant le jargon inutile. Pour les référentiels et normes (ISO, ITIL, NIST, etc.), explique-les toujours avec des mots simples. N'accumule pas les termes techniques sur chaque slide : utilise-les avec parcimonie pour ne pas noyer le jury sous une liste interminable en fin de présentation. Priorise la clarté et la concision pour éviter les questions pièges.
 
 VOCABULAIRE : tout terme ou acronyme présent sur une slide ou dans les notes orateur doit provenir du glossaire validé en amont. Aucune exception.
 
