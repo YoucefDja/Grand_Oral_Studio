@@ -21,7 +21,7 @@ export default function HomePage() {
   const [error, setError] = useState(null);
   const [creating, setCreating] = useState(false);
 
-  const [form, setForm] = useState({ titre: '', theme: '', contexte: '' });
+  const [form, setForm] = useState({ titre: '', theme: '' });
   const [ideas, setIdeas] = useState([]);
   const [ideasLoading, setIdeasLoading] = useState(false);
 
@@ -61,7 +61,6 @@ export default function HomePage() {
     try {
       const data = await api.post('/api/sessions/ideas', {
         theme: form.theme,
-        contexte: form.contexte,
         nb: 3,
         lang,
       });
@@ -86,7 +85,6 @@ export default function HomePage() {
       const session = await api.post('/api/sessions', {
         titre: form.titre.trim(),
         theme: form.theme,
-        contexte: form.contexte.trim(),
       });
       navigate(`/session/${session._id}`);
     } catch (err) {
@@ -220,15 +218,6 @@ export default function HomePage() {
             />
           </label>
 
-          <label className="field">
-            {t('home.contextLabel')}
-            <small>{t('home.contextHint')}</small>
-            <textarea
-              value={form.contexte}
-              onChange={(e) => setForm((prev) => ({ ...prev, contexte: e.target.value }))}
-              placeholder={t('home.contextPlaceholder')}
-            />
-          </label>
           <button type="submit" className="btn-primary" disabled={creating || !form.titre.trim()}>
             {creating ? (
               <>

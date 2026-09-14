@@ -398,7 +398,6 @@ async function verifierEtCorrigerProbleme({ system, session, problemeGenere }) {
       'la formulation la plus solide), justification_recommandation.',
     sujet: String(session.titre || '').trim(),
     theme: String(session.theme || '').trim(),
-    contexte_etudiant: String(session.contexte || '').trim() || null,
     analyse_sujet: {
       reformulation: analyse.reformulation || '',
       mots_cles: analyse.mots_cles || [],

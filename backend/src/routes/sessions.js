@@ -132,14 +132,13 @@ router.get(
 router.post(
   '/',
   asyncHandler(async (req, res) => {
-    const { titre, theme, contexte } = req.body || {};
+    const { titre, theme } = req.body || {};
     if (!titre || !String(titre).trim()) {
       throw httpError(400, 'Le sujet (titre) est obligatoire pour créer une session.');
     }
     const session = await Session.create({
       titre: String(titre).trim(),
       theme: theme ? String(theme) : '',
-      contexte: contexte ? String(contexte) : '',
       owner: req.userId,
       currentStep: 0,
       // « Créer la session et commencer » : le chrono de travail démarre ici.
@@ -165,8 +164,8 @@ router.post(
 
     const system = [
       'Tu conçois des sujets pour le Grand Oral d’un étudiant ingénieur (CESI).',
-      'À partir du thème choisi (et éventuellement du contexte de l’étudiant), propose des sujets',
-      'percutants, originaux et réalisables, qui portent une vraie tension ou question à défendre.',
+      'À partir du thème choisi, propose des sujets percutants, originaux et réalisables,',
+      'qui portent une vraie tension ou question à défendre.',
       'Chaque sujet est court (1 phrase), sous forme de question ou de sujet d’oral.',
       `Rédige les sujets en ${langue}.`,
       'Réponds UNIQUEMENT par un objet JSON : {"sujets":["…","…"]} — aucun commentaire, aucune balise.',
@@ -175,7 +174,6 @@ router.post(
     const user = JSON.stringify({
       theme,
       nombre: nb,
-      contexte_etudiant: String(req.body?.contexte || '').trim().slice(0, 800) || null,
     });
 
     let sujets = [];
@@ -212,10 +210,9 @@ router.patch(
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
-    const { titre, theme, contexte, currentStep } = req.body || {};
+    const { titre, theme, currentStep } = req.body || {};
     if (titre !== undefined) session.titre = String(titre).trim();
     if (theme !== undefined) session.theme = String(theme);
-    if (contexte !== undefined) session.contexte = String(contexte);
     if (currentStep !== undefined) {
       const step = Number(currentStep);
       if (!Number.isInteger(step) || step < 0 || step > STEP_KEYS.length) {

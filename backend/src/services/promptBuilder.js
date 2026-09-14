@@ -289,9 +289,6 @@ async function buildStepPrompt(session, stepKey, options = {}) {
   const userLines = [
     `Sujet du Grand Oral : « ${session.titre} »`,
     session.theme ? `Thème : ${session.theme}` : '',
-    session.contexte
-      ? `Contexte et expérience de l'étudiant :\n${session.contexte}`
-      : "Contexte et expérience de l'étudiant : aucun contexte précis fourni. Signale-le si c'est bloquant, ou appuie-toi sur des exemples d'entreprises réelles et vérifiables.",
     '',
     `Étape en cours : « ${STEP_LABELS[stepKey] || stepKey} ». Produis la sortie attendue pour cette étape, en suivant strictement la méthodologie fournie ci-dessus.`,
   ];
