@@ -159,6 +159,31 @@ l'entreprise, pas la décrire. Reproduis cette disposition :
 4. PUCES D'ANALYSE : sous les pastilles, 14 pt, mêmes règles que le corps
    standard (puces natives, 6 maximum).
 
+### SLIDE « problematique » — RENDU DÉDIÉ OBLIGATOIRE
+
+La question centrale est la seule chose mise en avant : on refuse toute
+présentation biaisée opposant deux camps.
+
+1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
+2. AUCUN visuel de comparaison : jamais de deux colonnes opposées, jamais de
+   « Pour / Contre », « Oui / Non », « Avantages / Risques », jamais de pôle A
+   face à un pôle B. Ces formes nourrissent un débat d'opinion, alors que la
+   problématique doit soulever un problème concret à instruire.
+3. Encadré de la question : rectangle arrondi x 1,6 / y 2,1 / w 13,33 − 3,2 /
+   h 2,6, fond blanc, contour ${COULEURS.ACCENT} épaisseur 2 pt, ombre légère
+   désactivée. La question seule est posée à l'intérieur : corps 28-32 pt, gras,
+   couleur ${COULEURS.DARK}, centrée horizontalement et verticalement, retour à
+   la ligne automatique. Adapte la taille à la longueur (32 pt en dessous de
+   90 caractères, 28 pt au-delà).
+4. Optionnel : un filet ${COULEURS.ACCENT} de 2,5 pouces centré au-dessus de
+   l'encadré (y = 1,85, épaisseur 1,5 pt) comme simple repère visuel.
+5. Aucune puce de comparaison, aucun bloc « état des lieux » : le contexte, les
+   mots-clés et les observations préliminaires sont déjà portés par les slides
+   précédentes et ne sont pas répétés ici.
+6. Le rappel de la problématique en pied de slide ne s'affiche PAS sur cette
+   slide (il commence sur les slides postérieures). La note du présentateur
+   tient en 2 lignes courtes maximum.
+
 ### AUTRES VISUELS (champ "visuel" non nul)
 
 Quand une slide porte un objet "visuel", ne te contente pas des puces :
@@ -209,6 +234,8 @@ Vérifie, slide par slide, que :
 - chaque slide de contenu possède son bandeau jaune CESI et sa barre de progression ;
 - la barre progresse bien d'une slide à l'autre et le compteur « n / total » est exact ;
 - le rappel de la problématique apparaît uniquement après sa slide dédiée ;
+- la slide « problematique » ne met en avant que la question, sans aucune forme
+  opposant deux camps (pas de deux colonnes, pas de « Pour / Contre ») ;
 - la page de titre ne mentionne ni le thème, ni la problématique ;
 - les notes du présentateur sont remplies pour chaque slide de contenu, avec une
   ligne par puce (5 lignes et 60 mots maximum), jamais un paragraphe ;

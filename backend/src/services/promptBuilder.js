@@ -88,7 +88,8 @@ function vocabBlock(theme, vocab) {
  *
  * Référence absolue : structure_support_grand_oral_cesi.md. L'enchaînement est
  * chronologique et non négociable — c'est l'ordre d'un entonnoir : on pose le
- * contexte, on en déduit les enjeux, la problématique émerge de leur tension,
+ * contexte, on en déduit les enjeux, la problématique en découle et est
+ * formulée comme un problème concret à instruire (jamais un débat d'opinion),
  * puis chaque bloc suivant la traite (existant → statistiques sourcées → cas
  * réels sourcés → solutions) avant de refermer sur une conclusion qui y répond
  * et ouvre une question non résolue. La problématique n'est jamais dévoilée
@@ -115,8 +116,8 @@ BLOC 1 — Introduction & Contextualisation
  1. « Accroche » (type contexte) : une phrase d'accroche qui capte le jury, puis pourquoi le sujet est d'actualité et pourquoi les entreprises sont directement concernées (critère 1.1).
  2. « Contexte du sujet & mots-clés » (type contexte) : le positionnement stratégique clair du sujet au sein de l'entreprise ou du secteur et pour qui (critère 1.1) ; les mots-clés du sujet avec leur définition courte (issus de l'analyse) et 1 à 2 chiffres clés actuels.
  3. « Enjeux » (type enjeux) : ce qui se joue pour l'entreprise, structuré par la grille TOHEE — Technique, Organisationnel, Humain, Économique, Environnemental — restreinte au cœur du sujet, pas un inventaire (critère 1.2).
- 4. UNE slide dédiée « Problématique » (type problematique) : la tension / le dilemme identifié à travers le contexte et les enjeux, puis la question posée explicitement, mise en avant. C'est le fil rouge de toute la suite.
-    RÈGLE : ne formule JAMAIS la problématique avant cette slide ; les slides précédentes ne font que préparer sa venue.
+ 4. UNE slide dédiée « Problématique » (type problematique) : elle met en avant UNIQUEMENT la question centrale, formulée comme un PROBLÈME CONCRET à instruire (pas un débat d'opinion), mise en grand et en évidence. C'est le fil rouge de toute la suite : « voici l'existant, voici ses limites, voici ce que je préconise ».
+    RÈGLE : ne formule JAMAIS la problématique avant cette slide ; les slides précédentes ne font que préparer sa venue. Cette slide n'oppose aucun camp : pas de deux colonnes opposées, pas de « Pour / Contre ». L'état des lieux et les observations préliminaires restent sur les slides précédentes.
 BLOC 2 — L'Existant (Fondements & Théorie), type existant
  5. Analyse des concepts académiques et techniques du sujet : mobilise NOMMÉMENT les modèles, normes, auteurs ou cadres théoriques issus de l'analyse et de la recherche documentaire — le jury note la rigueur académique (critère 1.3).
  6. État de l'art des pratiques professionnelles : où en sont les organisations aujourd'hui sur ce sujet (critère 1.4).
