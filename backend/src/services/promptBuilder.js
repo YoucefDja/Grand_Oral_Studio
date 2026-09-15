@@ -228,7 +228,7 @@ async function buildStepPrompt(session, stepKey, options = {}) {
       }
       bloc.push(
         '',
-        "RÈGLE STRICTE : aucun acronyme ou terme technique absent de ce glossaire ne doit apparaître sur les slides ni dans les notes orateur. Si un terme nouveau semble nécessaire, formule-le autrement plutôt que de l'utiliser sans définition."
+        "RÈGLE STRICTE : aucun acronyme ou terme technique absent de ce glossaire ne doit apparaître sur les slides ni dans les notes orateur. Si un terme nouveau semble nécessaire, formule-le autrement plutôt que de l'utiliser sans définition. Respecte l'ÉQUILIBRE TECHNIQUE ET VULGARISATION : utilise ces termes avec précision professionnelle mais explique-les toujours simplement."
       );
       parts.push(bloc.join('\n'));
     }
