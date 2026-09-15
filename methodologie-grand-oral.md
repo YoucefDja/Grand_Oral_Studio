@@ -276,10 +276,18 @@ présentation généré sans figurer dans ce glossaire.
 
 Le support est la mise en forme visuelle du plan détaillé, pas un nouveau
 contenu. Consignes :
-- une slide de titre, une slide par partie ou sous-partie significative, une
-  slide de conclusion,
-- puces courtes sur les slides (le détail argumentatif va dans les notes
-  orateur, jamais sur la diapositive elle-même),
+- le support compte exactement 20 slides page de titre comprise (19 slides de
+  contenu, conclusion incluse) : une slide de titre, puis contexte, plan de
+  présentation (2e slide, systématique), mots clés du sujet (sujet complet
+  repris et chaque mot clé défini), enjeux, problématique, existant, données
+  chiffrées, cas d'entreprises (regroupés sur une seule slide, deux au
+  maximum), solutions, conclusion,
+- puces courtes sur les slides (3 à 5 puces, une ligne chacune, 6 maximum ; le
+  détail argumentatif va dans les notes orateur, jamais sur la diapositive
+  elle-même : l'étudiant doit présenter en s'appuyant sur la slide, pas la lire),
+- chaque slide de contenu se termine par une phrase de transition discrète qui
+  annonce la suivante et rend la ligne directrice continue (l'évaluation porte
+  d'abord sur l'exercice oral : aucune slide ne doit paraître indépendante),
 - au moins une slide avec des données chiffrées ou un graphique dans la partie
   contexte,
 - au moins une slide qui présente un ou plusieurs exemples d'entreprises réelles

@@ -72,6 +72,10 @@ const MARQUEURS_CHIFFRES = [
 // Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels →
 // Solutions → Conclusion. `null` = bloc facultatif dans une session donnée
 // (ex. un sujet peut n'avoir aucun cas d'entreprise réel à citer).
+// Rappel : le volume cible du support est de 20 slides page de titre comprise
+// (voir services/supportLayout.js pour la ligne directrice continue).
+const VOLUME_CIBLE_TOTAL = 20;
+
 const ORDRE_BLOCS = [
   { cle: 'contexte', libelle: 'Contexte', tester: (t) => t.includes('contexte') },
   { cle: 'enjeux', libelle: 'Enjeux', tester: (t) => t.includes('enjeux') },
@@ -272,17 +276,60 @@ function detecterManquesSupport(session) {
     );
   }
 
+  // ---- Critère 1.4 : benchmark condensé (une slide, deux au maximum) ----
+  const slidesCas = slides.filter(
+    (slide, i) => types[i].includes('exempleentreprise') || /cas d.entreprise|cas reel/.test(textes[i])
+  );
+  if (slidesCas.length > 2) {
+    ajouter(
+      '1.4',
+      `Les cas d’entreprises occupent ${slidesCas.length} slides : ils doivent être regroupés sur une seule slide (deux au maximum) pour laisser la place à la réponse à la problématique.`
+    );
+  }
+
+  // ---- Ligne directrice continue (critères 2.1 et 2.4) ----
+  const sansTransition = slides.filter(
+    (slide, i) =>
+      !/conclusion/.test(types[i]) && !String(slide.transition || '').trim()
+  ).length;
+  if (slides.length > 3 && sansTransition > 0) {
+    ajouter(
+      '2.1',
+      `${sansTransition} slide(s) n’ont pas de phrase de transition : la ligne directrice s’interrompt et les slides paraissent indépendantes à l’oral. Régénérez le support pour obtenir la ligne directrice continue.`
+    );
+  }
+
+  // ---- Volume cible : 19 slides de contenu, soit 20 slides page de titre comprise.
+  //      Avertissement seulement : la génération conclut d'elle-même si la
+  //      conclusion manque, et un support un peu plus long reste présentable.
+  const totalAvecTitre = slides.length + 1 < VOLUME_CIBLE_TOTAL ? slides.length + 1 : VOLUME_CIBLE_TOTAL;
+  if (slides.length + 1 !== VOLUME_CIBLE_TOTAL) {
+    const ecart = slides.length + 1 - VOLUME_CIBLE_TOTAL;
+    ajouter(
+      '2.4',
+      `Le support compte ${totalAvecTitre} slides page de titre comprise au lieu des ${VOLUME_CIBLE_TOTAL} attendues (${ecart > 0 ? `retirez ${ecart}` : `ajoutez ${-ecart}`} slide(s) : condensez les cas d’entreprises et les redondances, ou développez l’existant et les solutions).`
+    );
+  }
+
   return { slides: slides.length, manques };
 }
 
 /**
  * Lève une erreur 400 détaillant les manques structurels, ou renvoie le rapport.
  * Utilisé avant la génération du .pptx (export et prévisualisation).
+ *
+ * Les attendus issus du durcissement du support (ligne directrice continue,
+ * volume de 20 slides, cas d'entreprises condensés) sont signalés à titre
+ * d'AVERTISSEMENT : ils guident la régénération sans bloquer l'export d'un
+ * support déjà généré, dont l'étudiant reste maître.
  */
+const TYPES_AVERTISSEMENT = new Set(['2.1', '2.4']);
+
 function assertConformiteSupport(session) {
   const rapport = detecterManquesSupport(session);
-  if (rapport.manques.length > 0) {
-    const detail = rapport.manques.map((m) => `• [critère ${m.critere}] ${m.message}`).join('\n');
+  const bloquants = rapport.manques.filter((m) => !TYPES_AVERTISSEMENT.has(m.critere));
+  if (bloquants.length > 0) {
+    const detail = bloquants.map((m) => `• [critère ${m.critere}] ${m.message}`).join('\n');
     throw httpError(
       400,
       `Le support n’est pas conforme aux attendus structurels de la grille d’évaluation du jury :\n${detail}\n` +

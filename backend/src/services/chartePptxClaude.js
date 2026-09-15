@@ -100,9 +100,11 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
    - Titre de la slide : x 0,5 / y 0,14 / w 13,33 − 2,6 / h 0,8, corps 20 pt, gras,
      couleur gris très foncé ${COULEURS.DARK}, centré verticalement. Aligné à gauche.
      Le titre est un MOT-CLÉ, jamais une phrase : deux ou trois mots maximum,
-     sans verbe conjugué, sans point, sans sous-titre (« Contexte », « Enjeux »,
-     « Problématique », « Existant », « Cas d'entreprise », « Solutions »,
-     « Conclusion »). Le détail va dans les puces et les notes du présentateur.
+     sans verbe conjugué, sans point, sans sous-titre. Nomenclature imposée :
+     « Plan de présentation », « Contexte », « Mots clés du sujet », « Enjeux »,
+     « Problématique », « Existant », « Chiffres clés », « Cas d'entreprises »,
+     « Solutions », « Conclusion ». Le détail va dans les puces et les notes du
+     présentateur.
    - ÉQUILIBRE TECHNIQUE ET VULGARISATION : utilise un vocabulaire RICHE, précis et professionnel, mais simple à comprendre et à maîtriser à l'oral. Explique les référentiels en mots simples. N'accumule pas les termes techniques sur chaque slide : utilise-les avec parcimonie pour ne pas noyer le jury.
    - Type de la slide (contexte, enjeux, existant…) : x 13,33 − 2,2 / y 0,14 /
      w 1,8 / h 0,8, corps 10 pt, couleur ${COULEURS.LIGHT}, aligné à droite,
@@ -111,12 +113,16 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
 3. CORPS : liste à puces, x 0,55 / y 1,3 / w 13,33 − 1,1, corps 15 pt, couleur
    ${COULEURS.DARK}, aligné en haut, avec de vraies puces (puces natives, pas de
    caractère « • » tapé dans le texte). Une ligne par puce, espacement de 8 pt
-   après chaque puce, 6 puces maximum.
-   - Hauteur du corps : 7,5 − 2,2 (= 5,3) lorsque le pied de slide n'affiche pas
-     la problématique ; 7,5 − 3,1 (= 4,4) lorsqu'il l'affiche.
+   après chaque puce, 6 puces maximum — 3 à 5 puces courtes suffisent : une
+   slide ne doit jamais être un bloc de texte, l'étudiant doit pouvoir parler en
+   s'appuyant dessus, jamais la lire.
+   - Hauteur du corps : 7,5 − 3,1 (= 4,4) maximum, car la phrase de transition
+     occupe le bas de la slide (voir section « LIGNE DIRECTRICE CONTINUE »).
    - Si la slide n'a aucune puce, écris la mention en italique gris
      « Détail en notes orateur. » (x 0,5 / y 1,4 / corps 14 pt).
-4. NOTES ORATEUR : le contenu du champ notes_orateur est placé dans les notes du
+4. PHRASE DE TRANSITION (voir section dédiée ci-dessous) : dernière ligne de la
+   slide, au-dessus du rappel de la problématique.
+5. NOTES ORATEUR : le contenu du champ notes_orateur est placé dans les notes du
    présentateur de la slide (panneau « Notes »), jamais sur la slide elle-même.
    Ces notes sont COURTES et calquées sur la slide : une ligne par puce de la
    slide (reprise dans le même ordre), 5 lignes et 60 mots MAXIMUM par slide,
@@ -127,10 +133,67 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
    paragraphes, plus de 5 lignes, recopie mot pour mot des puces. La page de
    titre n'a pas de note.
 
+### LIGNE DIRECTRICE CONTINUE — PHRASE DE TRANSITION EN FIN DE SLIDE (OBLIGATOIRE)
+
+L'évaluation du grand oral porte d'abord sur la qualité de l'exercice oral : le
+support ne doit jamais donner l'impression d'une suite de slides indépendantes.
+Chaque slide de contenu (toutes sauf la page de titre et la dernière slide de
+contenu) se termine donc par UNE phrase de transition discrète, reprise du champ
+"transition" fourni avec la slide.
+
+- Position : x 0,6 / y 6,5 / w 13,33 − 2,4 / h 0,45, corps 10 pt, italique,
+  couleur ${COULEURS.GREY}, aligné à gauche, centré verticalement, retour à la
+  ligne automatique activé. Précède la phrase d'une flèche « → ».
+- Style : petit, gris, italique — c'est un repère de continuité, jamais un
+  élément qui domine le contenu. Aucun encadré, aucune couleur d'accent.
+- Contenu : une seule phrase courte (12 à 18 mots). Elle part de la slide
+  courante et annonce explicitement la suivante, pour que le jury entende le fil
+  du raisonnement (« … ce qui m'amène à… », « … voyons maintenant… »). Elle ne
+  répète pas une puce, n'introduit ni chiffre ni terme nouveau, ne pose jamais
+  la problématique avant sa slide dédiée et ne se réduit pas à une formule
+  creuse. Si le champ "transition" est vide, écris une relance cohérente avec la
+  slide suivante : la ligne directrice ne doit jamais s'interrompre.
+- Coexistence avec le rappel de la problématique : la transition reste AU-DESSUS
+  du fil rouge (y 6,8). Sur les slides antérieures à la problématique, elle est
+  centrée verticalement dans la zone libre jusqu'à y 6,95 + 0,35.
+- La dernière slide de contenu (la conclusion) n'affiche pas de transition.
+
+### SLIDE « Plan de présentation » — RENDU IMPOSÉ (2e slide du dossier)
+
+Cette slide est SYSTÉMATIQUE : elle vient toujours juste après la première slide
+du dossier (la slide « Contexte ») et avant « Mots clés du sujet ». Elle suit le
+gabarit standard (bandeau, barre de progression, phrase de transition) avec un
+corps particulier :
+
+1. 4 à 5 puces très courtes seulement, une ligne chacune, annonçant les parties
+   du support dans l'ordre de la présentation (contexte et mots clés du sujet,
+   enjeux, problématique, existant et chiffres clés, cas d'entreprises,
+   solutions, conclusion).
+2. Chaque puce peut être précédée d'un petit repère numéroté ${COULEURS.ACCENT}
+   (1, 2, 3…) : c'est un sommaire, le jury doit embrasser la construction d'un
+   coup d'œil.
+3. Aucun chiffre d'analyse, aucune source, aucun développement, et surtout AUCUNE
+   formulation de la problématique : elle est réservée à sa slide dédiée.
+4. La phrase de transition de cette slide annonce les mots clés du sujet.
+
+### SLIDE « Mots clés du sujet » — RENDU IMPOSÉ
+
+1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
+2. Encadré du sujet : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 / h 1,1,
+   fond blanc, contour ${COULEURS.ACCENT} épaisseur 1 pt. Le SUJET COMPLET y est
+   repris tel quel, corps 16-18 pt, gras, ${COULEURS.DARK}, centré.
+3. Définitions des mots clés : sous l'encadré (y = 2,6), 2 à 4 mots clés du
+   sujet, chacun sur une ligne « mot clé : définition courte » en corps 13 pt,
+   le mot clé en gras ${COULEURS.DARK} et sa définition en ${COULEURS.GREY}.
+   Ces définitions viennent du glossaire validé : aucun terme technique nouveau.
+
 ### SLIDES « exemple_entreprise » — RENDU DÉDIÉ OBLIGATOIRE
 
 Ces slides ne suivent PAS le gabarit ci-dessus : elles doivent montrer
-l'entreprise, pas la décrire. Reproduis cette disposition :
+l'entreprise, pas la décrire. Le support ne compte qu'UNE seule slide
+« Cas d'entreprises » (DEUX au maximum en tout) : les cas d'entreprises sont donc
+REGROUPÉS, jamais un cas par slide au-delà de deux slides. Reproduis cette
+disposition :
 
 1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
 2. CARTE ENTREPRISE : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 /
@@ -159,6 +222,14 @@ l'entreprise, pas la décrire. Reproduis cette disposition :
    ${COULEURS.DARK} centrée, et le libellé en 10 pt gris centré dessous.
 4. PUCES D'ANALYSE : sous les pastilles, 14 pt, mêmes règles que le corps
    standard (puces natives, 6 maximum).
+5. PHRASE DE TRANSITION : zone et style de la section « LIGNE DIRECTRICE
+   CONTINUE », au-dessus du rappel de la problématique.
+
+Pour comparer 2 ou 3 entreprises sur une même slide « Cas d'entreprises » :
+empile 2 ou 3 blocs « carte + pastilles » (carte 1,1 de haut au lieu de 1,5,
+pastilles 0,7 au lieu de 1,0, corps 12 pt pour les puces), chacun avec son logo
+réel, son nom, sa source et ses chiffres clés. Le jury doit pouvoir comparer les
+cas d'un coup d'œil, sans changer de slide.
 
 ### SLIDE « problematique » — RENDU DÉDIÉ OBLIGATOIRE
 
@@ -234,6 +305,14 @@ Vérifie, slide par slide, que :
 - le fond est blanc et les textes lisibles (aucun texte clair sur fond clair) ;
 - chaque slide de contenu possède son bandeau jaune CESI et sa barre de progression ;
 - la barre progresse bien d'une slide à l'autre et le compteur « n / total » est exact ;
+- la 2e slide du dossier est bien le « Plan de présentation », puis « Contexte » et
+  « Mots clés du sujet » (le sujet complet repris et chaque mot clé défini) ;
+- chaque slide de contenu se termine par sa phrase de transition (sauf la
+  dernière), qui annonce la slide suivante : la ligne directrice ne s'interrompt
+  jamais et aucune slide ne paraît isolée ;
+- les cas d'entreprises tiennent sur une seule slide (deux au maximum en tout) ;
+- aucune slide n'est surchargée de texte : les puces sont courtes, une ligne
+  chacune, et l'étudiant peut présenter sans lire ses slides ;
 - le rappel de la problématique apparaît uniquement après sa slide dédiée ;
 - la slide « problematique » ne met en avant que la question, sans aucune forme
   opposant deux camps (pas de deux colonnes, pas de « Pour / Contre ») ;
@@ -242,7 +321,8 @@ Vérifie, slide par slide, que :
   ligne par puce (5 lignes et 60 mots maximum), jamais un paragraphe ;
 - aucune slide n'est un bloc de texte brut : au moins une forme, un encadré, un
   schéma ou un visuel structure l'information ;
-- total entre 22 et 25 slides, page de titre comprise (fourchette stricte).
+- total EXACTEMENT 20 slides, page de titre comprise (volume imposé, ni plus ni
+  moins) : 1 page de titre + 19 slides de contenu, conclusion incluse.
 `.trim();
 }
 

@@ -51,6 +51,7 @@ const LABELS = {
   type: 'Type',
   puces: 'Puces (slides)',
   notes_orateur: 'Notes orateur',
+  transition: 'Transition (ligne directrice)',
   notes_globales: 'Notes globales',
   entreprise: 'Entreprise',
 };
@@ -74,6 +75,7 @@ const QUOTE_KEYS = new Set([
   'definition',
   'resume',
   'notes_orateur',
+  'transition',
   'notes_globales',
   'description',
   'pourquoi_discutable',

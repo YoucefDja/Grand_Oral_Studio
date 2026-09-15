@@ -21,6 +21,11 @@ function SlideCard({ slide, index, t }) {
           ))}
         </ul>
       ) : null}
+      {slide.transition ? (
+        <p className="muted" style={{ marginTop: 6, fontStyle: 'italic', fontSize: 12 }}>
+          → {slide.transition}
+        </p>
+      ) : null}
       {slide.notes_orateur ? (
         <details style={{ marginTop: 6 }}>
           <summary className="muted" style={{ cursor: 'pointer' }}>

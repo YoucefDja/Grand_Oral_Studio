@@ -20,6 +20,7 @@ const fs = require('fs');
 const pptxgen = require('pptxgenjs');
 const { NOM, ANNEE, LOGO_PATH, LOGO_DISPO } = require('../config/soutenance');
 const { recupererLogosSupport } = require('./entrepriseLogos');
+const { phraseTransition, zoneTransition } = require('./supportLayout');
 
 // Charte CESI : jaune institutionnel #F2D934. Le jaune est très clair, donc
 // les textes posés dessus sont en gris foncé (jamais en blanc, illisible).
@@ -243,6 +244,30 @@ function addFooter(slide, withProblem) {
 }
 
 /**
+ * Phrase de transition discrète en fin de slide : elle annonce la slide
+ * suivante et matérialise le fil conducteur continu de la présentation
+ * (le jury évalue d'abord la qualité de l'oral, critère 2.1). Elle reste
+ * au-dessus du rappel de la problématique et ne domine jamais le contenu.
+ */
+function addTransition(slide, texte, withProblem) {
+  const phrase = String(texte || '').trim();
+  if (!phrase) return;
+  const zone = zoneTransition({ withProblem });
+  slide.addText(`→ ${phrase}`, {
+    x: zone.x,
+    y: zone.y,
+    w: zone.w,
+    h: zone.h,
+    fontSize: 10,
+    italic: true,
+    color: COLORS.GREY,
+    align: 'left',
+    valign: 'middle',
+    wrap: true,
+  });
+}
+
+/**
  * Barre de progression fine intégrée au bandeau d'en-tête : matérialise
  * l'avancement dans la présentation (curseur rempli jusqu'à la slide courante)
  * et affiche « n / total » juste en dessous, pour que le jury et l'étudiant
@@ -318,7 +343,7 @@ function ajouterPuces(slide, puces, zone) {
  * puces d'analyse. Jamais un simple bloc de texte : on identifie l'entreprise
  * d'un coup d'œil avant de lire.
  */
-function addExempleSlide(pres, item, showProblem, problematique, progress, logo) {
+function addExempleSlide(pres, item, showProblem, problematique, progress, logo, transition) {
   const slide = pres.addSlide();
   slide.background = { color: COLORS.WHITE };
   if (showProblem && problematique) slide.problematiqueTexte = problematique;
@@ -507,12 +532,13 @@ function addExempleSlide(pres, item, showProblem, problematique, progress, logo)
     ajouterPuces(slide, puces, { x: 0.55, y: bodyY, w: LAYOUT_W - 1.1, h: bodyH, fontSize: 14 });
   }
 
+  addTransition(slide, transition, showProblem && problematique);
   if (item.notes_orateur) slide.addNotes(String(item.notes_orateur).trim());
   return slide;
 }
 
 /** Slide de contenu standard (bandeau titre + puces + notes orateur). */
-function addContentSlide(pres, item, showProblem, problematique, progress) {
+function addContentSlide(pres, item, showProblem, problematique, progress, transition) {
   const slide = pres.addSlide();
   slide.background = { color: COLORS.WHITE };
   if (showProblem && problematique) slide.problematiqueTexte = problematique;
@@ -556,8 +582,9 @@ function addContentSlide(pres, item, showProblem, problematique, progress) {
     .map(cleanBullet)
     .filter(Boolean);
 
-  // Zone de texte réduite quand la problématique occupe le pied de slide.
-  const bodyH = showProblem && problematique ? LAYOUT_H - 3.1 : LAYOUT_H - 2.2;
+  // Zone de texte réduite quand la problématique occupe le pied de slide, et
+  // laissée libre en bas pour la phrase de transition (ligne directrice).
+  const bodyH = showProblem && problematique ? LAYOUT_H - 3.1 : LAYOUT_H - 3.0;
   if (puces.length > 0) {
     ajouterPuces(slide, puces, {
       x: 0.55,
@@ -578,6 +605,7 @@ function addContentSlide(pres, item, showProblem, problematique, progress) {
     });
   }
 
+  addTransition(slide, transition, showProblem && problematique);
   if (item.notes_orateur) {
     slide.addNotes(String(item.notes_orateur).trim());
   }
@@ -625,9 +653,10 @@ async function buildPptx(session) {
     footerIndex += 1;
     const showProblem = i >= showProblemAfter;
     const progress = { index: footerIndex, total };
+    const transition = phraseTransition(item);
     const slide = isExempleEntreprise(item)
-      ? addExempleSlide(pres, item, showProblem, problematique, progress, logos.get(i) || null)
-      : addContentSlide(pres, item, showProblem, problematique, progress);
+      ? addExempleSlide(pres, item, showProblem, problematique, progress, logos.get(i) || null, transition)
+      : addContentSlide(pres, item, showProblem, problematique, progress, transition);
     addFooter(slide, showProblem);
   });
 
@@ -646,10 +675,17 @@ async function buildPptx(session) {
       conclusionItem.puces.push(`La démonstration a répondu à : « ${problematique} ».`);
     }
     const withProblemFooter = Boolean(problematique);
-    const slide = addContentSlide(pres, conclusionItem, withProblemFooter, problematique, {
-      index: footerIndex,
-      total,
-    });
+    const slide = addContentSlide(
+      pres,
+      conclusionItem,
+      withProblemFooter,
+      problematique,
+      {
+        index: footerIndex,
+        total,
+      },
+      "C'est ici que s'arrête ma démonstration — je vous remercie de votre attention"
+    );
     addFooter(slide, withProblemFooter);
   }
 
