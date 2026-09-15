@@ -6,7 +6,7 @@ import { useSettings } from '../settings.jsx';
 /**
  * Glossaire personnel — cumul des termes & acronymes définis à l'étape
  * « Glossaire » des sessions de l'utilisateur connecté (dédoublonnés).
- * Servent de fiches de révision, consultables à tout moment.
+ * Rangement par thème (sections repliables) pour retrouver vite un terme.
  */
 export default function GlossaryPage() {
   const { t } = useSettings();
@@ -15,6 +15,7 @@ export default function GlossaryPage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
   const [query, setQuery] = useState('');
+  const [collapsed, setCollapsed] = useState({});
 
   const load = useCallback(async () => {
     try {
@@ -40,9 +41,29 @@ export default function GlossaryPage() {
     return termes.filter(
       (e) =>
         String(e.terme || '').toLowerCase().includes(q) ||
-        String(e.definition || '').toLowerCase().includes(q)
+        String(e.definition || '').toLowerCase().includes(q) ||
+        String(e.theme || '').toLowerCase().includes(q)
     );
   }, [termes, query]);
+
+  // Regroupement par thème, dans l'ordre alphabétique ; « Autres » en dernier.
+  const groupes = useMemo(() => {
+    const map = new Map();
+    for (const terme of filtered) {
+      const label = String(terme.theme || '').trim();
+      const key = label.toLowerCase() || '__autres__';
+      if (!map.has(key)) map.set(key, { key, label, termes: [] });
+      map.get(key).termes.push(terme);
+    }
+    return Array.from(map.values()).sort((a, b) => {
+      if (!a.label) return 1;
+      if (!b.label) return -1;
+      return a.label.localeCompare(b.label, 'fr', { sensitivity: 'base' });
+    });
+  }, [filtered]);
+
+  const searching = Boolean(query.trim());
+  const isOpen = (key) => (searching ? true : !collapsed[key]);
 
   return (
     <div>
@@ -86,31 +107,59 @@ export default function GlossaryPage() {
         </div>
       ) : null}
 
-      {!loading && filtered.length > 0 ? (
-        <div className="glossary-list">
-          {filtered.map((entry) => (
-            <article key={entry.terme} className="obj-card">
-              <div className="obj-card-title glossary-term">{entry.terme}</div>
-              <p className="glossary-def">
-                {entry.definition || t('glossary.noDefinition')}
-              </p>
-              {Array.isArray(entry.sessions) && entry.sessions.length ? (
-                <p className="muted glossary-src">
-                  {entry.sessions.length === 1
-                    ? t('glossary.fromSession')
-                    : t('glossary.fromSessions').replace('{n}', String(entry.sessions.length))}{' '}
-                  {entry.sessions.map((s, i) => (
-                    <React.Fragment key={s._id}>
-                      {i > 0 ? ' · ' : null}
-                      <Link to={`/session/${s._id}`} title={s.theme || s.titre}>
-                        {s.titre}
-                      </Link>
-                    </React.Fragment>
-                  ))}
-                </p>
-              ) : null}
-            </article>
-          ))}
+      {!loading && !error && groupes.length > 0 ? (
+        <div className="glossary-groups">
+          {groupes.map((groupe) => {
+            const open = isOpen(groupe.key);
+            return (
+              <section key={groupe.key} className="glossary-group">
+                <button
+                  type="button"
+                  className="glossary-group-head"
+                  onClick={() =>
+                    setCollapsed((prev) => ({ ...prev, [groupe.key]: !prev[groupe.key] }))
+                  }
+                  aria-expanded={open}
+                >
+                  <span className={`glossary-caret${open ? ' is-open' : ''}`} aria-hidden="true" />
+                  <span className="glossary-group-title">
+                    {groupe.label || t('glossary.otherTheme')}
+                  </span>
+                  <span className="badge badge-done glossary-group-count">
+                    {t('glossary.groupCount').replace('{n}', String(groupe.termes.length))}
+                  </span>
+                </button>
+
+                {open ? (
+                  <div className="glossary-list">
+                    {groupe.termes.map((entry) => (
+                      <article key={entry.terme} className="obj-card">
+                        <div className="obj-card-title glossary-term">{entry.terme}</div>
+                        <p className="glossary-def">
+                          {entry.definition || t('glossary.noDefinition')}
+                        </p>
+                        {Array.isArray(entry.sessions) && entry.sessions.length ? (
+                          <p className="muted glossary-src">
+                            {entry.sessions.length === 1
+                              ? t('glossary.fromSession')
+                              : t('glossary.fromSessions').replace('{n}', String(entry.sessions.length))}{' '}
+                            {entry.sessions.map((s, i) => (
+                              <React.Fragment key={s._id}>
+                                {i > 0 ? ' · ' : null}
+                                <Link to={`/session/${s._id}`} title={s.theme || s.titre}>
+                                  {s.titre}
+                                </Link>
+                              </React.Fragment>
+                            ))}
+                          </p>
+                        ) : null}
+                      </article>
+                    ))}
+                  </div>
+                ) : null}
+              </section>
+            );
+          })}
         </div>
       ) : null}
     </div>

@@ -965,6 +965,50 @@ button .spin {
   flex-direction: column;
   gap: 10px;
 }
+.glossary-groups {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.glossary-group-head {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  width: 100%;
+  padding: 10px 14px;
+  background: var(--cesi-lighter);
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  cursor: pointer;
+  text-align: left;
+}
+.glossary-group-head:hover {
+  border-color: var(--cesi-primary);
+}
+.glossary-group-title {
+  flex: 1 1 auto;
+  font-weight: 700;
+  color: var(--cesi-primary);
+}
+.glossary-group-count {
+  flex: 0 0 auto;
+}
+.glossary-caret {
+  flex: 0 0 auto;
+  width: 0;
+  height: 0;
+  border-left: 5px solid currentColor;
+  border-top: 4px solid transparent;
+  border-bottom: 4px solid transparent;
+  transition: transform 0.15s ease;
+  color: var(--ink-soft);
+}
+.glossary-caret.is-open {
+  transform: rotate(90deg);
+}
+.glossary-group .glossary-list {
+  margin-top: 10px;
+}
 .glossary-list .obj-card {
   margin: 0;
 }

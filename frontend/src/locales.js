@@ -247,6 +247,8 @@ export const FR = {
     'Tous les termes & acronymes définis dans les glossaires de vos sessions (étape Glossaire), cumulés et sans doublon : de quoi réviser à tout moment.',
   'glossary.searchPlaceholder': 'Rechercher un terme ou une définition…',
   'glossary.count': '{n} terme(s)',
+  'glossary.groupCount': '{n} terme(s)',
+  'glossary.otherTheme': 'Autres termes',
   'glossary.loading': 'Chargement du glossaire…',
   'glossary.error': 'Impossible de charger le glossaire.',
   'glossary.empty':
@@ -534,6 +536,8 @@ export const EN = {
     'Every term & acronym defined in the glossaries of your sessions (Glossary step), merged with no duplicates: handy for reviewing anytime.',
   'glossary.searchPlaceholder': 'Search a term or a definition…',
   'glossary.count': '{n} term(s)',
+  'glossary.groupCount': '{n} term(s)',
+  'glossary.otherTheme': 'Other terms',
   'glossary.loading': 'Loading the glossary…',
   'glossary.error': 'Unable to load the glossary.',
   'glossary.empty':

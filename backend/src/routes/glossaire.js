@@ -15,6 +15,14 @@ function cleanTerme(raw) {
     .trim();
 }
 
+/** Clé de regroupement : insensible à la casse et aux espaces superflus. */
+function themeKey(raw) {
+  return String(raw || '')
+    .replace(/\s+/g, ' ')
+    .trim()
+    .toLowerCase();
+}
+
 // GET /api/glossaire — glossaire de révision propre à l'utilisateur connecté.
 // Les termes proviennent des glossaires générés à l'étape « Glossaire » de ses
 // sessions (données déjà validées : terme + définition courte). Chaque terme
@@ -47,10 +55,14 @@ router.get(
         const terme = cleanTerme(item && item.terme);
         if (!terme) continue;
 
+        // Thème de rattachement porté par le terme lui-même (2 à 4 mots) ; à
+        // défaut seulement, on retombe sur le thème de la session.
+        const theme = cleanTerme(item && item.theme) || sessionRef.theme;
+
         const key = terme.toLowerCase();
         let entry = byKey.get(key);
         if (!entry) {
-          entry = { terme, definition: '', sessions: [] };
+          entry = { terme, definition: '', sessions: [], themes: new Map() };
           byKey.set(key, entry);
         }
         // Définition retenue : celle de la session la plus récente ; sinon on
@@ -58,6 +70,13 @@ router.get(
         if (!entry.definition) {
           const definition = String(item && item.definition || '').trim();
           if (definition) entry.definition = definition;
+        }
+        // Thèmes de rattachement : compte des sessions par thème.
+        const tKey = themeKey(theme);
+        if (tKey) {
+          const current = entry.themes.get(tKey);
+          if (current) current.count += 1;
+          else entry.themes.set(tKey, { theme, count: 1 });
         }
         // Dédoublonnage des références de session pour ce terme.
         if (!entry.sessions.some((s) => s._id === sessionRef._id)) {
@@ -67,15 +86,41 @@ router.get(
     }
 
     const termes = Array.from(byKey.values())
-      .map((entry) => ({
-        terme: entry.terme,
-        definition: entry.definition,
-        occurrence: entry.sessions.length,
-        sessions: entry.sessions,
-      }))
+      .map((entry) => {
+        // Thème dominant : celui auquel le terme est le plus souvent rattaché.
+        let theme = '';
+        let best = 0;
+        for (const value of entry.themes.values()) {
+          if (value.count > best) {
+            best = value.count;
+            theme = value.theme;
+          }
+        }
+        return {
+          terme: entry.terme,
+          definition: entry.definition,
+          theme,
+          occurrence: entry.sessions.length,
+          sessions: entry.sessions,
+        };
+      })
       .sort((a, b) => a.terme.localeCompare(b.terme, 'fr', { sensitivity: 'base' }));
 
-    res.json({ termes, total: termes.length });
+    // Regroupement par thème pour un parcours rapide : les termes sans thème
+    // exploitable sont regroupés sous une clé vide (affichée « Autres »).
+    const groupesMap = new Map();
+    for (const terme of termes) {
+      const key = themeKey(terme.theme);
+      if (!groupesMap.has(key)) groupesMap.set(key, { theme: terme.theme, termes: [] });
+      groupesMap.get(key).termes.push(terme);
+    }
+    const groupes = Array.from(groupesMap.values()).sort((a, b) => {
+      if (!a.theme) return 1; // « Autres » toujours en dernier.
+      if (!b.theme) return -1;
+      return a.theme.localeCompare(b.theme, 'fr', { sensitivity: 'base' });
+    });
+
+    res.json({ groupes, termes, total: termes.length });
   })
 );
 
