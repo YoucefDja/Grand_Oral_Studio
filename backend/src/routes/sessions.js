@@ -457,7 +457,9 @@ router.get(
       '',
     ].join('\n');
 
-    const fileName = 'support-etape-6-generation-pptx-claude.md';
+    const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+    const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
+    const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-support-claude.md`;
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.setHeader(
       'Content-Disposition',
