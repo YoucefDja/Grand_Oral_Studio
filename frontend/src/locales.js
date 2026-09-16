@@ -185,6 +185,11 @@ export const FR = {
   'steps.claudePptxHint':
     'Ce fichier contient la charte visuelle complète (jaune CESI #F2D934) : Claude Desktop fabrique directement le .pptx, sans réimport. Il récupère le logo CESI dans les fichiers de votre projet Claude.',
   'steps.claudeJsonLabel': 'JSON renvoyé par Claude (objet avec une clé "slides")',
+  'steps.gammaExportPrompt': '⬇ Exporter le .md « Gamma génère la présentation »',
+  'steps.gammaHint':
+    'Ce fichier contient la charte CESI, la posture de vulgarisation managériale et le squelette de texte : collez-le dans Gamma (mode « Coller du texte ») et appliquez les couleurs indiquées. Aucune image IA : uniquement formes et frises sobres.',
+  'steps.gammaPromptDownloaded':
+    'Prompt téléchargé : {file} — collez-le dans Gamma (mode « Coller du texte »).',
   'steps.importing': 'Validation…',
   'steps.importValidate': 'Importer et valider le support',
   'steps.claudeImportSuccess':
@@ -474,6 +479,11 @@ export const EN = {
   'steps.claudePptxHint':
     'This file contains the full visual charter (CESI yellow #F2D934): Claude Desktop builds the .pptx directly, with no re-import. It takes the CESI logo from your Claude project files.',
   'steps.claudeJsonLabel': 'JSON returned by Claude (object with a "slides" key)',
+  'steps.gammaExportPrompt': '⬇ Export the ".md — Gamma builds the presentation"',
+  'steps.gammaHint':
+    'This file contains the CESI charter, the managerial plain-language stance and the text skeleton: paste it into Gamma ("Paste text" mode) and apply the listed colours. No AI images: sober shapes and timelines only.',
+  'steps.gammaPromptDownloaded':
+    'Prompt downloaded: {file} — paste it into Gamma ("Paste text" mode).',
   'steps.importing': 'Validating…',
   'steps.importValidate': 'Import and validate the presentation',
   'steps.claudeImportSuccess':

@@ -9,6 +9,10 @@
 const MethodologySection = require('../models/MethodologySection');
 const StepSchemaModel = require('../models/StepSchema');
 const { getThemeVocabulary } = require('./vocabulaire');
+const {
+  CONSIGNES_FOND_VULGARISATION,
+  CONSIGNES_FORME_SUPPORT,
+} = require('./consignesSupport');
 
 // Parcours visible de l'étudiant. La recherche documentaire n'y figure plus :
 // elle est produite automatiquement en arrière-plan (voir HIDDEN_STEPS).
@@ -273,6 +277,8 @@ async function buildStepPrompt(session, stepKey, options = {}) {
   if (stepKey === 'support') {
     parts.push(SUPPORT_STRUCTURE);
     parts.push(SUPPORT_CHARTE_COULEUR);
+    parts.push(CONSIGNES_FOND_VULGARISATION);
+    parts.push(CONSIGNES_FORME_SUPPORT);
   }
 
   if (pourPptxClaude) {

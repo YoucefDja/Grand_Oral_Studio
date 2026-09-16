@@ -64,6 +64,11 @@ inventer d'autres styles, couleurs ou dispositions.
   universitaire, mentions secondaires.
 - Aucune autre couleur, en particulier aucun bleu. Pas de couleurs vives, pas de
   dégradés, pas de cliparts.
+- Images : AUCUNE image générée par l'IA, aucun visuel photoréaliste, aucune
+  photo, aucun clipart. Uniquement des formes simples (rectangles arrondis,
+  cartes, encadrés, badges), des frises, des schémas sobres et des icônes sobres.
+  Le logo réel de l'entreprise (voir slides « Cas d'entreprises ») est la seule
+  image autorisée.
 
 ### PAGE DE TITRE (1re slide — sans numéro de progression)
 
@@ -105,7 +110,9 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
      « Problématique », « Existant », « Chiffres clés », « Cas d'entreprises »,
      « Solutions », « Conclusion ». Le détail va dans les puces et les notes du
      présentateur.
-   - ÉQUILIBRE TECHNIQUE ET VULGARISATION : utilise un vocabulaire RICHE, précis et professionnel, mais simple à comprendre et à maîtriser à l'oral. Explique les référentiels en mots simples. N'accumule pas les termes techniques sur chaque slide : utilise-les avec parcimonie pour ne pas noyer le jury.
+   - ÉQUILIBRE TECHNIQUE ET VULGARISATION : utilise un vocabulaire RICHE, précis et professionnel, mais simple à comprendre et à maîtriser à l'oral. N'accumule pas les termes techniques sur chaque slide : utilise-les avec parcimonie pour ne pas noyer le jury.
+   - SUPPRESSION DU JARGON TECHNIQUE : aucune référence directe aux normes et référentiels complexes (ISO 27031, ISO 22301, NIST, EBIOS, ITIL…) ni aucun acronyme technique posé sans explication. Remplace-les par le vocabulaire managérial et organisationnel : gouvernance, pilotage, tests réguliers, communication de crise, sensibilisation, sauvegarde isolée, plan de communication. Un référentiel ne peut apparaître que s'il est immédiatement traduit en conséquence concrète pour l'organisation.
+   - VULGARISATION ET ARGUMENTATION : chaque point montre la compréhension des ENJEUX (pourquoi c'est critique) et non le fonctionnement technique (comment ça marche). Le fil conducteur est la vulgarisation : un problème réel d'entreprise, puis des solutions pragmatiques.
    - Type de la slide (contexte, enjeux, existant…) : x 13,33 − 2,2 / y 0,14 /
      w 1,8 / h 0,8, corps 10 pt, couleur ${COULEURS.LIGHT}, aligné à droite,
      centré verticalement. Écris-le en minuscules, sans underscore.
@@ -190,10 +197,12 @@ corps particulier :
 ### SLIDES « exemple_entreprise » — RENDU DÉDIÉ OBLIGATOIRE
 
 Ces slides ne suivent PAS le gabarit ci-dessus : elles doivent montrer
-l'entreprise, pas la décrire. Le support ne compte qu'UNE seule slide
-« Cas d'entreprises » (DEUX au maximum en tout) : les cas d'entreprises sont donc
-REGROUPÉS, jamais un cas par slide au-delà de deux slides. Reproduis cette
-disposition :
+l'entreprise, pas la décrire. Elles illustrent CONCRÈTEMENT le problème soulevé
+par la problématique : le cas montre le problème à l'œuvre (ce qui a manqué, ce
+qui a coûté), jamais une fiche descriptive de l'entreprise. Le support ne compte
+qu'UNE seule slide « Cas d'entreprises » (DEUX au maximum en tout) : les cas
+d'entreprises sont donc REGROUPÉS, jamais un cas par slide au-delà de deux
+slides. Reproduis cette disposition :
 
 1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
 2. CARTE ENTREPRISE : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 /
@@ -321,6 +330,14 @@ Vérifie, slide par slide, que :
   ligne par puce (5 lignes et 60 mots maximum), jamais un paragraphe ;
 - aucune slide n'est un bloc de texte brut : au moins une forme, un encadré, un
   schéma ou un visuel structure l'information ;
+- AUCUNE image générée par l'IA, aucun visuel photoréaliste : uniquement des
+  formes, des frises, des schémas sobres et des icônes sobres (plus le logo réel
+  des entreprises citées) ;
+- aucun acronyme ni norme technique complexe (ISO, NIST, EBIOS, ITIL…) n'est
+  affiché sans être traduit en vocabulaire managérial ;
+- les cas d'entreprises illustrent le problème posé par la problématique, et les
+  préconisations y répondent directement (actions humaines, organisationnelles et
+  de gouvernance, structurées avant / pendant / après) ;
 - total EXACTEMENT 20 slides, page de titre comprise (volume imposé, ni plus ni
   moins) : 1 page de titre + 19 slides de contenu, conclusion incluse.
 `.trim();

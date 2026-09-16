@@ -7,6 +7,11 @@ const { generateDeepseek } = require('../services/deepseek');
 const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
 const { buildPptx } = require('../services/pptx');
 const { buildChartePptxClaude } = require('../services/chartePptxClaude');
+const { buildGammaPrompt } = require('../services/charteGamma');
+const {
+  CONSIGNES_FOND_VULGARISATION,
+  CONSIGNES_FORME_SUPPORT,
+} = require('../services/consignesSupport');
 const { assertConformiteSupport } = require('../services/conformiteSupport');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
@@ -447,6 +452,14 @@ router.get(
       '',
       '---',
       '',
+      CONSIGNES_FOND_VULGARISATION,
+      '',
+      '---',
+      '',
+      CONSIGNES_FORME_SUPPORT,
+      '',
+      '---',
+      '',
       '## CONTEXTE ET DONNÉES DE L’ÉTUDIANT',
       '',
       user,
@@ -460,6 +473,69 @@ router.get(
     const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
     const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
     const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-support-claude.md`;
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
+    res.send(md);
+  })
+);
+
+// GET /api/sessions/:id/support-gamma-prompt
+// Exporte un fichier .md destiné à Gamma : l'étudiant le colle dans Gamma
+// (mode « Coller du texte ») pour obtenir directement sa présentation.
+// Comme Gamma ne fabrique pas de .pptx, ce document contient à la fois les
+// consignes de fond (vulgarisation managériale, sans jargon technique), la
+// charte visuelle CESI transposée à Gamma, et le squelette de texte à coller.
+router.get(
+  '/:id/support-gamma-prompt',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    assertGlossaireValide(session, 'support');
+
+    const { system, user } = await buildStepPrompt(session, 'support');
+    const md = [
+      '# Grand Oral Studio — Génération du support dans Gamma',
+      '',
+      '> Colle ce document dans un nouveau chat Gamma (mode « Coller du texte »), puis applique la charte visuelle décrite plus bas. Gamma génère la présentation ; aucun réimport dans l\'application n\'est nécessaire.',
+      '',
+      '---',
+      '',
+      '## CE QUE TU DOIS PRODUIRE',
+      '',
+      "Tu génères une présentation de Grand Oral CESI prête à présenter devant un jury, à partir du contenu ci-dessous. Tu appliques à la lettre : la structure narrative, la posture de fond (vulgarisation managériale, sans jargon technique), les contraintes de forme, puis la charte visuelle Gamma.",
+      '',
+      '---',
+      '',
+      '## INSTRUCTIONS À SUIVRE (méthodologie, glossaire, structure, format du contenu)',
+      '',
+      system,
+      '',
+      '---',
+      '',
+      CONSIGNES_FOND_VULGARISATION,
+      '',
+      '---',
+      '',
+      CONSIGNES_FORME_SUPPORT,
+      '',
+      '---',
+      '',
+      '## CONTEXTE ET DONNÉES DE L\'ÉTUDIANT',
+      '',
+      user,
+      '',
+      '---',
+      '',
+      buildGammaPrompt(),
+      '',
+    ].join('\n');
+
+    const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+    const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
+    const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-support-gamma.md`;
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.setHeader(
       'Content-Disposition',

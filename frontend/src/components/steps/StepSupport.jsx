@@ -44,6 +44,7 @@ function SlideCard({ slide, index, t }) {
 function ClaudeModeCard({ session, onSessionRefresh }) {
   const { t } = useSettings();
   const [exportingPptx, setExportingPptx] = useState(false);
+  const [exportingGamma, setExportingGamma] = useState(false);
   const [json, setJson] = useState('');
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -65,6 +66,24 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       setError(err.message);
     } finally {
       setExportingPptx(false);
+    }
+  }
+
+  async function handleExportGammaPrompt() {
+    setExportingGamma(true);
+    setError(null);
+    setMsg(null);
+    try {
+      const fileName = await downloadSupportPrompt(
+        session._id,
+        'support-etape-6-generation-gamma.md',
+        'support-gamma-prompt'
+      );
+      setMsg(t('steps.gammaPromptDownloaded').replace('{file}', fileName));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExportingGamma(false);
     }
   }
 
@@ -106,9 +125,15 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
             <button type="button" className="btn-ghost" disabled={exportingPptx} onClick={handleExportPptxPrompt}>
               {exportingPptx ? t('steps.preparing') : t('steps.claudeExportPptxPrompt')}
             </button>
+            <button type="button" className="btn-ghost" disabled={exportingGamma} onClick={handleExportGammaPrompt}>
+              {exportingGamma ? t('steps.preparing') : t('steps.gammaExportPrompt')}
+            </button>
           </div>
           <p className="muted" style={{ marginTop: 8 }}>
             {t('steps.claudePptxHint')}
+          </p>
+          <p className="muted" style={{ marginTop: 4 }}>
+            {t('steps.gammaHint')}
           </p>
           <label className="field" style={{ marginTop: 14 }}>
             {t('steps.claudeJsonLabel')}
