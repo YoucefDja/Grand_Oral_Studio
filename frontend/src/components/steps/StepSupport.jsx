@@ -41,12 +41,18 @@ function SlideCard({ slide, index, t }) {
 }
 
 /** Étape de vérification systématique exécutée avant l'export des fichiers Markdown. */
-function VerificationCard({ session }) {
+function VerificationCard({ session, onSessionRefresh }) {
   const { t } = useSettings();
   const [rapport, setRapport] = useState(null);
   const [chargement, setChargement] = useState(false);
   const [erreur, setErreur] = useState(null);
   const [telechargement, setTelechargement] = useState(false);
+  // Correction des points faibles : plan de correction, champ en cours de
+  // traitement, proposition « avant / après » à valider.
+  const [plan, setPlan] = useState(null);
+  const [correctionEnCours, setCorrectionEnCours] = useState(null);
+  const [proposition, setProposition] = useState(null);
+  const [application, setApplication] = useState(false);
 
   const charger = useCallback(async () => {
     if (!session?._id) return;
@@ -54,6 +60,7 @@ function VerificationCard({ session }) {
     setErreur(null);
     try {
       setRapport(await api.get(`/api/sessions/${session._id}/conformite-rapport`));
+      setProposition(null);
     } catch (err) {
       setErreur(err.message);
     } finally {
@@ -76,6 +83,71 @@ function VerificationCard({ session }) {
       setTelechargement(false);
     }
   }
+
+  // Étape 1 : demander à DeepSeek de réécrire le champ fautif. Rien n'est écrit
+  // en base à ce stade — on récupère une proposition à prévisualiser.
+  async function handleProposer(lot) {
+    setCorrectionEnCours(`${lot.etape}::${lot.chemin}`);
+    setErreur(null);
+    setProposition(null);
+    try {
+      const res = await api.post(`/api/sessions/${session._id}/corriger-points-faibles`, {
+        etape: lot.etape,
+        chemin: lot.chemin,
+      });
+      setProposition(res);
+    } catch (err) {
+      setErreur(err.message);
+    } finally {
+      setCorrectionEnCours(null);
+    }
+  }
+
+  // Étape 2 : l'étudiant valide — la correction est écrite en base et les
+  // fichiers Markdown seront renouvelés au prochain export.
+  async function handleAppliquer() {
+    if (!proposition) return;
+    setApplication(true);
+    setErreur(null);
+    try {
+      await api.post(`/api/sessions/${session._id}/corriger-points-faibles`, {
+        etape: proposition.etape,
+        chemin: proposition.chemin,
+        appliquer: true,
+      });
+      setProposition(null);
+      await charger();
+      if (onSessionRefresh) await onSessionRefresh();
+    } catch (err) {
+      setErreur(err.message);
+    } finally {
+      setApplication(false);
+    }
+  }
+
+  // « Tout corriger » : enchaîne les propositions champ par champ, sans rien
+  // écrire tant que l'étudiant n'a pas validé chacune d'elles.
+  async function handlePlanifier() {
+    setCorrectionEnCours('plan');
+    setErreur(null);
+    try {
+      const res = await api.post(`/api/sessions/${session._id}/corriger-points-faibles`, {});
+      setPlan(res.corrections || []);
+      if ((res.corrections || []).length === 0) {
+        setErreur(t('steps.verifCorrigerRien'));
+      }
+    } catch (err) {
+      setErreur(err.message);
+    } finally {
+      setCorrectionEnCours(null);
+    }
+  }
+
+  const afficherValeur = (valeur) => {
+    if (valeur === undefined || valeur === null) return '—';
+    if (typeof valeur === 'string') return valeur;
+    return JSON.stringify(valeur, null, 2);
+  };
 
   const statutLabel = (statut) => {
     if (statut === 'conforme') return t('steps.verifStatutConforme');
@@ -107,7 +179,7 @@ function VerificationCard({ session }) {
               {t('steps.verifScore')} : {rapport.scoreTotal}/{rapport.scoreMax} ({rapport.pourcentage}%)
             </span>
             <span className="badge badge-progress">
-              {rapport.slidesPageDeTitreComprise}/{rapport.volumeCible} {t('steps.slidesUnit')}
+              {rapport.volumeCible} {t('steps.slidesUnit')} {t('steps.verifVolumeCible')}
             </span>
             <button type="button" className="btn-ghost" onClick={charger}>
               {t('steps.verifRefresh')}
@@ -126,7 +198,7 @@ function VerificationCard({ session }) {
             Problématique : « {rapport.problematique || '—'} »
           </p>
 
-          {rapport.pointsFaibles.length || rapport.manquesStructurels?.length ? (
+          {rapport.pointsFaibles.length ? (
             <>
               <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifBlockTitle')}</h3>
               <ul className="ul-value">
@@ -135,18 +207,86 @@ function VerificationCard({ session }) {
                     <strong>{p.critere}</strong> — {p.message}
                   </li>
                 ))}
-                {(rapport.manquesStructurels || []).map((m, i) => (
-                  <li key={`s${i}`}>
-                    <strong>{m.critere || '—'}</strong> — {m.message || m}
-                  </li>
-                ))}
               </ul>
+
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', marginTop: 8 }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={correctionEnCours === 'plan'}
+                  onClick={handlePlanifier}
+                >
+                  {correctionEnCours === 'plan'
+                    ? t('steps.preparing')
+                    : t('steps.verifCorriger')}
+                </button>
+              </div>
+
+              {plan && plan.length ? (
+                <div style={{ marginTop: 10 }}>
+                  <p className="muted" style={{ margin: '0 0 6px' }}>
+                    {t('steps.verifCorrigerIntro')}
+                  </p>
+                  <ul className="ul-value">
+                    {plan.map((lot) => (
+                      <li key={`${lot.etape}::${lot.chemin}`} style={{ marginBottom: 6 }}>
+                        <strong>{lot.libelle}</strong>
+                        <div style={{ marginTop: 4 }}>
+                          <button
+                            type="button"
+                            className="btn-ghost"
+                            disabled={correctionEnCours === `${lot.etape}::${lot.chemin}`}
+                            onClick={() => handleProposer(lot)}
+                          >
+                            {correctionEnCours === `${lot.etape}::${lot.chemin}`
+                              ? t('steps.preparing')
+                              : t('steps.verifCorrigerUn')}
+                          </button>
+                        </div>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              ) : null}
             </>
           ) : (
             <p className="muted" style={{ marginTop: 10 }}>
               {t('steps.verifFilRougeOk')}
             </p>
           )}
+
+          {proposition ? (
+            <div className="card panel" style={{ marginTop: 12, background: 'rgba(0,0,0,.02)' }}>
+              <h3 style={{ fontSize: 14, margin: '0 0 6px' }}>
+                {t('steps.verifAvantApres')} — {proposition.libelle}
+              </h3>
+              <p className="muted" style={{ margin: '0 0 2px', fontWeight: 600 }}>
+                {t('steps.verifAvant')}
+              </p>
+              <pre className="alert alert-info" style={{ whiteSpace: 'pre-wrap', margin: '0 0 8px' }}>
+                {afficherValeur(proposition.avant)}
+              </pre>
+              <p className="muted" style={{ margin: '0 0 2px', fontWeight: 600 }}>
+                {t('steps.verifApres')}
+              </p>
+              <pre className="alert alert-success" style={{ whiteSpace: 'pre-wrap', margin: '0 0 8px' }}>
+                {afficherValeur(proposition.apres)}
+              </pre>
+              <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
+                <button
+                  type="button"
+                  className="btn-primary"
+                  disabled={application}
+                  onClick={handleAppliquer}
+                >
+                  {application ? t('steps.preparing') : t('steps.verifValider')}
+                </button>
+                <button type="button" className="btn-ghost" onClick={() => setProposition(null)}>
+                  {t('steps.verifAnnuler')}
+                </button>
+              </div>
+            </div>
+          ) : null}
 
           <h3 style={{ fontSize: 14, margin: '16px 0 6px' }}>{t('steps.verifCriteria')}</h3>
           {(rapport.blocs || []).map((bloc, bi) => (
@@ -430,7 +570,7 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
           </div>
         )}
       />
-      <VerificationCard session={session} />
+      <VerificationCard session={session} onSessionRefresh={onSessionRefresh} />
       <ClaudeModeCard session={session} onSessionRefresh={onSessionRefresh} />
     </>
   );

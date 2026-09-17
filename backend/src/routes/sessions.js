@@ -27,6 +27,11 @@ const {
   rendreRapportMarkdown,
   rendreEnteteVerification,
 } = require('../services/verificationExport');
+const {
+  planifierCorrections,
+  corrigerChamp,
+  ecrireChemin,
+} = require('../services/correctionPointsFaibles');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -674,6 +679,111 @@ router.get(
       `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
     );
     res.send(md);
+  })
+);
+
+// POST /api/sessions/:id/corriger-points-faibles
+// Le rapport de vérification juge les INTRANTS du Markdown et liste les points
+// faibles. Cette route les rend corrigeables EN PLACE :
+//  - sans body       → renvoie le plan de correction (quels champs, quels points faibles) ;
+//  - body { champ }  → DeepSeek réécrit CE champ seulement et renvoie une
+//                      proposition « avant / après », SANS RIEN ÉCRIRE en base ;
+//  - body { champ, appliquer: true } → la proposition est écrite en base, le
+//                      champ est marqué modifié et les Markdown sont donc
+//                      renouvelés au prochain export.
+// Les étapes aval ne sont jamais invalidées : seule la valeur du champ change.
+router.post(
+  '/:id/corriger-points-faibles',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+
+    const rapport = await construireRapportVerification(session);
+    const etapeDemandee = String(req.body?.etape || '').trim();
+    const cheminDemande = String(req.body?.chemin || '').trim();
+
+    // 1) Aucun champ visé : on renvoie le plan de correction.
+    if (!etapeDemandee || !cheminDemande) {
+      const corrections = planifierCorrections(rapport.pointsFaibles);
+      return res.json({
+        rapport,
+        corrections,
+        // Points faibles qu'aucune règle automatique ne sait réécrire (critères
+        // oraux, par exemple) : ils restent affichés, sans promesse de correction.
+        nonCorrigeables: rapport.pointsFaibles.filter((pf) => {
+          return !corrections.some((c) => c.codes.includes(pf.code));
+        }),
+      });
+    }
+
+    // 2) Un champ est visé : on vérifie qu'il correspond bien à un lot planifié
+    // (on ne laisse pas le client réécrire un champ arbitraire de la session).
+    const corrections = planifierCorrections(rapport.pointsFaibles);
+    const lot = corrections.find(
+      (c) => c.etape === etapeDemandee && c.chemin === cheminDemande
+    );
+    if (!lot) {
+      throw httpError(
+        400,
+        `Aucun point faible du rapport ne porte sur le champ « ${cheminDemande} » de l'étape « ${etapeDemandee} ». Relance la vérification avant export.`
+      );
+    }
+
+    const proposition = await corrigerChamp({
+      session,
+      etape: lot.etape,
+      chemin: lot.chemin,
+      pointsFaibles: lot.codes.map((code, i) => ({ code, message: lot.messages[i] })),
+    });
+
+    // 3) Prévisualisation seule : rien n'est écrit tant que l'étudiant n'a pas
+    // validé explicitement (appliquer: true).
+    if (req.body?.appliquer !== true) {
+      return res.json({
+        applique: false,
+        etape: lot.etape,
+        chemin: lot.chemin,
+        libelle: lot.libelle,
+        codes: lot.codes,
+        avant: proposition.avant,
+        apres: proposition.apres,
+      });
+    }
+
+    // 4) Validation : la correction ne doit pas vider le champ (le Markdown se
+    // dégraderait au lieu de s'améliorer).
+    const vide =
+      proposition.apres === undefined ||
+      proposition.apres === null ||
+      (typeof proposition.apres === 'string' && !proposition.apres.trim()) ||
+      (Array.isArray(proposition.apres) && proposition.apres.length === 0);
+    if (vide) {
+      throw httpError(
+        502,
+        `La correction proposée pour « ${cheminDemande} » est vide : elle n'a pas été appliquée. Réessayez ou corrige le champ à la main dans l'étape concernée.`
+      );
+    }
+
+    ecrireChemin(session.data[lot.etape], lot.chemin, proposition.apres);
+    session.markModified('data');
+    // Le fil rouge vit aussi à la racine de la session : on le tient à jour.
+    if (lot.etape === 'probleme' && lot.chemin === 'ligne_directrice') {
+      session.ligneDirectrice = String(proposition.apres).trim();
+    }
+    await session.save();
+
+    // Rapport recalculé après correction : l'étudiant voit immédiatement le
+    // critère repasser au vert, sans relancer la vérification à la main.
+    const rapportApres = await construireRapportVerification(session);
+    res.json({
+      applique: true,
+      etape: lot.etape,
+      chemin: lot.chemin,
+      avant: proposition.avant,
+      apres: proposition.apres,
+      session,
+      rapport: rapportApres,
+    });
   })
 );
 

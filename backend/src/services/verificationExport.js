@@ -3,7 +3,7 @@
  *
  * Ce module implémente l'étape de contrôle qui s'exécute AVANT toute
  * exportation de fichier Markdown (Claude Desktop, Gamma, Claude Design). Elle
- * répond à quatre exigences produit :
+ * répond à cinq exigences produit :
  *
  * 1. PARCOURS DE LA GRILLE — les 14 critères du jury CESI sont lus depuis la
  *    section `grille_evaluation_cesi` stockée en base (source unique, éditable
@@ -11,18 +11,22 @@
  *    recopié en dur ici.
  *
  * 2. STATUT OBJECTIF PAR CRITÈRE — chaque critère reçoit un statut déterministe
- *    (conforme / partiel / non conforme / non applicable) et un score chiffré,
- *    calculés à partir d'observations vérifiables dans les données de la
- *    session (slides, plan, analyse, glossaire, problématique, ligne
- *    directrice). Aucune appréciation subjective : chaque verdict cite la
- *    preuve qui le fonde.
+ *    (conforme / partiel / non conforme) et un score chiffré, calculés à partir
+ *    d'observations vérifiables dans les INTRANTS du Markdown : analyse,
+ *    problématique, plan, glossaire et recherche. Aucune appréciation
+ *    subjective : chaque verdict cite la preuve qui le fonde.
  *
- * 3. RAPPORT DÉTAILLÉ — le rapport liste chaque critère, son statut, son score
+ * 3. LE JUGEMENT PORTE SUR LE MARKDOWN, PAS SUR LES SLIDES — le fichier
+ *    Markdown est assemblé à partir des étapes amont (voir
+ *    services/promptBuilder.js) et sert ensuite de base à la génération des
+ *    slides, quel que soit l'outil (Gamma, Claude Design, PowerPoint). Les
+ *    slides sont donc un PRODUIT AVAL : les juger à l'export n'aurait aucun
+ *    sens et rendrait la vérification muette. L'observation porte donc
+ *    exclusivement sur les intrants, ceux-là mêmes qui composent le .md.
+ *
+ * 4. RAPPORT DÉTAILLÉ — le rapport liste chaque critère, son statut, son score
  *    et le détail des points faibles, en distinguant les non-conformités
- *    BLOQUANTES (le support ne peut pas partir en export) des avertissements.
- *
- * 4. BLOCAGE DE L'EXPORT — `assertVerificationExport` lève une erreur 400
- *    contenant le rapport lorsque des non-conformités bloquantes subsistent.
+ *    BLOQUANTES (le Markdown ne peut pas partir en export) des avertissements.
  *
  * 5. POINTS FAIBLES À RECORRIGER — le rapport isole explicitement les points
  *    faibles actionnables, en particulier :
@@ -34,21 +38,16 @@
  *        sur la problématique mais sur l'ensemble de la présentation
  *        (entonnoir Contexte → Enjeux → Problématique → Existant → Données →
  *        Cas réels → Solutions → Conclusion, ligne directrice continue).
+ *
+ * Ces points faibles sont corrigeables EN PLACE : la route
+ * `POST /api/sessions/:id/corriger-points-faibles` demande à DeepSeek de
+ * réécrire le champ fautif de l'étape concernée, puis renouvelle les Markdown.
  */
 
 const MethodologySection = require('../models/MethodologySection');
 const { httpError } = require('../utils/httpError');
 const { parserGrille, SECTION_ID } = require('./grilleEvaluation');
-const {
-  detecterManquesSupport,
-  normaliser,
-  texteSlide,
-  typeDe,
-  rempli,
-  aUnVisuelExploitable,
-  detecterOrdreInvalide,
-  VOLUME_CIBLE_TOTAL,
-} = require('./conformiteSupport');
+const { normaliser, VOLUME_CIBLE_TOTAL } = require('./conformiteSupport');
 const { problemeRetenuPourSuite } = require('./promptBuilder');
 
 // ---------------------------------------------------------------------------
@@ -58,9 +57,6 @@ const { problemeRetenuPourSuite } = require('./promptBuilder');
 const SCORE_CONFORME = 1;
 const SCORE_PARTIEL = 0.5;
 const SCORE_NON_CONFORME = 0;
-
-/** Un critère est « non applicable » quand aucune slide n'est exploitable. */
-const STATUT_NON_APPLICABLE = 'non_applicable';
 
 /**
  * Un critère ne peut jamais être noté automatiquement sur sa QUALITÉ
@@ -350,123 +346,203 @@ function diagnostiquerFilRouge(session) {
 }
 
 // ---------------------------------------------------------------------------
-// Observation déterministe du support, critère par critère
+// Observation déterministe des INTRANTS du Markdown, critère par critère
+//
+// Le fichier Markdown exporté (Claude Desktop, Gamma, Claude Design) est
+// assemblé à partir des étapes AMONT de la session — analyse, problématique,
+// plan, glossaire et recherche (voir services/promptBuilder.js). Le support
+// n'est PAS un intrant de l'export : il est produit APRÈS, à partir de ce
+// Markdown, puis réimporté. Juger les slides au moment de l'export n'aurait
+// donc aucun sens et rendrait la vérification muette (tout « non applicable »).
+// C'est pourquoi l'observation porte exclusivement sur les intrants.
 // ---------------------------------------------------------------------------
+
+/** Aplatit récursivement une valeur en texte exploitable par les règles. */
+function aplatir(valeur, profondeur = 0) {
+  if (valeur == null || profondeur > 6) return '';
+  if (typeof valeur === 'string') return valeur;
+  if (typeof valeur === 'number' || typeof valeur === 'boolean') return String(valeur);
+  if (Array.isArray(valeur)) return valeur.map((v) => aplatir(v, profondeur + 1)).join(' \n ');
+  if (typeof valeur === 'object') {
+    return Object.values(valeur).map((v) => aplatir(v, profondeur + 1)).join(' \n ');
+  }
+  return '';
+}
+
+/** Liste sûre : renvoie le tableau ou un tableau vide. */
+function liste(valeur) {
+  return Array.isArray(valeur) ? valeur : [];
+}
+
+/** Texte d'un élément qui peut être une chaîne ou un objet. */
+function texteDe(valeur) {
+  if (typeof valeur === 'string') return valeur;
+  return aplatir(valeur);
+}
 
 /**
  * Contexte d'observation : tout ce dont les règles de critères ont besoin,
- * calculé une seule fois. Renvoie aussi les cartes de règles par critère.
+ * calculé une seule fois sur les intrants du Markdown.
  */
 function observer(session, filRouge) {
   const data = session?.data || {};
-  const slides = Array.isArray(data.support?.slides) ? data.support.slides : [];
-  const textes = slides.map(texteSlide);
-  const types = slides.map(typeDe);
-  const plan = data.plan || {};
   const analyse = data.analyse || {};
-  const recherche = data.recherche || {};
+  const probleme = data.probleme || {};
+  const plan = data.plan || {};
   const glossaire = data.glossaire || {};
+  const recherche = data.recherche || {};
 
-  const aTexte = (regex) => textes.some((t) => regex.test(t));
-  const slidesDe = (predicat) =>
-    slides.filter((slide, i) => predicat(slide, textes[i], types[i]));
-  const aSlideDe = (predicat) => slidesDe(predicat).length > 0;
+  // ---- Textes agrégés par étape (servent aux recherches par motif) ----
+  const texteAnalyse = aplatir(analyse);
+  const texteProbleme = aplatir(probleme);
+  const textePlan = aplatir(plan);
+  const texteGlossaire = aplatir(glossaire);
+  const texteRecherche = aplatir(recherche);
+  const texteAmont = [texteAnalyse, texteProbleme, textePlan, texteGlossaire, texteRecherche].join(' \n ');
 
-  const slidesContexte = slidesDe((_s, _t, type) => type.includes('contexte') || type.includes('context'));
-  const slidesEnjeux = slidesDe((_s, _t, type) => type.includes('enjeux'));
-  const slidesSolutions = slidesDe(
-    (_s, _t, type) => type.includes('solution') || type.includes('preconisation')
+  const aTexte = (regex) => regex.test(texteAmont);
+
+  // ---- Étape analyse ----
+  const motsCles = liste(analyse.mots_cles);
+  const notions = liste(analyse.notions_a_maitriser);
+  const tensionsAnalyse = liste(analyse.tensions);
+  const positionnement = String(analyse.positionnement_strategique || '').trim();
+  const reformulation = String(analyse.reformulation || '').trim();
+
+  // ---- Étape probleme ----
+  const retenu = problemeRetenuPourSuite(probleme);
+  const formulationRetenue = retenu?.formulation_retenue || {};
+  const tensionProbleme = formulationRetenue.tension || {};
+  const justification = String(probleme.justification_recommandation || '').trim();
+
+  // ---- Étape plan ----
+  const sectionsPlan = liste(plan.sections);
+  const filDirecteur = String(plan.fil_directeur || '').trim();
+  const objections = liste(plan.objections_et_reponses);
+  const ouverture = plan.ouverture || {};
+  const dureePlan = Number(plan.duree_totale_minutes || 0);
+  const repartition = plan.repartition_temps || {};
+  const sommeRepartition = Object.values(repartition).reduce(
+    (t, v) => t + (Number(v) || 0),
+    0
   );
-  const slidesConclusion = slidesDe(
-    (_s, texte, type) => type.includes('conclusion') || /conclusion/.test(texte)
+  const questionsJury = liste(recherche.questions_du_jury);
+
+  // ---- Étape glossaire ----
+  const termes = liste(glossaire.termes);
+  const sources = liste(glossaire.sources);
+
+  // ---- Étape recherche (alimente le fond du Markdown) ----
+  const referencesTheoriques = liste(recherche.references_theoriques);
+  const exemplesEntreprises = liste(recherche.exemples_entreprises);
+  const donneesARech = liste(recherche.donnees_a_rechercher);
+  const organismes = liste(recherche.organismes_exemples);
+
+  // Cas d'entreprise réellement sourcés + au moins un échec ou une limite.
+  const casSources = exemplesEntreprises.filter(
+    (c) => String(c?.source || '').trim() !== '' && String(c?.nom || '').trim() !== ''
   );
-  const indexConclusion = types.findIndex(
-    (type, i) => type.includes('conclusion') || /conclusion/.test(textes[i])
+  const casEchec = exemplesEntreprises.filter((c) =>
+    /echec|limite/i.test(String(c?.issue || ''))
   );
 
-  const slidesCas = slidesDe(
-    (_s, texte, type) => type.includes('exempleentreprise') || /cas d.entreprise|cas reel/.test(texte)
-  );
+  // Un exemple d'entreprise est « sourcé et daté » si sa source est renseignée.
+  const aEchecOuLimite =
+    casEchec.length > 0 ||
+    /(echec|limite|contre-exemple|insuffisan|defaillance|faiblesse)/.test(texteRecherche);
 
-  const slidesChiffrees = slides.filter((slide, i) => {
-    if (aUnVisuelExploitable(slide)) {
-      const donnees = Array.isArray(slide.visuel.donnees) ? slide.visuel.donnees : [];
-      if (donnees.some((d) => d && typeof d === 'object' && ['valeur', 'valeur_a', 'valeur_b'].some((c) => typeof d[c] === 'number'))) {
-        return true;
-      }
+  // ---- Chronologie du plan (méthode Armelle : entonnoir) ----
+  // L'ordre attendu est porté par les intitulés de sections : Contexte → Enjeux
+  // → Existant → Données → Cas réels → Solutions → Conclusion.
+  const ORDRE_ATTENDU = [
+    { cle: 'contexte', motif: /contexte|introduction|accroche|presentation du sujet/i },
+    { cle: 'enjeux', motif: /enjeu/i },
+    { cle: 'problematique', motif: /problematique|problème|question centrale/i },
+    { cle: 'existant', motif: /existant|etat de l.art|concepts|theori|theorique/i },
+    { cle: 'donnees', motif: /donnee|chiffre|statisti|marche/i },
+    { cle: 'cas', motif: /cas|benchmark|entreprise|exemple/i },
+    { cle: 'solutions', motif: /solution|preconisation|recommandation|reponse/i },
+    { cle: 'conclusion', motif: /conclusion|ouverture|synthese/i },
+  ];
+  const rangsSections = sectionsPlan
+    .map((section, i) => {
+      const intitule = texteDe(section?.partie || section?.titre || section?.role || '');
+      const trouve = ORDRE_ATTENDU.findIndex((o) => o.motif.test(intitule));
+      return trouve === -1 ? null : { rang: trouve, index: i, intitule };
+    })
+    .filter(Boolean);
+  let ordreInvalide = null;
+  for (let i = 1; i < rangsSections.length; i += 1) {
+    if (rangsSections[i].rang < rangsSections[i - 1].rang) {
+      ordreInvalide = { avant: rangsSections[i - 1].intitule, apres: rangsSections[i].intitule };
+      break;
     }
-    return /\d+([.,]\d+)?\s*%/.test(textes[i]) || /(chiffre|donnee|pourcent|enquete|etude|barometre|sondage|statistique)/.test(textes[i]);
-  });
+  }
 
-  const slidesAvecSource = slides.filter(
-    (slide, i) => /source\s*:/.test(textes[i]) || (slide.visuel && /source/i.test(String(slide.visuel.source || '')))
-  );
+  // ---- Couverture TOHEE dans les enjeux produits par l'analyse ----
+  const texteEnjeux = [texteAnalyse, textePlan].join(' \n ');
+  const dimensionsTohee = [
+    /techni/i,
+    /organisa/i,
+    /humain|social|\brh\b|manager|equipe/i,
+    /economi|cout|budget|financier|rentab/i,
+    /environnement|ecolog|\brse\b|carbone|climat|durable/i,
+  ];
+  const dimensionsCouvertes = dimensionsTohee.filter((r) => r.test(texteEnjeux)).length;
 
-  const surcharges = slides.filter((s) => Array.isArray(s.puces) && s.puces.length > 6);
-  const vides = slides.filter(
-    (s) => (!Array.isArray(s.puces) || s.puces.length === 0) && !String(s.notes_orateur || '').trim()
-  );
-  const sansTransition = slides.filter(
-    (slide, i) => !/conclusion/.test(types[i]) && !String(slide.transition || '').trim()
-  );
-  const avecVisuel = slides.filter(aUnVisuelExploitable);
-  const aForme = slides.some((s) => typeof s.forme_visuelle === 'string' && s.forme_visuelle.trim() !== '');
-
-  const notionsAnalyse = Array.isArray(analyse.notions_a_maitriser) ? analyse.notions_a_maitriser : [];
-  const refsRecherche = Array.isArray(recherche.references_theoriques) ? recherche.references_theoriques : [];
-  const aReferenceNommee = aTexte(/(modele|theorie|theorique|norme|referentiel|cadre\s|auteur|concept)/);
-
-  const aExempleEntreprise = slidesCas.length > 0 || aSlideDe(
-    (_s, texte, type) =>
-      type.includes('exemple') ||
-      /(entreprise|cas\s|societe|groupe|firme|start-?up|pme|eti|grand\s*compte|multinationale)/.test(texte)
-  );
-  const aEchecOuLimite = aTexte(/(echec|limite|contre-exemple|a echoue|n a pas suffi|insuffisan|ratage|defaillance|faiblesse)/);
-
-  const questionOuverture = (() => {
-    if (indexConclusion === -1) return false;
-    const t = textes[indexConclusion];
-    return t.includes('?') && /(ouverture|avenir|perspective|demain|futur|prospective|a terme)/.test(t);
-  })();
-
-  const ordreInvalide = detecterOrdreInvalide(types);
-  const conclusionsMultiples = slidesConclusion.length > 1;
-  const estimationTemps = Math.round(slides.length * 1.25); // ~1 min 15 par slide
-  const tempsPlan = Number(plan.duree_minutes || plan.duree || 0);
+  // ---- Volumétrie : le plan doit tenir dans le temps imparti ----
+  const minutesSections = sectionsPlan.reduce((t, s) => t + (Number(s?.minutes) || 0), 0);
+  const tempsPlan = dureePlan || minutesSections;
+  // Le support issu du Markdown compte 25 slides page de titre comprise
+  // (~1 min 15 par slide) : on vérifie la compatibilité avec le temps du plan.
+  const estimationTemps = Math.round(VOLUME_CIBLE_TOTAL * 1.25);
 
   return {
-    slides,
-    textes,
-    types,
-    plan,
+    // données brutes
     analyse,
-    recherche,
+    probleme,
+    plan,
     glossaire,
-    // compteurs
-    nbSlides: slides.length,
-    slidesContexte,
-    slidesEnjeux,
-    slidesSolutions,
-    slidesConclusion,
-    slidesCas,
-    slidesChiffrees,
-    slidesAvecSource,
-    surcharges,
-    vides,
-    sansTransition,
-    avecVisuel,
-    aForme,
-    notionsAnalyse,
-    refsRecherche,
-    aReferenceNommee,
-    aExempleEntreprise,
-    aEchecOuLimite,
-    questionOuverture,
-    ordreInvalide,
-    conclusionsMultiples,
-    estimationTemps,
-    tempsPlan,
+    recherche,
     filRouge,
+    // textes agrégés
+    texteAnalyse,
+    texteProbleme,
+    textePlan,
+    texteGlossaire,
+    texteRecherche,
+    texteAmont,
+    aTexte,
+    // compteurs et listes exploitables
+    notions,
+    motsCles,
+    tensionsAnalyse,
+    positionnement,
+    reformulation,
+    formulationRetenue,
+    tensionProbleme,
+    justification,
+    sectionsPlan,
+    filDirecteur,
+    objections,
+    ouverture,
+    dureePlan,
+    repartition,
+    sommeRepartition,
+    questionsJury,
+    termes,
+    sources,
+    referencesTheoriques,
+    exemplesEntreprises,
+    casSources,
+    casEchec,
+    donneesARech,
+    organismes,
+    aEchecOuLimite,
+    dimensionsCouvertes,
+    ordreInvalide,
+    tempsPlan,
+    estimationTemps,
   };
 }
 
@@ -487,124 +563,131 @@ function evaluerCritere(id, obs) {
   switch (id) {
     // ---- BLOC 1 : fond ----
     case '1.1': {
-      if (obs.slidesContexte.length === 0) {
-        faible('1.1-contexte', 'Aucune slide « Contexte » : le jury évalue la présentation du sujet et son positionnement stratégique.');
+      if (!obs.reformulation && !obs.positionnement && !obs.filRouge.problematique) {
+        faible('1.1-contexte', "Aucune reformulation du sujet ni positionnement stratégique (étape Analyse) : le Markdown ne peut pas présenter le contexte attendu par le jury.");
       } else {
-        force(`${obs.slidesContexte.length} slide(s) de contexte.`);
-        if (obs.slidesAvecSource.length === 0) {
-          faible('1.1-source', 'Aucune source citée (« Source : … ») : les données du contexte ne sont pas attribuées.');
+        if (obs.positionnement) {
+          force('Positionnement stratégique du sujet renseigné dans l’analyse.');
         } else {
-          force(`${obs.slidesAvecSource.length} slide(s) citent une source.`);
+          faible('1.1-positionnement', "Le positionnement stratégique du sujet (en quoi il compte pour l’entreprise et pour qui) n’est pas renseigné : le critère 1.1 du jury porte précisément dessus.");
+        }
+        if (obs.motsCles.length === 0) {
+          faible('1.1-mots-cles', "Aucun mot clé du sujet défini dans l’analyse : le Markdown n’a pas de vocabulaire d’ancrage pour l’introduction.");
+        } else {
+          force(`${obs.motsCles.length} mot(s) clé(s) défini(s).`);
         }
       }
       break;
     }
 
     case '1.2': {
-      if (obs.slidesEnjeux.length === 0) {
-        faible('1.2-enjeux', 'Aucune slide « Enjeux » : les dimensions TOHEE (technique, organisationnelle, humaine, économique, environnementale) attendues par le jury ne sont pas exposées.');
+      if (obs.dimensionsCouvertes < 3) {
+        faible('1.2-enjeux', `Seulement ${obs.dimensionsCouvertes} dimension(s) TOHEE sur 5 sont identifiables dans l’analyse et le plan : le jury attend un ancrage sur les cinq dimensions (Technique, Organisationnel, Humain, Économique, Environnemental).`);
       } else {
-        force(`${obs.slidesEnjeux.length} slide(s) d’enjeux.`);
-        const texteEnjeux = obs.slidesEnjeux
-          .flatMap((s) => (Array.isArray(s.puces) ? s.puces : []))
-          .join(' ');
-        const dimensions = [
-          /techni/i, /organisa/i, /humain|social|rh/i, /economi|co[uû]t|budget/i, /environnement|ecolog|rse|carbone/i,
-        ];
-        const couvertes = dimensions.filter((r) => r.test(texteEnjeux)).length;
-        if (couvertes < 3) {
-          faible('1.2-tohee', `Seulement ${couvertes} dimension(s) TOHEE sur 5 sont identifiables dans les enjeux : le jury attend un ancrage sur les cinq dimensions.`);
-        } else {
-          force(`${couvertes} dimensions TOHEE sur 5 identifiables.`);
-        }
+        force(`${obs.dimensionsCouvertes} dimensions TOHEE sur 5 identifiables.`);
+      }
+      if (obs.tensionsAnalyse.length === 0) {
+        faible('1.2-tensions', "Aucune tension relevée dans l’analyse : les enjeux se lisent comme un constat, pas comme ce qui se joue réellement pour l’entreprise.");
+      } else {
+        force(`${obs.tensionsAnalyse.length} tension(s) identifiée(s).`);
       }
       break;
     }
 
     case '1.3': {
-      if (obs.notionsAnalyse.length === 0 && obs.refsRecherche.length === 0 && !obs.aReferenceNommee) {
-        faible('1.3-concepts', 'Aucun concept théorique nommé (modèle, norme, auteur, cadre) : la rigueur académique attendue n’est pas démontrée.');
+      const total = obs.notions.length + obs.referencesTheoriques.length;
+      if (total === 0) {
+        faible('1.3-concepts', "Aucun concept théorique nommé (modèle, norme, auteur, cadre) ni dans l’analyse ni dans la recherche : la rigueur académique attendue n’est pas démontrée.");
       } else {
-        const total = obs.notionsAnalyse.length + obs.refsRecherche.length;
-        force(total > 0 ? `${total} notion(s) et référence(s) académiques mobilisées.` : 'Des concepts théoriques nommés apparaissent sur les slides.');
+        force(`${total} notion(s) et référence(s) académiques mobilisées.`);
+        const notionsAvecRef = obs.notions.filter(
+          (n) => String(n?.reference_theorique || '').trim() !== ''
+        );
+        if (notionsAvecRef.length === 0 && obs.referencesTheoriques.length === 0) {
+          faible('1.3-references', "Les notions sont listées sans référence théorique associée : le jury attend des modèles, normes ou auteurs explicitement nommés.");
+        } else {
+          force(`${notionsAvecRef.length + obs.referencesTheoriques.length} référence(s) théorique(s) nommée(s).`);
+        }
       }
       break;
     }
 
     case '1.4': {
-      if (!obs.aExempleEntreprise) {
-        faible('1.4-benchmark', 'Aucun exemple d’entreprise réelle identifié : le benchmark exigé par le jury est absent.');
+      if (obs.exemplesEntreprises.length === 0) {
+        faible('1.4-benchmark', "Aucun exemple d’entreprise réelle dans la recherche documentaire : le benchmark exigé par le jury est absent du Markdown.");
       } else {
-        force(`${obs.slidesCas.length} slide(s) de cas d’entreprise.`);
-        if (obs.slidesCas.length === 1) {
-          faible('1.4-regroupe', 'Les cas d’entreprises sont regroupés sur une seule slide : chaque entreprise doit disposer de sa propre slide, présentée de façon distincte et individualisée.');
+        force(`${obs.exemplesEntreprises.length} cas d’entreprise(s) identifié(s).`);
+        if (obs.casSources.length < obs.exemplesEntreprises.length) {
+          faible('1.4-source-cas', `${obs.exemplesEntreprises.length - obs.casSources.length} cas d’entreprise ne portent pas de source : chaque cas réel doit être sourcé et daté.`);
+        } else {
+          force('Tous les cas d’entreprise sont sourcés.');
         }
         if (!obs.aEchecOuLimite) {
-          faible('1.4-echec', 'Aucun échec ni limite mentionné dans les cas d’entreprise : le jury sanctionne le plaidoyer à sens unique (au moins un succès ET un échec ou une limite sont attendus).');
+          faible('1.4-echec', "Aucun échec ni limite mentionné dans les cas d’entreprise : le jury sanctionne le plaidoyer à sens unique (au moins un succès ET un échec ou une limite sont attendus).");
         } else {
           force('Au moins une limite ou un échec vient nuancer le propos.');
         }
-        const casSansSource = obs.slidesCas.filter((slide, i) => !/source\s*:/.test(texteSlide(slide)));
-        if (casSansSource.length > 0) {
-          faible('1.4-source-cas', `${casSansSource.length} slide(s) de cas d’entreprise sans source : chaque cas réel doit être sourcé et daté.`);
+        if (obs.exemplesEntreprises.length === 1) {
+          faible('1.4-regroupe', "Un seul cas d’entreprise est mobilisé : le benchmark est trop étroit pour permettre une comparaison.");
         }
       }
       break;
     }
 
     case '1.5': {
-      if (obs.slidesSolutions.length === 0) {
-        faible('1.5-solutions', 'Aucune slide de solutions ni de préconisations : le jury attend une prise de position claire et des propositions argumentées.');
+      if (!obs.filRouge.problematique) {
+        faible('1.5-solutions', "Aucune problématique retenue : sans question à instruire, la réponse stratégique attendue par le jury ne peut pas exister.");
       } else {
-        force(`${obs.slidesSolutions.length} slide(s) de solutions / préconisations.`);
-        if (obs.filRouge.problematique && obs.slidesConclusion.length > 0) {
-          const recReponse = recouvrement(
-            obs.filRouge.problematique,
-            obs.slidesConclusion.flatMap((s) => [s.titre || '', ...(Array.isArray(s.puces) ? s.puces : [])]).join(' ')
-          );
-          if (recReponse < 0.1) {
-            faible('1.5-reponse', 'La conclusion ne reprend pas le vocabulaire de la problématique : la réponse stratégique ne se lit pas comme une réponse à la question posée.');
-          } else {
-            force('La conclusion répond explicitement à la problématique.');
-          }
-        }
+        force('La problématique retenue cadre la réponse stratégique.');
+      }
+      const existeSolutions = /solution|preconisation|recommandation|levier|action/i.test(
+        obs.textePlan + ' ' + obs.texteRecherche
+      );
+      if (!existeSolutions) {
+        faible('1.5-reponse', "Aucune section de solutions ou de préconisations dans le plan : le jury attend une prise de position claire et des propositions argumentées.");
+      } else {
+        force('Le plan porte une partie solutions / préconisations.');
+      }
+      if (!obs.formulationRetenue.pourquoi_discutable) {
+        faible('1.5-justification', "La formulation retenue n’explique pas en quoi le problème est réellement discutable : la prise de position n’est pas justifiée.");
+      } else {
+        force('La formulation retenue est justifiée (problème discutable).');
       }
       break;
     }
 
     case '1.6': {
-      if (obs.slidesSolutions.length === 0) {
-        faible('1.6-operationnel', 'Aucune préconisation opérationnelle : l’applicabilité concrète de la solution ne peut pas être évaluée.');
+      const texteSolutions = obs.textePlan;
+      if (!/avant|pendant|apres/i.test(texteSolutions)) {
+        faible('1.6-phases', "Aucune structuration avant / pendant / après dans le plan : le jury attend une vision globale du champ applicatif.");
       } else {
-        const texteSolutions = obs.slidesSolutions
-          .flatMap((s) => [s.titre || '', ...(Array.isArray(s.puces) ? s.puces : [])])
-          .join(' ');
-        if (!/(avant|pendant|apres|après)/i.test(texteSolutions)) {
-          faible('1.6-phases', 'Aucune structuration avant / pendant / après dans les préconisations : le jury attend une vision globale du champ applicatif.');
-        } else {
-          force('Préconisations structurées en phases (avant / pendant / après).');
-        }
-        if (!/(pme|eti|grand groupe|tpe|multinationale|taille)/i.test(texteSolutions)) {
-          faible('1.6-taille', 'Aucune contextualisation selon la taille d’entreprise : la grille attend une solution adaptable au type de structure.');
-        } else {
-          force('Préconisations déclinées selon la taille d’entreprise.');
-        }
+        force('Préconisations structurées en phases (avant / pendant / après).');
+      }
+      if (!/pme|eti|grand groupe|tpe|multinationale|taille|structure/i.test(texteSolutions)) {
+        faible('1.6-taille', "Aucune contextualisation selon la taille ou le type de structure : la grille attend une solution adaptable au type d’entreprise.");
+      } else {
+        force('Préconisations déclinées selon le type de structure.');
       }
       break;
     }
 
     case '1.7': {
-      // Anticipation des questions du jury : les notes orateur sont le lieu
-      // naturel des objections traitées ; le plan peut aussi porter une liste
-      // de questions prévisibles.
-      const texteNotes = obs.slides.map((s) => String(s.notes_orateur || '')).join(' ');
-      const planQ = String(obs.plan.questions_previsibles || obs.plan.questions_jury || '');
-      if (!texteNotes.trim() && !planQ.trim()) {
-        faible('1.7-notes', 'Aucune note orateur et aucune liste de questions prévisibles : rien ne prépare l’étudiant aux objections du jury.');
-      } else if (/(objection|question|jury|counter|contre-argument|critique)/i.test(texteNotes + planQ)) {
-        force('Des objections ou questions prévisibles sont anticipées.');
+      // Les questions prévisibles du jury vivent dans la recherche
+      // (`questions_du_jury`) et dans le plan (`objections_et_reponses`).
+      const total = obs.questionsJury.length + obs.objections.length;
+      if (total === 0) {
+        faible('1.7-notes', "Aucune question prévisible du jury ni objection anticipée : rien ne prépare l’étudiant aux échanges avec le jury.");
       } else {
-        faible('1.7-objections', 'Les notes orateur ne mentionnent aucune objection ni question prévisible du jury : anticipe au moins les deux questions les plus probables avec leurs éléments de réponse.');
+        force(`${total} question(s) / objection(s) du jury anticipée(s).`);
+        const avecReponse = [
+          ...obs.questionsJury.filter((q) => String(q?.angle_de_reponse || '').trim() !== ''),
+          ...obs.objections.filter((o) => String(o?.reponse || '').trim() !== ''),
+        ];
+        if (avecReponse.length === 0) {
+          faible('1.7-objections', "Les questions du jury sont listées sans élément de réponse : anticipe la réponse attendue pour chacune.");
+        } else {
+          force(`${avecReponse.length} question(s) accompagnée(s) d’un angle de réponse.`);
+        }
       }
       break;
     }
@@ -612,23 +695,23 @@ function evaluerCritere(id, obs) {
     // ---- BLOC 2 : forme ----
     case '2.1': {
       if (obs.ordreInvalide) {
-        faible('2.1-ordre', `L’enchaînement des blocs ne respecte pas la structure imposée : « ${obs.ordreInvalide.apres} » apparaît avant « ${obs.ordreInvalide.avant} », alors que l’ordre attendu est Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels → Solutions → Conclusion.`);
+        faible('2.1-ordre', `L’enchaînement du plan ne respecte pas la structure imposée : « ${obs.ordreInvalide.avant} » puis « ${obs.ordreInvalide.apres} », alors que l’ordre attendu est Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels → Solutions → Conclusion.`);
+      } else if (obs.sectionsPlan.length > 0) {
+        force('L’ordre des sections respecte l’effet entonnoir.');
+      }
+      if (!obs.filDirecteur) {
+        faible('2.1-fil-directeur', "Le plan ne porte pas de « fil directeur » : rien ne garantit que les parties s’enchaînent comme un seul raisonnement.");
       } else {
-        force('L’ordre des blocs respecte l’effet entonnoir.');
+        force('Fil directeur du plan renseigné.');
+        if (obs.filRouge.ligneDirectrice) {
+          const recFd = recouvrement(obs.filDirecteur, obs.filRouge.ligneDirectrice);
+          if (recFd < 0.15) {
+            faible('2.1-fil-directeur-decroche', "Le fil directeur du plan ne recoupe pas la ligne directrice de la problématique : les deux fils rouges divergent.");
+          }
+        }
       }
-      if (obs.slides.length && obs.sansTransition.length > 0) {
-        faible('2.1-transitions', `${obs.sansTransition.length} slide(s) n’ont pas de phrase de transition : la ligne directrice s’interrompt et les slides paraissent indépendantes à l’oral.`);
-      } else if (obs.slides.length) {
-        force('Chaque slide se termine par une phrase de transition.');
-      }
-      if (obs.conclusionsMultiples) {
-        faible('2.1-conclusions', `${obs.slidesConclusion.length} slides de conclusion : une seule conclusion est attendue, sinon le fil directeur se perd.`);
-      }
-      const bandeau = obs.slides.filter((s) => /ligne directrice|fil directeur|fil rouge/i.test(`${s.titre || ''} ${String(s.notes_orateur || '')}`));
-      if (obs.slides.length && bandeau.length === 0) {
-        faible('2.1-rappel-ld', 'La ligne directrice n’est rappelée nulle part dans les slides (ni en introduction, ni en pied de slide) : le fil rouge n’est pas visible pour le jury.');
-      } else if (obs.slides.length) {
-        force('La ligne directrice est rappelée dans le support.');
+      if (obs.sectionsPlan.length === 0) {
+        faible('2.1-sections', "Aucune section dans le plan : la structure de la présentation n’est pas définie.");
       }
       break;
     }
@@ -639,71 +722,91 @@ function evaluerCritere(id, obs) {
       break;
 
     case '2.3': {
-      const aExemples = obs.aExempleEntreprise || obs.slidesChiffrees.length > 0;
+      const aExemples = obs.exemplesEntreprises.length > 0 || obs.donneesARech.length > 0;
       if (!aExemples) {
-        faible('2.3-illustration', 'Aucun exemple percutant ni donnée chiffrée pour appuyer la démonstration : l’argumentation manque d’illustrations.');
+        faible('2.3-illustration', "Aucun exemple d’entreprise ni donnée chiffrée à mobiliser : l’argumentation du Markdown manque d’illustrations percutantes.");
       } else {
-        force('La démonstration est appuyée par des exemples réels et/ou des données chiffrées.');
+        force('La démonstration pourra s’appuyer sur des exemples réels et/ou des données chiffrées.');
       }
       if (!obs.aEchecOuLimite) {
-        faible('2.3-nuance', 'Aucune limite ni contre-exemple : la prise de position paraît unilatérale, ce que le jury sanctionne sur le dynamisme de l’argumentation.');
+        faible('2.3-nuance', "Aucune limite ni contre-exemple : la prise de position paraîtra unilatérale, ce que le jury sanctionne sur le dynamisme de l’argumentation.");
       }
       break;
     }
 
     case '2.4': {
-      if (obs.avecVisuel.length === 0) {
-        faible('2.4-visuel', 'Aucun visuel (graphique, comparaison, frise) dans le support : l’impact visuel attendu est absent.');
-      } else if (!obs.aForme) {
-        faible('2.4-forme', 'Aucune indication de mise en forme (« forme_visuelle ») : le support risque de se réduire à des blocs de texte.');
+      if (obs.sectionsPlan.length === 0) {
+        faible('2.4-plan', "Aucun plan : la maîtrise de l’exercice et la gestion du temps ne peuvent pas être évaluées.");
       } else {
-        force(`${obs.avecVisuel.length} slide(s) portent un visuel exploitable.`);
-      }
-      if (obs.nbSlides + 1 !== VOLUME_CIBLE_TOTAL) {
-        const ecart = obs.nbSlides + 1 - VOLUME_CIBLE_TOTAL;
-        faible('2.4-volume', `Le support compte ${obs.nbSlides + 1} slides page de titre comprise au lieu des ${VOLUME_CIBLE_TOTAL} attendues (${ecart > 0 ? `retirez ${ecart}` : `ajoutez ${-ecart}`} slide(s)).`);
-      } else {
-        force(`Volume conforme : ${VOLUME_CIBLE_TOTAL} slides page de titre comprise.`);
-      }
-      if (obs.tempsPlan && obs.estimationTemps > obs.tempsPlan * 1.3) {
-        faible('2.4-temps', `Le volume déroulé représente environ ${obs.estimationTemps} min pour un oral prévu en ${obs.tempsPlan} min : le respect du temps imparti est noté, réduis le contenu.`);
+        if (obs.tempsPlan && obs.estimationTemps > obs.tempsPlan * 1.3) {
+          faible('2.4-temps', `Le volume cible (${VOLUME_CIBLE_TOTAL} slides, soit environ ${obs.estimationTemps} min) dépasse le temps prévu au plan (${obs.tempsPlan} min) : le respect du temps imparti est noté, resserre le contenu.`);
+        } else if (obs.tempsPlan) {
+          force(`Volume compatible avec le temps imparti (${obs.tempsPlan} min).`);
+        }
+        if (obs.dureePlan && obs.sommeRepartition && Math.abs(obs.sommeRepartition - obs.dureePlan) > 1) {
+          faible('2.4-repartition', `La répartition du temps totalise ${obs.sommeRepartition} min pour une durée annoncée de ${obs.dureePlan} min : la gestion du temps n’est pas cohérente.`);
+        } else if (obs.sommeRepartition) {
+          force('Répartition du temps cohérente avec la durée annoncée.');
+        }
       }
       break;
     }
 
     case '2.5': {
       if (!obs.filRouge.problematique) {
-        faible('2.5-problematique', 'Aucune problématique exploitable : la finesse du décryptage de la problématique ne peut pas être démontrée.');
+        faible('2.5-problematique', "Aucune problématique exploitable : la finesse du décryptage de la problématique ne peut pas être démontrée.");
       } else if (obs.filRouge.constats.some((c) => c.code.startsWith('problematique_'))) {
-        faible('2.5-analyse', 'La problématique présente des faiblesses d’analyse (voir les points faibles « problématique » ci-dessous) : le jury évalue la finesse du décryptage.');
+        faible('2.5-analyse', "La problématique présente des faiblesses d’analyse (voir les points faibles « problématique » ci-dessous) : le jury évalue la finesse du décryptage.");
       } else {
         force('La problématique retenue est analysable et bornée par le sujet.');
       }
+      const poleA = String(obs.tensionProbleme.pole_a || '').trim();
+      const poleB = String(obs.tensionProbleme.pole_b || '').trim();
+      if (poleA && poleB) {
+        force('La tension à deux pôles est explicitée.');
+      } else {
+        faible('2.5-tension', "La tension de la formulation retenue n’est pas explicitée (pole_a / pole_b) : le décryptage reste superficiel.");
+      }
       if (obs.ordreInvalide) {
-        faible('2.5-ordre', 'Le décryptage n’est pas progressif : la rupture d’ordre empêche l’analyse de se construire par étapes.');
+        faible('2.5-ordre', "Le décryptage n’est pas progressif : la rupture d’ordre dans le plan empêche l’analyse de se construire par étapes.");
       }
       break;
     }
 
     case '2.6': {
-      if (obs.surcharges.length > 0) {
-        faible('2.6-puces', `${obs.surcharges.length} slide(s) portent plus de 6 puces : la synthèse attendue (aller à l’essentiel) n’est pas respectée.`);
-      } else if (obs.nbSlides > 0) {
-        force('Aucune slide ne dépasse 6 puces.');
+      if (obs.termes.length === 0) {
+        faible('2.6-glossaire', "Aucun terme défini dans le glossaire : la capacité de synthèse (aller à l’essentiel, en langage clair) ne peut pas être démontrée.");
+      } else {
+        force(`${obs.termes.length} terme(s) défini(s) en langage clair.`);
+        const definitionsLongues = obs.termes.filter((t) => {
+          const mots = String(t?.definition || '').trim().split(/\s+/).filter(Boolean).length;
+          return mots > 25;
+        });
+        if (definitionsLongues.length > 0) {
+          faible('2.6-definitions', `${definitionsLongues.length} définition(s) dépassent 25 mots : une définition de glossaire doit rester une phrase de synthèse.`);
+        } else {
+          force('Définitions concises (une phrase).');
+        }
       }
-      if (obs.vides.length > 0) {
-        faible('2.6-vides', `${obs.vides.length} slide(s) sont vides (aucune puce, aucune note orateur) : la pensée n’est pas restituée.`);
+      if (obs.sources.length === 0) {
+        faible('2.6-sources', "Aucun résumé de source dans le glossaire : les sources ne sont pas restituées sous forme synthétique.");
+      } else {
+        force(`${obs.sources.length} source(s) résumée(s).`);
       }
       break;
     }
 
     case '2.7': {
-      if (obs.slidesConclusion.length === 0) {
-        faible('2.7-conclusion', 'Aucune conclusion : la prise de recul et l’ouverture ne peuvent pas être évaluées.');
-      } else if (!obs.questionOuverture && !rempli(obs.plan.ouverture)) {
-        faible('2.7-ouverture', 'La conclusion ne porte pas de question d’ouverture prospective : la prise de recul attendue par le jury est absente.');
+      const questionOuverture = String(obs.ouverture?.question || '').trim();
+      if (!questionOuverture) {
+        faible('2.7-ouverture', "Le plan ne porte pas de question d’ouverture prospective : la prise de recul attendue par le jury est absente.");
+      } else if (!questionOuverture.includes('?')) {
+        faible('2.7-ouverture-forme', "L’ouverture du plan n’est pas formulée comme une question ouverte : elle ne se lira pas comme une prise de recul.");
       } else {
-        force('La conclusion porte une question d’ouverture prospective.');
+        force('Le plan porte une question d’ouverture prospective.');
+      }
+      if (questionOuverture && !String(obs.ouverture?.pourquoi_elle_reste_ouverte || '').trim()) {
+        faible('2.7-ouverture-justification', "L’ouverture n’explique pas pourquoi elle reste volontairement non résolue : le jury attend une prise de recul argumentée.");
       }
       break;
     }
@@ -724,17 +827,18 @@ function statuer(id, pointsFaibles) {
       ? { statut: 'partiel', score: SCORE_PARTIEL }
       : { statut: 'conforme', score: SCORE_CONFORME };
   }
-  // Un point faible « bloquant » (fond, non corrigeable par une décision de
-  // l'étudiant) fait tomber le critère ; sinon le critère reste partiel.
+  // Un point faible « bloquant » (le Markdown ne peut pas partir ainsi) fait
+  // tomber le critère ; sinon le critère reste partiel.
   const bloquant = pointsFaibles.some((p) => CODES_BLOQUANTS.has(p.code));
   if (bloquant) return { statut: 'non_conforme', score: SCORE_NON_CONFORME };
   return { statut: 'partiel', score: SCORE_PARTIEL };
 }
 
 /**
- * Codes de points faibles qui INTERDISENT l'export. Un support peut être
+ * Codes de points faibles qui INTERDISENT l'export. Un Markdown peut être
  * exporté avec des avertissements de forme ou de volume (dont l'étudiant reste
- * maître), mais jamais sans réponse stratégique ni avec un fil rouge rompu.
+ * maître), mais jamais avec un fil rouge rompu : pas de problématique, pas de
+ * ligne directrice, pas de structure, pas de réponse stratégique.
  */
 const CODES_BLOQUANTS = new Set([
   // Fil rouge et méthode Armelle Aymond
@@ -743,16 +847,21 @@ const CODES_BLOQUANTS = new Set([
   'problematique_reformulation',
   'problematique_debat',
   'problematique_descriptive',
+  'problematique_sans_tension',
+  'problematique_tension_identique',
   'ligne_directrice_absente',
   'ligne_directrice_hors_sujet',
   'ligne_directrice_decrochee',
   'methodologie_plan_absent',
-  // Structure minimum du support
+  // Structure et fond minimum du Markdown
   '1.1-contexte',
   '1.2-enjeux',
+  '1.3-concepts',
+  '1.4-benchmark',
   '1.5-solutions',
   '2.1-ordre',
-  '2.1-conclusions',
+  '2.1-sections',
+  '2.6-glossaire',
 ]);
 
 // ---------------------------------------------------------------------------
@@ -763,7 +872,6 @@ const LIBELLES_STATUT = {
   conforme: 'Conforme',
   partiel: 'Partiellement conforme',
   non_conforme: 'Non conforme',
-  [STATUT_NON_APPLICABLE]: 'Non applicable (aucune slide)',
 };
 
 function arrondi(n) {
@@ -779,19 +887,8 @@ async function construireRapportVerification(session) {
   const referentiels = await chargerReferentiels();
   const filRouge = diagnostiquerFilRouge(session);
   const obs = observer(session, filRouge);
-  const sansSlides = obs.nbSlides === 0;
 
   const criteres = referentiels.grille.criteres.map((critere) => {
-    if (sansSlides) {
-      return {
-        ...critere,
-        statut: STATUT_NON_APPLICABLE,
-        score: 0,
-        scoreMax: 1,
-        pointsFaibles: [],
-        forces: [],
-      };
-    }
     const { pointsFaibles, forces } = evaluerCritere(critere.id, obs);
     const { statut, score } = statuer(critere.id, pointsFaibles);
     return { ...critere, statut, score, scoreMax: 1, pointsFaibles, forces };
@@ -829,18 +926,14 @@ async function construireRapportVerification(session) {
   const codesRattaches = new Set(criteres.flatMap((c) => c.pointsFaibles.map((p) => p.code)));
   const pointsFaiblesHorsCritere = filRouge.constats.filter((c) => !codesRattaches.has(c.code));
 
-  // Manques structurels déjà détectés par le contrôle de conformité : ils
-  // complètent le rapport sans être comptés deux fois.
-  const manquesStructurels = detecterManquesSupport(session);
-
   const scoreTotal = arrondi(criteres.reduce((t, c) => t + c.score, 0));
   const scoreMax = criteres.length;
   const nonConformes = criteres.filter((c) => c.statut === 'non_conforme');
-  const bloquants = [
-    ...nonConformes.map((c) => ({ critere: c.id, libelle: c.libelle, pointsFaibles: c.pointsFaibles })),
-  ];
-
-  const totalSlides = obs.nbSlides + (obs.nbSlides > 0 ? 1 : 0);
+  const bloquants = nonConformes.map((c) => ({
+    critere: c.id,
+    libelle: c.libelle,
+    pointsFaibles: c.pointsFaibles,
+  }));
 
   return {
     genereLe: new Date().toISOString(),
@@ -848,8 +941,9 @@ async function construireRapportVerification(session) {
     theme: filRouge.theme,
     problematique: filRouge.problematique,
     ligneDirectrice: filRouge.ligneDirectrice,
-    slides: obs.nbSlides,
-    slidesPageDeTitreComprise: totalSlides,
+    // Volumétrie : le Markdown alimente un support cible de 25 slides, page de
+    // titre comprise. On n'observe pas les slides (produit aval) mais on
+    // rappelle la cible pour situer le contenu du Markdown.
     volumeCible: VOLUME_CIBLE_TOTAL,
     scoreTotal,
     scoreMax,
@@ -869,7 +963,6 @@ async function construireRapportVerification(session) {
       ...pointsFaiblesHorsCritere.map((c) => ({ critere: '—', code: c.code, message: c.message })),
     ],
     pointsFaiblesHorsCritere,
-    manquesStructurels: manquesStructurels.manques,
     referentiels: {
       grille: referentiels.grille,
       consigneProblematique: referentiels.consigneProblematique,
@@ -888,7 +981,6 @@ const ICONES_STATUT = {
   conforme: '✅',
   partiel: '⚠️',
   non_conforme: '❌',
-  [STATUT_NON_APPLICABLE]: '➖',
 };
 
 function rendreRapportMarkdown(rapport) {
@@ -896,12 +988,14 @@ function rendreRapportMarkdown(rapport) {
   lignes.push('# Rapport de vérification avant export');
   lignes.push('');
   lignes.push(`> Vérification systématique exécutée avant l'export du fichier Markdown, sur la base de la grille officielle du jury CESI (${rapport.scoreMax} critères).`);
+  lignes.push('>');
+  lignes.push('> Le jugement porte sur les INTRANTS du Markdown (analyse, problématique, plan, glossaire, recherche) : ce sont eux qui serviront de base à la génération des slides, quel que soit l\'outil utilisé ensuite (Gamma, Claude Design, PowerPoint).');
   lignes.push('');
   lignes.push(`- **Sujet** : ${rapport.sujet || '—'}`);
   if (rapport.theme) lignes.push(`- **Thème** : ${rapport.theme}`);
   lignes.push(`- **Problématique retenue** : ${rapport.problematique ? `« ${rapport.problematique} »` : '—'}`);
   lignes.push(`- **Ligne directrice** : ${rapport.ligneDirectrice ? `« ${rapport.ligneDirectrice} »` : '—'}`);
-  lignes.push(`- **Support** : ${rapport.slides} slide(s), ${rapport.slidesPageDeTitreComprise} page de titre comprise (cible : ${rapport.volumeCible})`);
+  lignes.push(`- **Volume cible du support** : ${rapport.volumeCible} slides, page de titre comprise`);
   lignes.push(`- **Score de conformité** : ${rapport.scoreTotal} / ${rapport.scoreMax} (${rapport.pourcentage} %)`);
   lignes.push(`- **Verdict** : ${rapport.conforme ? '✅ CONFORME — export autorisé' : '❌ NON CONFORME — export bloqué'}`);
   lignes.push('');
@@ -927,8 +1021,10 @@ function rendreRapportMarkdown(rapport) {
   lignes.push('## 2. Points faibles à recorriger');
   lignes.push('');
   if (faibles.length === 0) {
-    lignes.push('Aucun point faible détecté : le support est parfaitement conforme aux attendus vérifiables de la grille.');
+    lignes.push('Aucun point faible détecté : le Markdown est conforme aux attendus vérifiables de la grille.');
   } else {
+    lignes.push("Ces points faibles peuvent être corrigés en place : depuis l'écran Support, le bouton « Corriger les points faibles » demande à DeepSeek de réécrire le champ fautif de l'étape concernée, puis renouvelle les Markdown.");
+    lignes.push('');
     faibles.forEach((p) => {
       lignes.push(`- **[critère ${p.critere}]** ${p.message}`);
     });
@@ -961,7 +1057,7 @@ function rendreRapportMarkdown(rapport) {
   );
   lignes.push(
     pfLd.length === 0
-      ? 'Constat : la ligne directrice est présente, cohérente avec la problématique et rappelée dans le support.'
+      ? 'Constat : la ligne directrice est présente, cohérente avec la problématique et reprise dans le plan.'
       : 'Constats à corriger :'
   );
   pfLd.forEach((p) => lignes.push(`- ${p.message}`));
@@ -971,22 +1067,15 @@ function rendreRapportMarkdown(rapport) {
   lignes.push('');
   lignes.push(rapport.referentiels.methodologieGlobal);
   lignes.push('');
-  lignes.push("La méthode ne porte pas seulement sur la problématique : elle structure TOUTE la présentation. Vérifie que l'entonnoir est respecté de bout en bout.");
+  lignes.push("La méthode ne porte pas seulement sur la problématique : elle structure TOUTE la présentation. Vérifie que l'entonnoir est respecté de bout en bout dans le plan et le Markdown.");
   lignes.push('');
-
-  if (rapport.manquesStructurels.length > 0) {
-    lignes.push('## 4. Manques structurels complémentaires');
-    lignes.push('');
-    rapport.manquesStructurels.forEach((m) => lignes.push(`- **[critère ${m.critere}]** ${m.message}`));
-    lignes.push('');
-  }
 
   lignes.push('---');
   lignes.push('');
   lignes.push(
     rapport.conforme
       ? "**Export autorisé.** Le rapport est joint au fichier exporté pour garder la trace de la vérification."
-      : "**Export bloqué.** Corrige les points faibles bloquants ci-dessus (en régénérant l'étape concernée ou en ajustant le plan, la problématique et le glossaire), puis relance l'export."
+      : "**Export bloqué.** Utilise le bouton « Corriger les points faibles » pour faire réécrire par DeepSeek les champs fautifs des étapes concernées, puis relance l'export."
   );
   lignes.push('');
   return lignes.join('\n');
@@ -998,6 +1087,7 @@ function rendreRapportMarkdown(rapport) {
 function rendreEnteteVerification(rapport) {
   const lignes = [];
   lignes.push('<!-- VÉRIFICATION AVANT EXPORT — générée automatiquement -->');
+  lignes.push("<!-- Contrôle portant sur les intrants du Markdown (analyse, problématique, plan, glossaire, recherche) -->");
   lignes.push(`<!-- Score de conformité à la grille CESI : ${rapport.scoreTotal}/${rapport.scoreMax} (${rapport.pourcentage} %) -->`);
   lignes.push(`<!-- ${rapport.criteres.length} critères parcourus, ${rapport.nonConformes.length} non conforme(s) -->`);
   if (rapport.pointsFaibles.length > 0) {
