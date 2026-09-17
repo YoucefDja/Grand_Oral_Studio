@@ -316,4 +316,10 @@ async function buildStepPrompt(session, stepKey, options = {}) {
   return { system, user };
 }
 
-module.exports = { buildStepPrompt, STEP_KEYS, STEP_LABELS, HIDDEN_STEPS };
+module.exports = {
+  buildStepPrompt,
+  STEP_KEYS,
+  STEP_LABELS,
+  HIDDEN_STEPS,
+  problemeRetenuPourSuite,
+};

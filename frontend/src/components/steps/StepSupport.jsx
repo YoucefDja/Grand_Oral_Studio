@@ -45,6 +45,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
   const { t } = useSettings();
   const [exportingPptx, setExportingPptx] = useState(false);
   const [exportingGamma, setExportingGamma] = useState(false);
+  const [exportingClaudeDesign, setExportingClaudeDesign] = useState(false);
   const [json, setJson] = useState('');
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
@@ -84,6 +85,24 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       setError(err.message);
     } finally {
       setExportingGamma(false);
+    }
+  }
+
+  async function handleExportClaudeDesignPrompt() {
+    setExportingClaudeDesign(true);
+    setError(null);
+    setMsg(null);
+    try {
+      const fileName = await downloadSupportPrompt(
+        session._id,
+        'support-etape-6-generation-claude-design.md',
+        'support-claude-design-prompt'
+      );
+      setMsg(t('steps.claudeDesignPromptDownloaded').replace('{file}', fileName));
+    } catch (err) {
+      setError(err.message);
+    } finally {
+      setExportingClaudeDesign(false);
     }
   }
 
@@ -128,12 +147,23 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
             <button type="button" className="btn-ghost" disabled={exportingGamma} onClick={handleExportGammaPrompt}>
               {exportingGamma ? t('steps.preparing') : t('steps.gammaExportPrompt')}
             </button>
+            <button
+              type="button"
+              className="btn-ghost"
+              disabled={exportingClaudeDesign}
+              onClick={handleExportClaudeDesignPrompt}
+            >
+              {exportingClaudeDesign ? t('steps.preparing') : t('steps.claudeDesignExportPrompt')}
+            </button>
           </div>
           <p className="muted" style={{ marginTop: 8 }}>
             {t('steps.claudePptxHint')}
           </p>
           <p className="muted" style={{ marginTop: 4 }}>
             {t('steps.gammaHint')}
+          </p>
+          <p className="muted" style={{ marginTop: 4 }}>
+            {t('steps.claudeDesignHint')}
           </p>
           <label className="field" style={{ marginTop: 14 }}>
             {t('steps.claudeJsonLabel')}

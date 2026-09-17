@@ -1,13 +1,21 @@
 const express = require('express');
 const mongoose = require('mongoose');
 const Session = require('../models/Session');
-const { buildStepPrompt, STEP_KEYS, STEP_LABELS, HIDDEN_STEPS } = require('../services/promptBuilder');
+const MethodologySection = require('../models/MethodologySection');
+const {
+  buildStepPrompt,
+  STEP_KEYS,
+  STEP_LABELS,
+  HIDDEN_STEPS,
+  problemeRetenuPourSuite,
+} = require('../services/promptBuilder');
 const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
 const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
 const { buildPptx } = require('../services/pptx');
 const { buildChartePptxClaude } = require('../services/chartePptxClaude');
 const { buildGammaPrompt } = require('../services/charteGamma');
+const { buildClaudeDesignExport } = require('../services/charteClaudeDesign');
 const {
   CONSIGNES_FOND_VULGARISATION,
   CONSIGNES_FORME_SUPPORT,
@@ -536,6 +544,60 @@ router.get(
     const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
     const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
     const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-support-gamma.md`;
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
+    res.send(md);
+  })
+);
+
+// GET /api/sessions/:id/support-claude-design-prompt
+// Exporte un fichier .md AUTO-SUFFISANT destiné à Claude Design. Contrairement
+// aux deux exports précédents, ce document ne suppose AUCUN contexte externe :
+// Claude Design n'a accès ni aux Projets Claude de l'étudiant, ni à ses
+// instructions, ni à ses diaporamas exemples. Le document embarque donc lui-même
+// la mission, le ton et le vocabulaire, la structure slide par slide, le contenu
+// déjà généré (analyse, plan, glossaire, problématique) et des exemples de
+// style réels. Le bloc de style est relu depuis la base (section
+// `style_support`), jamais dupliqué en dur.
+router.get(
+  '/:id/support-claude-design-prompt',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    assertGlossaireValide(session, 'support');
+
+    // Source de style : la section en base, éditable en admin, partagée avec
+    // les prompts système. Si elle est absente, le seed n'a pas été relancé.
+    const styleSection = await MethodologySection.findOne({ sectionId: 'style_support' }).lean();
+    if (!styleSection || !styleSection.content) {
+      throw httpError(
+        500,
+        "Le bloc de style « style_support » est absent de la base. Lancez le script de seed (npm run seed) puis relancez l'export."
+      );
+    }
+
+    const data = session.data || {};
+    const problemeRetenu = problemeRetenuPourSuite(data.probleme);
+    const problematique = String(problemeRetenu?.formulation_retenue?.formulation || '').trim();
+    const ligneDirectrice =
+      String(session.ligneDirectrice || data.probleme?.ligne_directrice || '').trim();
+
+    const md = buildClaudeDesignExport({
+      session,
+      analyse: JSON.stringify(data.analyse || {}, null, 2),
+      plan: JSON.stringify(data.plan || {}, null, 2),
+      glossaire: JSON.stringify(data.glossaire || {}, null, 2),
+      problematique,
+      ligneDirectrice,
+      styleSupport: styleSection.content,
+    });
+
+    const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+    const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
+    const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-claude-design.md`;
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.setHeader(
       'Content-Disposition',

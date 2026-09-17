@@ -190,6 +190,11 @@ export const FR = {
     'Ce fichier contient la charte CESI, la posture de vulgarisation managériale et le squelette de texte : collez-le dans Gamma (mode « Coller du texte ») et appliquez les couleurs indiquées. Aucune image IA : uniquement formes et frises sobres.',
   'steps.gammaPromptDownloaded':
     'Prompt téléchargé : {file} — collez-le dans Gamma (mode « Coller du texte »).',
+  'steps.claudeDesignExportPrompt': '⬇ Exporter le .md « Claude Design génère la présentation »',
+  'steps.claudeDesignHint':
+    'Export auto-suffisant : Claude Design n\'a accès ni à vos Projets Claude, ni à vos instructions, ni à vos exemples. Ce fichier embarque donc tout le contexte (ton, vocabulaire, structure slide par slide, analyse, problématique, glossaire et exemples de style réels). Collez-le tel quel dans une nouvelle conversation Claude Design.',
+  'steps.claudeDesignPromptDownloaded':
+    'Fichier téléchargé : {file} — collez-le tel quel dans Claude Design.',
   'steps.importing': 'Validation…',
   'steps.importValidate': 'Importer et valider le support',
   'steps.claudeImportSuccess':
@@ -484,6 +489,11 @@ export const EN = {
     'This file contains the CESI charter, the managerial plain-language stance and the text skeleton: paste it into Gamma ("Paste text" mode) and apply the listed colours. No AI images: sober shapes and timelines only.',
   'steps.gammaPromptDownloaded':
     'Prompt downloaded: {file} — paste it into Gamma ("Paste text" mode).',
+  'steps.claudeDesignExportPrompt': '⬇ Export the ".md — Claude Design builds the presentation"',
+  'steps.claudeDesignHint':
+    'Self-contained export: Claude Design has no access to your Claude Projects, your instructions or your examples. This file therefore embeds the whole context (tone, vocabulary, slide-by-slide structure, analysis, problem statement, glossary and real style examples). Paste it as-is into a new Claude Design conversation.',
+  'steps.claudeDesignPromptDownloaded':
+    'File downloaded: {file} — paste it as-is into Claude Design.',
   'steps.importing': 'Validating…',
   'steps.importValidate': 'Import and validate the presentation',
   'steps.claudeImportSuccess':

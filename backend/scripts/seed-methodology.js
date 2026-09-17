@@ -68,7 +68,6 @@ Exigences générales qui découlent de cette grille :
 Quand tu produis une étape, demande-toi explicitement quels critères cette étape prépare, et produis les éléments correspondants. Si une information manque pour satisfaire un critère, signale-le à l'étudiant au lieu de combler le vide par une généralité.`;
 
 const ETAPE_4_GLOSSAIRE = `Produis le glossaire et les résumés de sources APRÈS le plan détaillé, en t'appuyant sur le plan fourni plus haut et sur les résultats de la recherche documentaire.
-
 Objectif : ne définir que les termes que l'étudiant est SÛR d'employer dans sa présentation. Le plan fait autorité : c'est lui qui détermine quels termes entrent au glossaire.
 
 Contenu attendu :
@@ -84,6 +83,75 @@ Contraintes :
 - N'inclus dans le glossaire que les termes réellement présents dans le plan — pas un inventaire de cours, pas de termes « au cas où ».
 - Aucun acronyme ou terme technique ne devra ensuite apparaître dans le support de présentation s'il ne figure pas dans cette liste.
 - Tout terme nouveau qui émergerait à l'étape support devra y être ajouté au préalable, jamais utilisé sans définition.`;
+
+/**
+ * Ton, style et vocabulaire du support visuel.
+ *
+ * SOURCE UNIQUE et partagée : ce bloc est le seul endroit où le style de
+ * l'étudiant est décrit. Il est injecté dans le prompt système de l'étape
+ * support (donc dans le prompt PPTX Claude et dans le prompt Gamma), et il est
+ * relu depuis la base par l'export « Claude Design ». Ne jamais dupliquer ce
+ * contenu ailleurs : l'éditer ici, relancer `npm run seed`.
+ *
+ * Il est rédigé à partir de l'observation de deux diaporamas réellement
+ * présentés par l'étudiant (« Gestion de la sécurité mP.pptx » et
+ * « Grand_oral_3_Virtualisation_cloud_IOT_MP.pptx », 24 slides chacun), dont
+ * les extraits bruts sont figés dans src/services/exemplesStyle.js.
+ */
+const STYLE_SUPPORT = `Ce bloc décrit le TON, le STYLE et le VOCABULAIRE attendus pour le support de présentation. Il fait autorité : en cas de conflit avec une autre consigne de forme, c'est lui qui prime.
+
+REGISTRE
+- Académique, précis et sobre. On parle à un jury d'école, pas à des collègues ni à des amis.
+- Aucune familiarité, aucune interjection, aucun humour, aucun emoji, aucun point d'exclamation.
+- Aucun superlatif de vente (« révolutionnaire », « incroyable », « solution miracle »).
+- Aucun anglicisme évitable : dire « gestion des identités et des accès », pas « IAM » ; « plan de reprise d'activité », pas « business continuity plan ». Les sigles ne sont tolérés que s'ils sont définis dans le glossaire et réellement employés à l'oral.
+- Pas de première personne : ni « je », ni « nous », ni « mon », ni « notre ». Les constats sont posés au nominal, sans locuteur.
+
+VOCABULAIRE À PRIVILÉGIER (vocabulaire managérial et organisationnel)
+- Gouvernance, pilotage, procédures, politiques internes, rôles et responsabilités.
+- Sensibilisation, formation, communication interne, culture d'entreprise, conduite du changement.
+- Tests réguliers, exercices de crise, plan de communication de crise, plan de continuité et de reprise d'activité.
+- Sauvegarde isolée, gestion des identités et des accès, mises à jour et correctifs, plans de réponse aux incidents.
+- Enjeux, gain, perte, coût, impact, maturité, résilience, parties prenantes, silos organisationnels.
+- On raisonne par ENJEUX (pourquoi c'est critique) et non par FONCTIONNEMENT (comment ça marche techniquement).
+
+VOCABULAIRE À ÉVITER
+- Les normes et référentiels techniques complexes : ISO 27031, ISO 27001, NIST, EBIOS, RGPD détaillé, SOC, SIEM, EDR, XDR, zero trust, chiffrement de bout en bout… Ce qui compte n'est jamais le nom du cadre, c'est la décision managériale qu'il impose (gouvernance, tests réguliers, communication de crise).
+- Le vocabulaire de la vente : solutions innovantes, disruptif, à la pointe, leader du marché.
+- Les formules creuses : « de nos jours », « depuis toujours », « il est important de noter que », « force est de constater ».
+- Les mots-valises non mesurables : « optimal », « performant », « efficace » employés sans chiffre ni source.
+
+FABRIQUE DES PUCES (règle la plus visible du style)
+- Les puces sont des FRAGMENTS NOMINAUX : jamais de verbe conjugué, jamais de sujet, jamais de point final. Un groupe nominal, ou une suite de groupes nominaux séparés par « · ».
+- Longueur : 3 à 5 puces par slide, 6 au maximum. Aucune puce ne dépasse une ligne à l'écran.
+- La phrase complète, elle, n'existe que dans la note orateur : c'est là qu'on argumente, qu'on relie et qu'on explique.
+- Les tics d'écriture de l'étudiant sont à reprendre car ils font sa signature : la déclinaison « Gain : … / Perte : … » pour exposer un arbitrage, et la déclinaison par les cinq dimensions TOHEE nommées en clair (Technique, Organisationnel, Humain, Économique, Environnemental).
+
+FABRIQUE DES CHIFFRES
+- Un chiffre fort s'affiche SEUL et en très gros : « 4,45 millions $ », « 47 % », « 112 % ». Pas de phrase autour.
+- Le sens du chiffre, lui, va dans la note orateur, avec la source citée en clair (organisme ou URL).
+
+FABRIQUE DES CAS D'ENTREPRISES
+- Toujours une entreprise RÉELLE et NOMMÉE, jamais « une entreprise du secteur ».
+- Toujours un ANGLE précis : ce qui lui est arrivé. Exemple : « Thalès — touché deux fois par les cybercriminels de Lockbit 3.0, ayant refusé de payer la rançon. »
+- Le cas illustre le problème soulevé par la problématique ; il ne sert pas de décoration.
+- Ne jamais inventer un cas, un chiffre ou une source. Si l'information manque, le signaler plutôt que de la fabriquer.
+
+FABRIQUE DES NOTES ORATEUR
+- Une note est brève et télégraphique : une ligne courte par puce affichée, dans l'ordre des puces.
+- Ton direct, parlé, sans phrase d'apparat. On y commente le chiffre ou le cas affiché.
+- Les sources y figurent en clair (URL ou nom d'organisme).
+- Une note ne dépasse jamais quelques lignes : elle sert de repère, pas de script à lire.
+
+LONGUEUR CIBLE DES PHRASES
+- Sur la slide : aucune phrase. Uniquement des fragments nominaux.
+- Dans la note orateur : 12 à 18 mots en moyenne, une idée par phrase, jamais de subordonnée empilée.
+- La phrase de transition en bas de slide fait 12 à 18 mots, en italique, et se termine par un point.
+
+NIVEAU DE DÉTAIL PAR SLIDE
+- Une slide = une seule idée, portée par une seule ligne directrice.
+- Si une slide demande plus de 5 puces pour être comprise, c'est que le contenu doit être scindé ou condensé — jamais que la police doit être réduite.
+- Le détail argumenté vit dans l'oral (note orateur + ce que l'étudiant dira), pas à l'écran.`;
 
 /**
  * Liste canonique des sections en base. Les contenus sont copiés tels quels
@@ -183,8 +251,14 @@ const METHODOLOGY_SECTIONS = [
     appliesToSteps: ['all'],
     from: 'garde_fou_sujets_academiques',
   },
+  {
+    sectionId: 'style_support',
+    title: 'Ton, style et vocabulaire du support (source unique, partagée par tous les exports)',
+    order: 30,
+    appliesToSteps: ['support'],
+    content: STYLE_SUPPORT,
+  },
 ];
-
 /** Descriptions textuelles des JSON attendus, injectées à la fin du prompt. */
 const STEP_SCHEMAS = [
   {
