@@ -21,6 +21,12 @@ const {
   CONSIGNES_FORME_SUPPORT,
 } = require('../services/consignesSupport');
 const { assertConformiteSupport } = require('../services/conformiteSupport');
+const {
+  construireRapportVerification,
+  assertVerificationExport,
+  rendreRapportMarkdown,
+  rendreEnteteVerification,
+} = require('../services/verificationExport');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 
@@ -437,10 +443,16 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
+    // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT : parcourt les 14 critères de la
+    // grille du jury, bloque l'export si le support n'est pas conforme, et
+    // renvoie le rapport (joint au fichier exporté pour en garder la trace).
+    const rapport = await assertVerificationExport(session);
+
     const { system, user } = await buildStepPrompt(session, 'support', {
       pourPptxClaude: true,
     });
     const md = [
+      rendreEnteteVerification(rapport),
       '# Grand Oral Studio — Génération DIRECTE du .pptx par Claude Desktop',
       '',
       "> Mode « Claude Desktop » : joins ce document à une conversation Claude puis demande-lui de produire le .pptx. Claude fabrique lui-même le fichier PowerPoint en appliquant la charte visuelle décrite en fin de document — aucun réimport dans l'application n'est nécessaire.",
@@ -503,8 +515,12 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
+    // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT (grille CESI complète).
+    const rapport = await assertVerificationExport(session);
+
     const { system, user } = await buildStepPrompt(session, 'support');
     const md = [
+      rendreEnteteVerification(rapport),
       '# Grand Oral Studio — Génération du support dans Gamma',
       '',
       '> Colle ce document dans un nouveau chat Gamma (mode « Coller du texte »), puis applique la charte visuelle décrite plus bas. Gamma génère la présentation ; aucun réimport dans l\'application n\'est nécessaire.',
@@ -569,6 +585,9 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
+    // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT (grille CESI complète).
+    const rapport = await assertVerificationExport(session);
+
     // Source de style et charte visuelle : sections en base, éditables en
     // admin, partagées avec les prompts système. Si elles sont absentes, c'est
     // que le seed n'a pas été relancé après leur ajout.
@@ -593,20 +612,62 @@ router.get(
     const ligneDirectrice =
       String(session.ligneDirectrice || data.probleme?.ligne_directrice || '').trim();
 
-    const md = buildClaudeDesignExport({
-      session,
-      analyse: JSON.stringify(data.analyse || {}, null, 2),
-      plan: JSON.stringify(data.plan || {}, null, 2),
-      glossaire: JSON.stringify(data.glossaire || {}, null, 2),
-      problematique,
-      ligneDirectrice,
-      styleSupport: styleSection.content,
-      charteVisuelle: charteSection.content,
-    });
+    const md = [
+      rendreEnteteVerification(rapport),
+      buildClaudeDesignExport({
+        session,
+        analyse: JSON.stringify(data.analyse || {}, null, 2),
+        plan: JSON.stringify(data.plan || {}, null, 2),
+        glossaire: JSON.stringify(data.glossaire || {}, null, 2),
+        problematique,
+        ligneDirectrice,
+        styleSupport: styleSection.content,
+        charteVisuelle: charteSection.content,
+      }),
+    ].join('\n');
 
     const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
     const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
     const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-claude-design.md`;
+    res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
+    res.setHeader(
+      'Content-Disposition',
+      `attachment; filename="${fileName}"; filename*=UTF-8''${encodeURIComponent(fileName)}`
+    );
+    res.send(md);
+  })
+);
+
+// GET /api/sessions/:id/conformite-rapport
+// Rapport de vérification avant export, en JSON : parcourt les 14 critères de
+// la grille CESI, donne pour chacun un statut et un score, liste les points
+// faibles (fil rouge : ligne directrice et problématique) et indique si
+// l'export est autorisé. Sert à l'affichage dans l'interface, AVANT toute
+// exportation de fichier Markdown.
+router.get(
+  '/:id/conformite-rapport',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    const rapport = await construireRapportVerification(session);
+    res.json(rapport);
+  })
+);
+
+// GET /api/sessions/:id/support-conformite-rapport
+// Même rapport, en fichier Markdown téléchargeable, pour conserver une trace
+// détaillée de la vérification critère par critère.
+router.get(
+  '/:id/support-conformite-rapport',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+    const rapport = await construireRapportVerification(session);
+    const md = rendreRapportMarkdown(rapport);
+
+    const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);
+    const safeTheme = (session.theme || 'Sans_theme').replace(/[^a-z0-9]/gi, '_').substring(0, 20);
+    const fileName = `Grand-Oral-${safeTitre}-${safeTheme}-rapport-verification.md`;
     res.setHeader('Content-Type', 'text/markdown; charset=utf-8');
     res.setHeader(
       'Content-Disposition',

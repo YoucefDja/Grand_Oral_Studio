@@ -133,6 +133,14 @@ export async function downloadSupportPrompt(
   return fileName;
 }
 
+/** Télécharge le rapport de vérification (.md) produit avant l'export des fichiers Markdown. */
+export async function downloadVerificationReport(
+  sessionId,
+  fallbackName = 'rapport-verification.md'
+) {
+  return downloadSupportPrompt(sessionId, fallbackName, 'support-conformite-rapport');
+}
+
 /** Télécharge le .pptx généré par le backend (route protégée). */
 export async function downloadPptx(sessionId, fallbackName = 'presentation-grand-oral.pptx') {
   const auth = getAuth();

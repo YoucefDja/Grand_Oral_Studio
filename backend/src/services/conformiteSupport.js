@@ -341,4 +341,16 @@ function assertConformiteSupport(session) {
   return rapport;
 }
 
-module.exports = { detecterManquesSupport, assertConformiteSupport };
+module.exports = {
+  detecterManquesSupport,
+  assertConformiteSupport,
+  // Primitives réutilisées par la vérification d'export (grille complète) :
+  normaliser,
+  texteSlide,
+  typeDe,
+  rempli,
+  aUnVisuelExploitable,
+  detecterOrdreInvalide,
+  VOLUME_CIBLE_TOTAL,
+  ORDRE_BLOCS,
+};

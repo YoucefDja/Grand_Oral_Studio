@@ -1,8 +1,8 @@
-import React, { useState } from 'react';
+import React, { useCallback, useEffect, useState } from 'react';
 import StepShell from '../StepShell.jsx';
 import { useSettings } from '../../settings.jsx';
 import { STEP_EXPLANATIONS, ligneDirectriceOf, glossaireValide, stepIndex } from '../../steps.js';
-import { api, downloadPptx, downloadSupportPrompt } from '../../api.js';
+import { api, downloadPptx, downloadSupportPrompt, downloadVerificationReport } from '../../api.js';
 
 function SlideCard({ slide, index, t }) {
   const puces = Array.isArray(slide.puces) ? slide.puces : [];
@@ -37,6 +37,168 @@ function SlideCard({ slide, index, t }) {
         </details>
       ) : null}
     </div>
+  );
+}
+
+/** Étape de vérification systématique exécutée avant l'export des fichiers Markdown. */
+function VerificationCard({ session }) {
+  const { t } = useSettings();
+  const [rapport, setRapport] = useState(null);
+  const [chargement, setChargement] = useState(false);
+  const [erreur, setErreur] = useState(null);
+  const [telechargement, setTelechargement] = useState(false);
+
+  const charger = useCallback(async () => {
+    if (!session?._id) return;
+    setChargement(true);
+    setErreur(null);
+    try {
+      setRapport(await api.get(`/api/sessions/${session._id}/conformite-rapport`));
+    } catch (err) {
+      setErreur(err.message);
+    } finally {
+      setChargement(false);
+    }
+  }, [session?._id]);
+
+  useEffect(() => {
+    charger();
+  }, [charger, session?.data?.support?.slides?.length]);
+
+  async function handleTelecharger() {
+    setTelechargement(true);
+    setErreur(null);
+    try {
+      await downloadVerificationReport(session._id, 'rapport-verification-grand-oral.md');
+    } catch (err) {
+      setErreur(err.message);
+    } finally {
+      setTelechargement(false);
+    }
+  }
+
+  const statutLabel = (statut) => {
+    if (statut === 'conforme') return t('steps.verifStatutConforme');
+    if (statut === 'partiel') return t('steps.verifStatutPartiel');
+    if (statut === 'non_conforme') return t('steps.verifStatutNonConforme');
+    return t('steps.verifStatutNA');
+  };
+
+  const classeStatut = (statut) => {
+    if (statut === 'conforme') return 'alert-success';
+    if (statut === 'non_conforme') return 'alert-error';
+    return 'alert-info';
+  };
+
+  return (
+    <section className="card panel" style={{ marginTop: 20 }}>
+      <h2 style={{ margin: '0 0 4px' }}>{t('steps.verifTitle')}</h2>
+      <p className="muted" style={{ marginTop: 0 }}>
+        {t('steps.verifIntro')}
+      </p>
+
+      {chargement ? <div className="alert alert-info">{t('steps.verifLoading')}</div> : null}
+      {erreur && !chargement ? <div className="alert alert-error">{erreur}</div> : null}
+
+      {rapport && !chargement ? (
+        <>
+          <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0' }}>
+            <span className={`badge ${rapport.conforme ? 'badge-done' : 'badge-progress'}`}>
+              {t('steps.verifScore')} : {rapport.scoreTotal}/{rapport.scoreMax} ({rapport.pourcentage}%)
+            </span>
+            <span className="badge badge-progress">
+              {rapport.slidesPageDeTitreComprise}/{rapport.volumeCible} {t('steps.slidesUnit')}
+            </span>
+            <button type="button" className="btn-ghost" onClick={charger}>
+              {t('steps.verifRefresh')}
+            </button>
+          </div>
+
+          <div className={`alert ${rapport.conforme ? 'alert-success' : 'alert-error'}`}>
+            {rapport.conforme ? t('steps.verifConforme') : t('steps.verifBloque')}
+          </div>
+
+          <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifFilRougeTitle')}</h3>
+          <p className="muted" style={{ margin: 0 }}>
+            {t('steps.ldTag')} : « {rapport.ligneDirectrice || '—'} »
+          </p>
+          <p className="muted" style={{ margin: '2px 0' }}>
+            Problématique : « {rapport.problematique || '—'} »
+          </p>
+
+          {rapport.pointsFaibles.length || rapport.manquesStructurels?.length ? (
+            <>
+              <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifBlockTitle')}</h3>
+              <ul className="ul-value">
+                {rapport.pointsFaibles.map((p, i) => (
+                  <li key={i}>
+                    <strong>{p.critere}</strong> — {p.message}
+                  </li>
+                ))}
+                {(rapport.manquesStructurels || []).map((m, i) => (
+                  <li key={`s${i}`}>
+                    <strong>{m.critere || '—'}</strong> — {m.message || m}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : (
+            <p className="muted" style={{ marginTop: 10 }}>
+              {t('steps.verifFilRougeOk')}
+            </p>
+          )}
+
+          <h3 style={{ fontSize: 14, margin: '16px 0 6px' }}>{t('steps.verifCriteria')}</h3>
+          {(rapport.blocs || []).map((bloc, bi) => (
+            <div key={bi} style={{ marginBottom: 10 }}>
+              <p className="muted" style={{ margin: '0 0 4px', fontWeight: 600 }}>
+                {bloc.libelle}
+              </p>
+              <table style={{ width: '100%', borderCollapse: 'collapse', fontSize: 13 }}>
+                <thead>
+                  <tr>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>{t('steps.verifCriteria')}</th>
+                    <th style={{ textAlign: 'left', padding: '2px 6px' }}>{t('steps.verifStatut')}</th>
+                    <th style={{ textAlign: 'right', padding: '2px 6px' }}>{t('steps.verifScoreCol')}</th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {(bloc.criteres || []).map((id) => {
+                    const c = (rapport.criteres || []).find((x) => x.id === id);
+                    if (!c) return null;
+                    return (
+                      <tr key={id} style={{ borderTop: '1px solid rgba(0,0,0,.08)' }}>
+                        <td style={{ padding: '3px 6px' }}>
+                          <strong>{c.id}</strong> {c.libelle}
+                        </td>
+                        <td style={{ padding: '3px 6px' }}>
+                          <span className={`badge ${classeStatut(c.statut) === 'alert-success' ? 'badge-done' : 'badge-progress'}`}>
+                            {statutLabel(c.statut)}
+                          </span>
+                        </td>
+                        <td style={{ padding: '3px 6px', textAlign: 'right' }}>
+                          {c.score}/{c.scoreMax}
+                        </td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          ))}
+
+          <button
+            type="button"
+            className="btn-ghost"
+            style={{ marginTop: 10 }}
+            disabled={telechargement}
+            onClick={handleTelecharger}
+          >
+            {telechargement ? t('steps.preparing') : t('steps.verifDownloadReport')}
+          </button>
+        </>
+      ) : null}
+    </section>
   );
 }
 
@@ -268,6 +430,7 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
           </div>
         )}
       />
+      <VerificationCard session={session} />
       <ClaudeModeCard session={session} onSessionRefresh={onSessionRefresh} />
     </>
   );
