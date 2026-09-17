@@ -27,19 +27,44 @@ const COULEURS = {
   WHITE: '#FFFFFF',
 };
 
-/** Ordre narratif imposé : titre de slide → rôle attendu. */
+/**
+ * Ordre narratif imposé : titre de slide → rôle attendu.
+ *
+ * NOMENCLATURE ET DÉCLINAISON DES TITRES : la nomenclature est classique et
+ * structurée (« Plan de présentation », « Contexte », « Mots clés », « Enjeux »,
+ * « Problématiques », « Existant », « Chiffres clés », « Cas d'entreprises »,
+ * « Solutions », « Préconisations », « Conclusion »). Dès qu'une catégorie
+ * occupe PLUSIEURS slides, chaque titre reprend le titre principal suivi de
+ * deux ou trois mots de précision séparés par un tiret (« Solutions —
+ * Continuité d'activité »). Deux slides ne portent jamais le même titre.
+ *
+ * VOLUME : 1 page de titre + 24 slides de contenu = 25 slides au total. Les
+ * nombres entre parenthèses ci-dessous situent chaque bloc dans ce total.
+ */
 const SQUELETTE_SLIDES = [
-  ['Plan de présentation', "Sommaire de l'oral : 4 à 5 puces très courtes avec repères numérotés (contexte et mots clés, enjeux, problématique, existant et chiffres, cas d'entreprises, solutions, conclusion). Aucune problématique, aucun chiffre."],
+  ['Plan de présentation', "Sommaire de l'oral : 4 à 5 puces très courtes avec repères numérotés (contexte et mots clés, enjeux, problématiques, existant et chiffres, cas d'entreprises, solutions, préconisations, conclusion). Aucune problématique, aucun chiffre."],
   ['Contexte', "Pourquoi le sujet compte aujourd'hui, un ou deux chiffres clés sourcés, en quoi les entreprises sont directement concernées."],
-  ['Mots clés du sujet', "Reprendre le SUJET COMPLET dans un encadré, puis 2 à 4 mots clés du sujet, chacun suivi de sa définition courte (une ligne, langage clair)."],
-  ['Enjeux', "Ce qui se joue pour l'entreprise, structuré TOHEE : Techniques, Organisationnels, Humains, Économiques, Environnementaux. Restreint au cœur du sujet."],
-  ['Problématique', "La question SEULE, mise en grand, encadrée sobrement. Aucun visuel opposant deux camps. Aucune autre slide ne la cite avant."],
-  ['Existant', "L'état des lieux : ce qui se fait aujourd'hui en entreprise, et pourquoi ça ne suffit pas. Illustre le problème soulevé par la problématique."],
-  ['Chiffres clés', "2 ou 3 données chiffrées récentes, chacune avec sa source en dessous. Montre l'ampleur du problème."],
-  ['Cas d\'entreprises', "UNE seule slide comparant 2 ou 3 entreprises réelles (dont un échec ou une limite), chacune avec son angle et sa source. Ils illustrent le problème, pas une fiche descriptive."],
-  ['Solutions', "Les préconisations, structurées avant / pendant / après. Actions humaines, organisationnelles et de gouvernance : gouvernance, tests réguliers, communication de crise, sensibilisation, sauvegarde isolée. Réponse directe à la problématique."],
-  ['Solutions', "(suite) Approfondissement des préconisations : conditions de réussite, moyens, indicateurs de suivi, gouvernance."],
-  ['Solutions', "(suite) Déclinaison selon la taille d'entreprise : les priorités ne sont pas les mêmes en PME et en grand groupe."],
+  ['Mots clés', "Reprendre le SUJET COMPLET dans un encadré, puis 2 à 4 mots clés du sujet, chacun suivi de sa définition courte (une ligne, langage clair)."],
+  ['Enjeux — Volet technique et économique', "Ce qui se joue pour l'entreprise, structuré TOHEE : Techniques, Organisationnels, Humains, Économiques, Environnementaux. Restreint au cœur du sujet."],
+  ['Enjeux — Volet humain et organisationnel', "(suite) Les volets humain et organisationnel des enjeux, développés sans condenser."],
+  ['Problématiques — Question centrale', "La question SEULE, mise en grand, encadrée sobrement. Aucun visuel opposant deux camps. Aucune autre slide ne la cite avant."],
+  ['Problématiques — Angle complémentaire', "(suite, seulement si le sujet appelle un second angle) Une seconde question, une seule par slide, formulée dans la continuité de la première."],
+  ['Existant — État des lieux', "L'état des lieux : ce qui se fait aujourd'hui en entreprise, et pourquoi ça ne suffit pas. Illustre le problème soulevé par la problématique."],
+  ['Existant — Références théoriques', "(suite) Les concepts académiques et référentiels mobilisés, traduits en vocabulaire managérial."],
+  ['Existant — Limites et angles morts', "(suite) Ce que les pratiques actuelles ne couvrent pas."],
+  ['Chiffres clés — Ampleur du phénomène', "2 ou 3 données chiffrées récentes, chacune avec sa source en dessous. Montre l'ampleur du problème."],
+  ['Chiffres clés — Coûts et impacts', "(suite) Les coûts et impacts chiffrés, chacun avec sa source."],
+  ['Cas d\'entreprises — <nom de l\'entreprise>', "UNE SLIDE PAR ENTREPRISE : chaque cas réel occupe sa propre slide, présentée de façon distincte et individualisée (jamais deux entreprises sur la même slide), avec son angle et sa source. Il illustre le problème, pas une fiche descriptive."],
+  ['Cas d\'entreprises — <nom de l\'entreprise>', "(suite) Le deuxième cas, sur sa propre slide, avec son angle, ses chiffres clés et sa source."],
+  ['Cas d\'entreprises — <nom de l\'entreprise>', "(suite) Le troisième cas, sur sa propre slide — dont au moins un échec ou une limite."],
+  ['Chiffres clés — Synthèse comparative', "Ce que les chiffres et les cas révèlent ensemble, en une lecture d'ensemble sourcée."],
+  ['Solutions — Anticipation et gouvernance', "Les préconisations, structurées avant / pendant / après. Actions humaines, organisationnelles et de gouvernance : gouvernance, tests réguliers, communication de crise, sensibilisation, sauvegarde isolée. Réponse directe à la problématique."],
+  ['Solutions — Réponse à incident', "(suite) La conduite à tenir pendant la crise : pilotage, communication, décisions immédiates."],
+  ['Solutions — Reprise et amélioration continue', "(suite) L'après-crise : retour d'expérience, plan d'amélioration, indicateurs de suivi."],
+  ['Préconisations — Conditions de réussite', "Ce qui conditionne la réussite des préconisations : moyens à mobiliser, portage, gouvernance."],
+  ['Préconisations — Déclinaison selon la taille', "Les priorités ne sont pas les mêmes en PME et en grand groupe : décliner les préconisations par taille d'entreprise."],
+  ['Préconisations — Indicateurs de suivi', "Les indicateurs qui montrent que les préconisations produisent leur effet, et à quelle échéance."],
+  ['Préconisations — Feuille de route', "La séquence de mise en œuvre proposée, étape par étape."],
   ['Conclusion', "Réponse explicite à la problématique, rappel du fil directeur, puis ouverture prospective posée comme une question et laissée sans réponse."],
 ];
 
@@ -96,7 +121,7 @@ Structure type d'une slide de contenu :
    (avant / pendant / après).
 4. En bas de slide, en petit et en italique gris, précédée d'une flèche « → » :
    la phrase de transition.
-5. Sous la transition, sur toutes les slides postérieures à « Problématique » :
+5. Sous la transition, sur toutes les slides postérieures aux « Problématiques » :
    le rappel de la problématique en 9 pt italique gris.
 
 Éléments à NE PAS générer : images IA, photos, illustrations, icônes
@@ -106,10 +131,26 @@ décoratives, dégradés, ombres marquées, plus de 6 puces par slide.
 
 ## SQUELETTE DE TEXTE À COLLER (structure de référence)
 
-Ce squelette couvre les slides 2 à 13. Complète-le par répétition des blocs
-« Existant » (jusqu'à 4-5 slides), « Chiffres clés » (2-3 slides), « Cas
-d'entreprises » (1 slide, 2 maximum) et « Solutions » (jusqu'à 4-5 slides) pour
-atteindre EXACTEMENT 19 slides de contenu, soit 20 slides avec la page de titre.
+Ce squelette couvre les slides 2 à 25, soit 24 slides de contenu. Il est déjà
+complet : chaque bloc y figure à sa place, dans l'ordre narratif imposé. Tu peux
+développer un bloc sur une slide supplémentaire si le sujet le réclame, mais le
+total reste EXACTEMENT de 25 slides, page de titre comprise.
+
+NOMENCLATURE ET DÉCLINAISON DES TITRES — deux règles non négociables :
+- Les titres suivent la nomenclature classique et structurée : « Plan de
+  présentation », « Contexte », « Mots clés », « Enjeux », « Problématiques »,
+  « Existant », « Chiffres clés », « Cas d'entreprises », « Solutions »,
+  « Préconisations », « Conclusion ». Jamais une phrase, jamais de verbe
+  conjugué, jamais de point.
+- Dès qu'une catégorie occupe PLUSIEURS slides, chaque titre reprend le titre
+  principal suivi de DEUX OU TROIS MOTS de précision, séparés par un tiret, qui
+  disent ce que la slide a d'unique : « Enjeux — Volet humain », « Solutions —
+  Continuité d'activité », « Préconisations — Avant la crise ». Deux slides ne
+  portent JAMAIS le même titre. Les cas d'entreprises portent le nom de
+  l'entreprise : « Cas d'entreprises — Thalès ».
+
+CAS D'ENTREPRISES : UNE slide par entreprise, présentée de façon distincte et
+individualisée. Aucun regroupement de deux entreprises sur une même slide.
 
 Chaque bloc suit toujours ce format :
 
@@ -143,14 +184,19 @@ ${squelette}
 ## CONTRÔLE FINAL AVANT EXPORT
 
 Vérifie, slide par slide, que :
-- le total est EXACTEMENT de 20 slides, page de titre comprise ;
+- le total est EXACTEMENT de 25 slides, page de titre comprise, soit 24 slides
+  de contenu ;
 - la 2e slide du dossier est « Plan de présentation », sans aucune problématique ;
-- la slide « Mots clés du sujet » reprend le sujet complet et définit chaque mot clé ;
+- les titres suivent la nomenclature imposée, et chaque slide d'une catégorie
+  déclinée porte sa précision de deux ou trois mots après un tiret : aucun titre
+  n'est répété d'une slide à l'autre ;
+- la slide « Mots clés » reprend le sujet complet et définit chaque mot clé ;
 - la problématique n'apparaît qu'à partir de sa slide dédiée, et n'y est jamais
   opposée à un camp adverse ;
 - chaque slide de contenu se termine par sa phrase de transition (sauf la
   conclusion) ;
-- les cas d'entreprises tiennent sur une seule slide (deux au maximum) ;
+- chaque cas d'entreprise occupe sa PROPRE slide, présentée de façon distincte
+  et individualisée : jamais deux entreprises sur la même slide ;
 - aucune slide ne contient de phrase rédigée : uniquement des puces nominales
   courtes ;
 - AUCUNE image générée par l'IA : uniquement des formes, frises ou icônes sobres ;

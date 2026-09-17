@@ -72,9 +72,9 @@ const MARQUEURS_CHIFFRES = [
 // Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels →
 // Solutions → Conclusion. `null` = bloc facultatif dans une session donnée
 // (ex. un sujet peut n'avoir aucun cas d'entreprise réel à citer).
-// Rappel : le volume cible du support est de 20 slides page de titre comprise
+// Rappel : le volume cible du support est de 25 slides page de titre comprise
 // (voir services/supportLayout.js pour la ligne directrice continue).
-const VOLUME_CIBLE_TOTAL = 20;
+const VOLUME_CIBLE_TOTAL = 25;
 
 const ORDRE_BLOCS = [
   { cle: 'contexte', libelle: 'Contexte', tester: (t) => t.includes('contexte') },
@@ -276,14 +276,16 @@ function detecterManquesSupport(session) {
     );
   }
 
-  // ---- Critère 1.4 : benchmark condensé (une slide, deux au maximum) ----
+  // ---- Critère 1.4 : une slide par cas d'entreprise (présentation distincte) ----
+  // Chaque cas doit être individualisé : jamais deux entreprises sur la même
+  // slide. Une seule slide « Cas d'entreprises » signale un regroupement.
   const slidesCas = slides.filter(
     (slide, i) => types[i].includes('exempleentreprise') || /cas d.entreprise|cas reel/.test(textes[i])
   );
-  if (slidesCas.length > 2) {
+  if (slidesCas.length === 1) {
     ajouter(
       '1.4',
-      `Les cas d’entreprises occupent ${slidesCas.length} slides : ils doivent être regroupés sur une seule slide (deux au maximum) pour laisser la place à la réponse à la problématique.`
+      'Les cas d’entreprises sont regroupés sur une seule slide : chaque entreprise doit disposer de sa propre slide, présentée de façon distincte et individualisée.'
     );
   }
 
@@ -299,7 +301,7 @@ function detecterManquesSupport(session) {
     );
   }
 
-  // ---- Volume cible : 19 slides de contenu, soit 20 slides page de titre comprise.
+  // ---- Volume cible : 24 slides de contenu, soit 25 slides page de titre comprise.
   //      Avertissement seulement : la génération conclut d'elle-même si la
   //      conclusion manque, et un support un peu plus long reste présentable.
   const totalAvecTitre = slides.length + 1 < VOLUME_CIBLE_TOTAL ? slides.length + 1 : VOLUME_CIBLE_TOTAL;
@@ -307,7 +309,7 @@ function detecterManquesSupport(session) {
     const ecart = slides.length + 1 - VOLUME_CIBLE_TOTAL;
     ajouter(
       '2.4',
-      `Le support compte ${totalAvecTitre} slides page de titre comprise au lieu des ${VOLUME_CIBLE_TOTAL} attendues (${ecart > 0 ? `retirez ${ecart}` : `ajoutez ${-ecart}`} slide(s) : condensez les cas d’entreprises et les redondances, ou développez l’existant et les solutions).`
+      `Le support compte ${totalAvecTitre} slides page de titre comprise au lieu des ${VOLUME_CIBLE_TOTAL} attendues (${ecart > 0 ? `retirez ${ecart}` : `ajoutez ${-ecart}`} slide(s) : supprimez les redondances, ou développez l’existant, les cas d’entreprises et les solutions).`
     );
   }
 
@@ -319,11 +321,11 @@ function detecterManquesSupport(session) {
  * Utilisé avant la génération du .pptx (export et prévisualisation).
  *
  * Les attendus issus du durcissement du support (ligne directrice continue,
- * volume de 20 slides, cas d'entreprises condensés) sont signalés à titre
+ * volume de 25 slides, un cas d'entreprise par slide) sont signalés à titre
  * d'AVERTISSEMENT : ils guident la régénération sans bloquer l'export d'un
  * support déjà généré, dont l'étudiant reste maître.
  */
-const TYPES_AVERTISSEMENT = new Set(['2.1', '2.4']);
+const TYPES_AVERTISSEMENT = new Set(['2.1', '2.4', '1.4']);
 
 function assertConformiteSupport(session) {
   const rapport = detecterManquesSupport(session);

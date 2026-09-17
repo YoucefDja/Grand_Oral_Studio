@@ -276,12 +276,21 @@ présentation généré sans figurer dans ce glossaire.
 
 Le support est la mise en forme visuelle du plan détaillé, pas un nouveau
 contenu. Consignes :
-- le support compte exactement 20 slides page de titre comprise (19 slides de
-  contenu, conclusion incluse) : une slide de titre, puis contexte, plan de
-  présentation (2e slide, systématique), mots clés du sujet (sujet complet
-  repris et chaque mot clé défini), enjeux, problématique, existant, données
-  chiffrées, cas d'entreprises (regroupés sur une seule slide, deux au
-  maximum), solutions, conclusion,
+- le support compte exactement 25 slides page de titre comprise (24 slides de
+  contenu, conclusion incluse) : ce volume est volontairement large, il permet
+  une slide distincte et individualisée par cas d'entreprise et le
+  développement de chaque idée sans condenser. Une slide de titre, puis
+  contexte, plan de présentation (2e slide, systématique), mots clés (sujet
+  complet repris et chaque mot clé défini), enjeux, problématiques, existant,
+  données chiffrées, cas d'entreprises (une slide par entreprise), solutions,
+  préconisations, conclusion,
+- les titres suivent une nomenclature classique et structurée (Contexte, Mots
+  clés, Enjeux, Problématiques, Solutions, Préconisations…) : jamais une phrase,
+  jamais de verbe conjugué, jamais de point. Dès qu'une catégorie occupe
+  plusieurs slides, chaque titre reprend le titre principal suivi de deux ou
+  trois mots de précision différenciatrice après un tiret (« Solutions —
+  Continuité d'activité », « Préconisations — Avant la crise », « Cas
+  d'entreprises — Thalès ») ; deux slides ne portent jamais le même titre,
 - puces courtes sur les slides (3 à 5 puces, une ligne chacune, 6 maximum ; le
   détail argumentatif va dans les notes orateur, jamais sur la diapositive
   elle-même : l'étudiant doit présenter en s'appuyant sur la slide, pas la lire),

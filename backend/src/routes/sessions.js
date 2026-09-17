@@ -569,13 +569,21 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
-    // Source de style : la section en base, éditable en admin, partagée avec
-    // les prompts système. Si elle est absente, le seed n'a pas été relancé.
-    const styleSection = await MethodologySection.findOne({ sectionId: 'style_support' }).lean();
-    if (!styleSection || !styleSection.content) {
+    // Source de style et charte visuelle : sections en base, éditables en
+    // admin, partagées avec les prompts système. Si elles sont absentes, c'est
+    // que le seed n'a pas été relancé après leur ajout.
+    const sections = await MethodologySection.find({
+      sectionId: { $in: ['style_support', 'charte_visuelle_support'] },
+    }).lean();
+    const styleSection = sections.find((s) => s.sectionId === 'style_support');
+    const charteSection = sections.find((s) => s.sectionId === 'charte_visuelle_support');
+    const manquantes = [];
+    if (!styleSection || !styleSection.content) manquantes.push('style_support');
+    if (!charteSection || !charteSection.content) manquantes.push('charte_visuelle_support');
+    if (manquantes.length) {
       throw httpError(
         500,
-        "Le bloc de style « style_support » est absent de la base. Lancez le script de seed (npm run seed) puis relancez l'export."
+        `Bloc(s) « ${manquantes.join(' », « ')} » absent(s) de la base. Lancez le script de seed (npm run seed) puis relancez l'export.`
       );
     }
 
@@ -593,6 +601,7 @@ router.get(
       problematique,
       ligneDirectrice,
       styleSupport: styleSection.content,
+      charteVisuelle: charteSection.content,
     });
 
     const safeTitre = session.titre.replace(/[^a-z0-9]/gi, '_').substring(0, 30);

@@ -15,12 +15,15 @@
  *   5. CONTENU GÉNÉRÉ PAR L'APP     — analyse, problématique, glossaire, plan
  *   6. EXEMPLES DE RÉFÉRENCE        — extraits réels des diaporamas de l'étudiant
  *   7. CONSIGNES FINALES            — les garde-fous adressés à Claude Design
+ * puis, en annexes, la CHARTE VISUELLE complète (relue depuis la base, section
+ * « charte_visuelle_support ») : couleurs CESI, gabarit des slides, page de
+ * titre, barre de progression, fil rouge et contrôle final.
  *
- * Règle d'architecture : AUCUN contenu de style n'est dupliqué en dur ici. Le
- * bloc « ton, style et vocabulaire » est relu depuis la collection
- * `MethodologySection` (sectionId `style_support`), c'est-à-dire depuis la même
- * source que celle qui alimente les prompts système. L'éditer en admin puis
- * relancer le seed suffit à mettre à jour tous les exports.
+ * Règle d'architecture : AUCUN contenu de style ni de charte n'est dupliqué en
+ * dur ici. Ces deux blocs sont relus depuis la collection `MethodologySection`
+ * (sections `style_support` et `charte_visuelle_support`), c'est-à-dire depuis
+ * la même source que celle qui alimente les prompts système. Les éditer en
+ * admin puis relancer le seed suffit à mettre à jour tous les exports.
  */
 const { NOM, ANNEE } = require('../config/soutenance');
 const { CONSIGNES_FOND_VULGARISATION, CONSIGNES_FORME_SUPPORT } = require('./consignesSupport');
@@ -31,9 +34,9 @@ const {
   TITRES_OBSERVES,
 } = require('./exemplesStyle');
 
-/** Durée et volume cibles de l'oral — alignés sur le code (20 slides exactement). */
+/** Durée et volume cibles de l'oral — alignés sur le code (25 slides exactement). */
 const DUREE_MINUTES = 20;
-const NB_SLIDES_TOTAL = 20;
+const NB_SLIDES_TOTAL = 25;
 
 /**
  * Squelette imposé du support : une entrée par slide de contenu (la page de
@@ -54,7 +57,7 @@ const SQUELETTE_SLIDES = [
     titre: 'Plan de présentation',
     role: 'Slide 2 — sommaire de l\'oral, obligatoirement en deuxième position.',
     contenu:
-      "4 à 5 puces très courtes annonçant les parties dans l'ordre où elles seront présentées (contexte et mots clés, enjeux, problématique, existant et chiffres, cas d'entreprises, solutions, conclusion). Aucune problématique, aucun chiffre, aucun développement.",
+      "4 à 5 puces très courtes annonçant les parties dans l'ordre où elles seront présentées (contexte et mots clés, enjeux, problématiques, existant et chiffres, cas d'entreprises, solutions, préconisations, conclusion). Aucune problématique, aucun chiffre, aucun développement.",
   },
   {
     titre: 'Contexte',
@@ -63,50 +66,57 @@ const SQUELETTE_SLIDES = [
       "Une accroche qui capte le jury, puis pourquoi le sujet est d'actualité et pourquoi les entreprises sont directement concernées. Positionnement stratégique du sujet dans l'entreprise ou le secteur.",
   },
   {
-    titre: 'Mots clés du sujet',
+    titre: 'Mots clés',
     role: 'Slide 4 — cadrage du vocabulaire.',
     contenu:
       "Le SUJET COMPLET repris tel qu'il est posé (encadré), puis 2 à 4 mots clés du sujet, chacun suivi de sa définition courte (une ligne, langage clair) issue du glossaire validé.",
   },
   {
     titre: 'Enjeux',
-    role: 'Slide 5 — ce qui se joue pour l\'entreprise.',
+    role: 'Slides 5 à 6 — ce qui se joue pour l\'entreprise (1 à 2 slides).',
     contenu:
-      "Structuré par la grille TOHEE nommée en clair : Techniques, Organisationnels, Humains, Économiques, Environnementaux. Restreint au cœur du sujet, pas un inventaire. Déclinaison « Gain : … / Perte : … » possible quand un arbitrage doit être exposé.",
+      "Structuré par la grille TOHEE nommée en clair : Techniques, Organisationnels, Humains, Économiques, Environnementaux. Restreint au cœur du sujet, pas un inventaire. Déclinaison « Gain : … / Perte : … » possible quand un arbitrage doit être exposé. Si la catégorie occupe deux slides, les titres portent une précision distincte (ex. « Enjeux — Volet humain »).",
   },
   {
-    titre: 'Problématique',
-    role: 'Slide 6 — la question centrale, et rien d\'autre.',
+    titre: 'Problématiques',
+    role: 'Slides 7 à 8 — la ou les questions centrales (1 à 2 slides).',
     contenu:
-      "La question SEULE, mise en grand et encadrée sobrement. C'est un problème concret à instruire, pas un débat d'opinion : aucun visuel opposant deux camps, pas de deux colonnes « Pour / Contre ». La problématique n'apparaît sur AUCUNE slide antérieure.",
+      "La question SEULE, mise en grand et encadrée sobrement. S'il y a plusieurs angles, une question par slide, chaque titre précisant l'angle (ex. « Problématiques — Angle humain »). C'est un problème concret à instruire, pas un débat d'opinion : aucun visuel opposant deux camps, pas de deux colonnes « Pour / Contre ». La problématique n'apparaît sur AUCUNE slide antérieure.",
   },
   {
     titre: 'Existant',
-    role: 'Slides 7 à 10 — état des lieux et fondements (répéter le bloc jusqu\'à 4-5 slides).',
+    role: 'Slides 9 à 13 — état des lieux et fondements (4 à 5 slides).',
     contenu:
-      "Ce qui se fait aujourd'hui en entreprise sur ce sujet et pourquoi ça ne suffit pas. Les concepts et cadres d'analyse sont mobilisés et nommés, mais toujours traduits en conséquence concrète pour l'organisation (jamais une vitrine de normes). Chaque slide illustre le problème soulevé par la problématique.",
+      "Ce qui se fait aujourd'hui en entreprise sur ce sujet et pourquoi ça ne suffit pas. Les concepts et cadres d'analyse sont mobilisés et nommés, mais toujours traduits en conséquence concrète pour l'organisation (jamais une vitrine de normes). Chaque slide illustre le problème soulevé par la problématique, et chaque titre porte sa précision distinctive.",
   },
   {
     titre: 'Chiffres clés',
-    role: 'Slides 11 à 13 — ampleur du problème (2-3 slides).',
+    role: 'Slides 14 à 16 — ampleur du problème (2 à 3 slides).',
     contenu:
       "2 ou 3 données chiffrées récentes par slide, chacune affichée seule et en grand, avec sa source citée juste en dessous. Le sens du chiffre est expliqué dans la note de présentateur, pas sur la slide.",
   },
   {
-    titre: 'Cas d\'entreprises',
-    role: 'Slide 14 — benchmark réel (2 slides au maximum dans tout le support).',
+    titre: 'Cas d\'entreprises — <nom>',
+    role:
+      'Slides 17 à 19 — benchmark réel : UNE SLIDE PAR ENTREPRISE (2 à 3 slides, une par cas).',
     contenu:
-      "UNE slide comparant 2 ou 3 entreprises réelles, nommées, dont au moins un échec ou une limite. Chacune avec son angle précis (ce qui lui est arrivé) et sa source. Les cas montrent le problème à l'œuvre, ce ne sont pas des fiches descriptives.",
+      "Chaque entreprise occupe sa propre slide, présentée de façon distincte et individualisée : jamais deux entreprises sur la même slide. Le titre porte « Cas d'entreprises » suivi du nom réel de l'entreprise. Le cas montre le problème à l'œuvre (ce qui a manqué, ce qui a coûté), avec son angle précis, ses chiffres clés et sa source. Au moins un cas illustre un échec ou une limite ; ce ne sont pas des fiches descriptives.",
   },
   {
     titre: 'Solutions',
-    role: 'Slides 15 à 18 — préconisations (4-5 slides).',
+    role: 'Slides 20 à 22 — préconisations (3 à 4 slides).',
     contenu:
-      "Réponse directe à la problématique, structurée avant / pendant / après. Actions humaines, organisationnelles et de gouvernance : gouvernance, tests réguliers, communication de crise, sensibilisation des équipes, sauvegarde isolée. Puis approfondissement : conditions de réussite, moyens, indicateurs de suivi, déclinaison selon la taille d'entreprise.",
+      "Réponse directe à la problématique, structurée avant / pendant / après. Actions humaines, organisationnelles et de gouvernance : gouvernance, tests réguliers, communication de crise, sensibilisation des équipes, sauvegarde isolée. Chaque slide traite une facette distincte, et son titre porte la précision correspondante (ex. « Solutions — Continuité d'activité »).",
+  },
+  {
+    titre: 'Préconisations',
+    role: 'Slides 23 à 24 — approfondissement des préconisations (1 à 2 slides).',
+    contenu:
+      "Conditions de réussite, moyens à mobiliser, indicateurs de suivi, déclinaison selon la taille d'entreprise (les priorités ne sont pas les mêmes en PME et en grand groupe). Titres déclinés avec précision (ex. « Préconisations — Suivi et pilotage »).",
   },
   {
     titre: 'Conclusion',
-    role: 'Slide 19-20 — fermeture.',
+    role: 'Slide 25 — fermeture du dossier.',
     contenu:
       "Réponse explicite à la problématique, rappel du fil directeur, puis ouverture prospective posée comme une question et volontairement laissée sans réponse. Dernière slide : pas de phrase de transition.",
   },
@@ -139,6 +149,7 @@ function blocExempleSlide(ex) {
  * @param {string} params.problematique  problématique retenue, en clair
  * @param {string} params.ligneDirectrice fil conducteur, en clair
  * @param {string} params.styleSupport   bloc « ton, style et vocabulaire » relu en base
+ * @param {string} params.charteVisuelle bloc « charte visuelle CESI » relu en base
  * @returns {string} le markdown complet
  */
 function buildClaudeDesignExport({
@@ -149,6 +160,7 @@ function buildClaudeDesignExport({
   problematique,
   ligneDirectrice,
   styleSupport,
+  charteVisuelle,
 }) {
   const sujet = String(session.titre || '').trim();
   const theme = String(session.theme || '').trim();
@@ -171,7 +183,8 @@ function buildClaudeDesignExport({
 
 > **Ce document est auto-suffisant.** Il contient tout le contexte nécessaire :
 > la mission, le sujet, le ton et le vocabulaire attendus, la structure imposée
-> slide par slide, le contenu déjà rédigé, et des exemples de référence réels.
+> slide par slide, le contenu déjà rédigé, des exemples de référence réels, et
+> la charte visuelle complète (palette CESI, gabarit des slides, page de titre).
 > Tu n'as besoin d'aucune autre source ni d'aucun accès externe : lis-le en
 > entier avant de produire quoi que ce soit.
 
@@ -185,7 +198,7 @@ Tu produis une **présentation de soutenance orale académique** (Grand Oral CES
 - **Volume imposé : EXACTEMENT ${NB_SLIDES_TOTAL} slides**, page de titre comprise.
 - **Rythme attendu : environ 1 slide toutes les 45 à 60 secondes.** C'est ce rythme qui garantit que l'étudiant tient le temps imparti : si une slide demande plus d'une minute d'explication, elle est trop dense et doit être condensée.
 - **Ce que tu produis n'est PAS un document à lire.** Les slides sont des appuis visuels pour l'orateur : elles portent des mots clés et des formes sobres, jamais des paragraphes. L'argumentation complète vit dans la note de présentateur, qui accompagne chaque slide.
-- Tu produis le **contenu des slides** (titre, puces, formes, note de présentateur) et tu appliques la **charte sobre** décrite plus bas. Tu ne produis rien d'autre.
+- Tu produis le **contenu des slides** (titre, puces, formes, note de présentateur) et tu appliques la **charte visuelle** décrite en section 7. Tu ne produis rien d'autre.
 
 ---
 
@@ -213,9 +226,9 @@ ${styleSupport}
 L'enchaînement ci-dessous est **non négociable** : le jury évalue la clarté du plan et la construction en entonnoir (on pose le contexte, on en déduit les enjeux, la problématique en découle, puis chaque bloc suivant la traite avant de refermer sur une conclusion qui y répond).
 
 **Règles de progression :**
-1. **Interdiction absolue de dévoiler la problématique avant sa slide dédiée** (slide 6). Les slides précédentes la préparent sans jamais la formuler, la slide « Plan de présentation » comprise.
-2. La progression est **Contexte → Plan de présentation → Mots clés du sujet → Enjeux → Problématique → Existant → Chiffres clés → Cas d'entreprises → Solutions → Conclusion**.
-3. **N'ajoute, ne fusionne et ne supprime aucune slide hors de cette structure.** Les seuls ajustements autorisés sont les répétitions explicitement indiquées (Existant 4-5 slides, Chiffres clés 2-3 slides, Cas d'entreprises 1-2 slides, Solutions 4-5 slides), dans les limites indiquées, pour atteindre EXACTEMENT ${NB_SLIDES_TOTAL} slides.
+1. **Interdiction absolue de dévoiler la problématique avant sa slide dédiée** (slide 7). Les slides précédentes la préparent sans jamais la formuler, la slide « Plan de présentation » comprise.
+2. La progression est **Contexte → Plan de présentation → Mots clés → Enjeux → Problématiques → Existant → Chiffres clés → Cas d'entreprises → Solutions → Préconisations → Conclusion**.
+3. **N'ajoute, ne fusionne et ne supprime aucune slide hors de cette structure.** Les seuls ajustements autorisés sont les répétitions explicitement indiquées (Enjeux 2 slides, Problématiques 2 slides, Existant 5 slides, Chiffres clés 3 slides, Cas d'entreprises 3 slides — une par entreprise, Solutions 3 slides, Préconisations 2 slides), dans les limites indiquées, pour atteindre EXACTEMENT ${NB_SLIDES_TOTAL} slides. **Déclinaison obligatoire des titres** : dès qu'une catégorie occupe plusieurs slides, chaque titre reprend le titre principal suivi de deux ou trois mots de précision après un tiret (« Enjeux — Volet humain », « Solutions — Continuité d'activité ») ; deux slides ne portent jamais le même titre.
 4. **Chaque slide de contenu se termine par une phrase de transition** en italique, en bas de slide, qui part de la slide courante et annonce la suivante (12 à 18 mots). Seule la conclusion n'en a pas.
 5. **Chaque chiffre ou cas d'entreprise porte sa source** juste en dessous, en petit. Une donnée non sourcée ne compte pas.
 
@@ -273,7 +286,15 @@ ${TITRES_OBSERVES.map((t) => `- ${t}`).join('\n')}
 
 ---
 
-## 7. CONSIGNES FINALES À CLAUDE DESIGN
+## 7. CHARTE VISUELLE À APPLIQUER À LA LETTRE
+
+Cette section décrit l'apparence exacte attendue : palette CESI, gabarit de chaque slide, page de titre, barre de progression, fil rouge et contrôle final. Elle fait autorité sur tout choix esthétique. Applique-la sans inventer d'autres styles, couleurs ou dispositions.
+
+${charteVisuelle || "*(Charte visuelle indisponible : la section « charte_visuelle_support » est absente de la base. Relancez le seed puis régénérez ce document.)*"}
+
+---
+
+## 8. CONSIGNES FINALES À CLAUDE DESIGN
 
 1. **« Respecte strictement le ton, le vocabulaire et la structure ci-dessus. »**
 2. **« N'invente aucun contenu hors des éléments fournis. »** Si une information n'est pas dans la section 5, elle n'existe pas : ne la fabrique pas, ne comble pas les vides par des généralités, et n'ajoute ni chiffre, ni entreprise, ni source de ton cru.

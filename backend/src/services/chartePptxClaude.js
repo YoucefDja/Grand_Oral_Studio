@@ -104,12 +104,22 @@ Chaque slide de contenu comporte quatre zones, dans cet ordre :
    h 1,05, couleur ${COULEURS.PRIMARY}, sans bordure.
    - Titre de la slide : x 0,5 / y 0,14 / w 13,33 − 2,6 / h 0,8, corps 20 pt, gras,
      couleur gris très foncé ${COULEURS.DARK}, centré verticalement. Aligné à gauche.
-     Le titre est un MOT-CLÉ, jamais une phrase : deux ou trois mots maximum,
-     sans verbe conjugué, sans point, sans sous-titre. Nomenclature imposée :
-     « Plan de présentation », « Contexte », « Mots clés du sujet », « Enjeux »,
-     « Problématique », « Existant », « Chiffres clés », « Cas d'entreprises »,
-     « Solutions », « Conclusion ». Le détail va dans les puces et les notes du
-     présentateur.
+     Le titre est un MOT-CLÉ, jamais une phrase : jamais de verbe conjugué, jamais
+     de point, jamais de sous-titre explicatif. Le détail va dans les puces et les
+     notes du présentateur.
+     NOMENCLATURE IMPOSÉE (2 à 4 mots) : « Plan de présentation », « Contexte »,
+     « Mots clés », « Enjeux », « Problématiques », « Solutions », « Préconisations »,
+     « Conclusion », complétée par les blocs de contenu de la méthodologie
+     (« Existant », « Chiffres clés », « Cas d'entreprises »).
+     DÉCLINAISON OBLIGATOIRE : dès qu'une catégorie occupe PLUSIEURS slides, chaque
+     slide porte le titre principal suivi de DEUX OU TROIS MOTS de précision, séparés
+     par un tiret, qui identifient ce qui la distingue des autres slides de la même
+     catégorie. Exemples : « Solutions — Continuité d'activité »,
+     « Solutions — Sensibilisation des équipes », « Préconisations — Avant la crise »,
+     « Préconisations — Pendant la crise », « Cas d'entreprises — Thalès et Cisco »,
+     « Problématiques — Angle humain ». Deux slides ne doivent JAMAIS porter le même
+     titre : le jury doit pouvoir suivre la progression sur le seul sommaire des
+     titres.
    - ÉQUILIBRE TECHNIQUE ET VULGARISATION : utilise un vocabulaire RICHE, précis et professionnel, mais simple à comprendre et à maîtriser à l'oral. N'accumule pas les termes techniques sur chaque slide : utilise-les avec parcimonie pour ne pas noyer le jury.
    - SUPPRESSION DU JARGON TECHNIQUE : aucune référence directe aux normes et référentiels complexes (ISO 27031, ISO 22301, NIST, EBIOS, ITIL…) ni aucun acronyme technique posé sans explication. Remplace-les par le vocabulaire managérial et organisationnel : gouvernance, pilotage, tests réguliers, communication de crise, sensibilisation, sauvegarde isolée, plan de communication. Un référentiel ne peut apparaître que s'il est immédiatement traduit en conséquence concrète pour l'organisation.
    - VULGARISATION ET ARGUMENTATION : chaque point montre la compréhension des ENJEUX (pourquoi c'est critique) et non le fonctionnement technique (comment ça marche). Le fil conducteur est la vulgarisation : un problème réel d'entreprise, puis des solutions pragmatiques.
@@ -168,7 +178,7 @@ contenu) se termine donc par UNE phrase de transition discrète, reprise du cham
 ### SLIDE « Plan de présentation » — RENDU IMPOSÉ (2e slide du dossier)
 
 Cette slide est SYSTÉMATIQUE : elle vient toujours juste après la première slide
-du dossier (la slide « Contexte ») et avant « Mots clés du sujet ». Elle suit le
+du dossier (la slide « Contexte ») et avant « Mots clés ». Elle suit le
 gabarit standard (bandeau, barre de progression, phrase de transition) avec un
 corps particulier :
 
@@ -183,7 +193,7 @@ corps particulier :
    formulation de la problématique : elle est réservée à sa slide dédiée.
 4. La phrase de transition de cette slide annonce les mots clés du sujet.
 
-### SLIDE « Mots clés du sujet » — RENDU IMPOSÉ
+### SLIDE « Mots clés » — RENDU IMPOSÉ
 
 1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
 2. Encadré du sujet : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 / h 1,1,
@@ -198,11 +208,13 @@ corps particulier :
 
 Ces slides ne suivent PAS le gabarit ci-dessus : elles doivent montrer
 l'entreprise, pas la décrire. Elles illustrent CONCRÈTEMENT le problème soulevé
-par la problématique : le cas montre le problème à l'œuvre (ce qui a manqué, ce
-qui a coûté), jamais une fiche descriptive de l'entreprise. Le support ne compte
-qu'UNE seule slide « Cas d'entreprises » (DEUX au maximum en tout) : les cas
-d'entreprises sont donc REGROUPÉS, jamais un cas par slide au-delà de deux
-slides. Reproduis cette disposition :
+par la problématique : le cas montre le problème à l'œuvre (ce qui a manqué,
+ce qui a coûté), jamais une fiche descriptive de l'entreprise.
+STRUCTURE IMPOSÉE : UNE slide par entreprise. Chaque cas est présenté de façon
+distincte et individualisée, jamais regroupé avec un autre — le jury doit
+consacrer à chaque entreprise le temps d'analyse qu'elle mérite. Le titre de
+chaque slide porte donc « Cas d'entreprises » suivi du nom de l'entreprise
+(ex. « Cas d'entreprises — Thalès »). Reproduis cette disposition :
 
 1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
 2. CARTE ENTREPRISE : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 /
@@ -230,15 +242,10 @@ slides. Reproduis cette disposition :
    fond blanc, contour ${COULEURS.ACCENT} 1 pt ; la valeur en 20 pt gras
    ${COULEURS.DARK} centrée, et le libellé en 10 pt gris centré dessous.
 4. PUCES D'ANALYSE : sous les pastilles, 14 pt, mêmes règles que le corps
-   standard (puces natives, 6 maximum).
+   standard (puces natives, 6 maximum). Elles montrent le problème à l'œuvre :
+   ce qui a manqué, ce que cela a coûté.
 5. PHRASE DE TRANSITION : zone et style de la section « LIGNE DIRECTRICE
    CONTINUE », au-dessus du rappel de la problématique.
-
-Pour comparer 2 ou 3 entreprises sur une même slide « Cas d'entreprises » :
-empile 2 ou 3 blocs « carte + pastilles » (carte 1,1 de haut au lieu de 1,5,
-pastilles 0,7 au lieu de 1,0, corps 12 pt pour les puces), chacun avec son logo
-réel, son nom, sa source et ses chiffres clés. Le jury doit pouvoir comparer les
-cas d'un coup d'œil, sans changer de slide.
 
 ### SLIDE « problematique » — RENDU DÉDIÉ OBLIGATOIRE
 
@@ -314,12 +321,14 @@ Vérifie, slide par slide, que :
 - le fond est blanc et les textes lisibles (aucun texte clair sur fond clair) ;
 - chaque slide de contenu possède son bandeau jaune CESI et sa barre de progression ;
 - la barre progresse bien d'une slide à l'autre et le compteur « n / total » est exact ;
-- la 2e slide du dossier est bien le « Plan de présentation », puis « Contexte » et
-  « Mots clés du sujet » (le sujet complet repris et chaque mot clé défini) ;
+- 2e slide du dossier est bien le « Plan de présentation », puis « Contexte » et
+  « Mots clés » (le sujet complet repris et chaque mot clé défini) ;
 - chaque slide de contenu se termine par sa phrase de transition (sauf la
   dernière), qui annonce la slide suivante : la ligne directrice ne s'interrompt
   jamais et aucune slide ne paraît isolée ;
-- les cas d'entreprises tiennent sur une seule slide (deux au maximum en tout) ;
+- chaque cas d'entreprise occupe sa PROPRE slide, présentée de façon distincte et
+  individualisée, avec son titre « Cas d'entreprises — <nom> » ; aucun cas n'est
+  regroupé avec un autre sur la même slide ;
 - aucune slide n'est surchargée de texte : les puces sont courtes, une ligne
   chacune, et l'étudiant peut présenter sans lire ses slides ;
 - le rappel de la problématique apparaît uniquement après sa slide dédiée ;
@@ -338,8 +347,9 @@ Vérifie, slide par slide, que :
 - les cas d'entreprises illustrent le problème posé par la problématique, et les
   préconisations y répondent directement (actions humaines, organisationnelles et
   de gouvernance, structurées avant / pendant / après) ;
-- total EXACTEMENT 20 slides, page de titre comprise (volume imposé, ni plus ni
-  moins) : 1 page de titre + 19 slides de contenu, conclusion incluse.
+- total EXACTEMENT 25 slides, page de titre comprise (volume imposé, ni plus ni
+  moins) : 1 page de titre + 24 slides de contenu, conclusion incluse. Ce volume
+  permet une slide distincte par cas d'entreprise.
 `.trim();
 }
 

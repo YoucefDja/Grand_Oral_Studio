@@ -27,8 +27,17 @@ if (fs.existsSync(envPath)) require('dotenv').config({ path: envPath });
 const MethodologySection = require('../src/models/MethodologySection');
 const StepSchemaModel = require('../src/models/StepSchema');
 const Theme = require('../src/models/Theme');
+const { NOM, ANNEE } = require('../src/config/soutenance');
 
 const raw = require('../methodology-content.json');
+
+// Les sections de style et de charte sont rédigées avec des marqueurs __NOM__ et
+// __ANNEE__ : on les remplace au seed par les valeurs réelles de la
+// configuration de soutenance, pour ne pas figer le nom du candidat dans le
+// contenu stocké en base.
+function injecterIdentite(texte) {
+  return String(texte).replace(/__NOM__/g, NOM).replace(/__ANNEE__/g, ANNEE);
+}
 
 // Section "glossaire" absente de methodologie-grand-oral.md (nouvelle étape
 // intermédiaire entre recherche et plan) : rédigée à partir du principe
@@ -154,6 +163,148 @@ NIVEAU DE DÉTAIL PAR SLIDE
 - Le détail argumenté vit dans l'oral (note orateur + ce que l'étudiant dira), pas à l'écran.`;
 
 /**
+ * Charte visuelle CESI du support.
+ *
+ * SOURCE UNIQUE et partagée : ce bloc est le seul endroit où l'apparence du
+ * diaporama est décrite (couleurs, gabarit, page de titre, barre de
+ * progression, fil rouge, contrôles). Il est relu depuis la base par l'export
+ * « Claude Design » (route support-claude-design-prompt) et par le prompt
+ * système de l'étape support, donc par les exports Claude Desktop et Gamma.
+ * Ne jamais dupliquer ce contenu ailleurs : l'éditer ici, relancer `npm run seed`.
+ *
+ * Il est aligné sur le rendu réel de services/pptx.js (source de vérité
+ * exécutable) : toute évolution de pptx.js doit être répercutée ici.
+ * Les valeurs de NOM et ANNEE sont injectées au moment du seed depuis la
+ * configuration de soutenance, pour ne pas figer le nom du candidat.
+ */
+const CHARTE_VISUELLE_SUPPORT = `Cette section décrit l'apparence exacte du diaporama. Elle fait autorité pour la mise en page : la méthodologie n'en parle pas. Applique-la sans inventer d'autres styles, couleurs ou dispositions.
+
+FORMAT ET REPÈRES
+- Format 16:9, dimensions 33,87 cm × 19,05 cm (soit 13,33 × 7,5 pouces).
+- Repère : 1 pouce = 2,54 cm. Toutes les positions ci-dessous sont exprimées en pouces depuis le coin supérieur gauche de la slide.
+- Slide entièrement sur fond BLANC. Jamais de fond sombre, jamais de dégradé.
+- Police sans empattement : Arial (ou Calibri / Helvetica si Arial indisponible).
+- Texte courant en gris très foncé, jamais du noir pur.
+
+PALETTE (usage strictement limité)
+- Jaune CESI #F2D934 : bandeau d'en-tête des slides de contenu, liseré supérieur de la page de titre. Usage structurel uniquement. C'est un jaune très clair : tout texte posé dessus est en gris très foncé, JAMAIS en blanc.
+- Jaune CESI assombri #E0C200 : traits de séparation, partie remplie de la barre de progression, contours d'encadrés, repères numérotés. Accent uniquement, jamais en aplat large.
+- Ocre foncé #8A7A00 : rail vide de la barre de progression, type de la slide (petit texte de droite du bandeau). Seule teinte sombre de la famille jaune.
+- Gris très foncé #262626 : corps de texte, titres.
+- Gris #595959 : pied de page, rappel de la problématique, phrase de transition, mentions secondaires.
+- Gris clair #BFBFBF : contours de pastilles.
+- Aucune autre couleur, en particulier AUCUN bleu. Pas de couleurs vives, pas de dégradés, pas de cliparts.
+
+IMAGES
+AUCUNE image générée par l'IA, aucun visuel photoréaliste, aucune photo, aucun clipart, aucune icône décorative. Uniquement des formes simples (rectangles arrondis, cartes, encadrés, badges), des frises, des schémas sobres et des icônes sobres. Le logo réel de l'entreprise (slide « Cas d'entreprises ») et le logo CESI (page de titre) sont les SEULES images autorisées.
+
+PAGE DE TITRE (1re slide, sans barre de progression)
+1. Fond blanc.
+2. Liseré supérieur : rectangle plein de la largeur totale (x 0 / y 0 / w 13,33 / h 0,16), couleur #F2D934, sans bordure.
+3. Logo CESI centré horizontalement, y = 0,55, taille maximale 2,6 × 1,15 pouces, proportions d'origine respectées (jamais déformé).
+4. Libellé « GRAND ORAL CESI » : centré, y = 2,05, hauteur 0,5, corps 16 pt, gras, espacement des caractères large (≈ 6 pt), couleur #E0C200.
+5. LE SUJET SEUL, en grand, centré : y = 2,6, hauteur 1,9, largeur 13,33 − 2,4, gras, gris très foncé, aligné au centre et centré verticalement. Taille adaptée à la longueur : 32 pt si le sujet fait 55 caractères ou moins, 28 pt jusqu'à 100 caractères, 24 pt au-delà. N'ajoute NI le thème, NI la problématique, NI aucun sous-titre.
+6. Trait de séparation horizontal : largeur 3,2 pouces, centré (x = (13,33 − 3,2) / 2, y = 4,75), couleur #E0C200, épaisseur 1,5 pt.
+7. Nom du candidat « __NOM__ » : centré, y = 5,0, hauteur 0,6, corps 24 pt, gras.
+8. « Année universitaire __ANNEE__ » : centré, y = 5,7, hauteur 0,45, corps 14 pt, gris.
+
+SLIDES DE CONTENU (toutes les autres)
+Chaque slide de contenu comporte cinq zones, dans cet ordre :
+1. BANDEAU D'EN-TÊTE : rectangle plein de toute la largeur, x 0 / y 0 / w 13,33 / h 1,05, couleur #F2D934, sans bordure.
+   - Titre de la slide : x 0,5 / y 0,14 / w 13,33 − 2,6 / h 0,8, corps 20 pt, gras, gris très foncé, centré verticalement, aligné à gauche.
+   - Le titre est un MOT-CLÉ, jamais une phrase, jamais de verbe conjugué, jamais de point. Nomenclature classique et structurée : « Plan de présentation », « Contexte », « Mots clés », « Enjeux », « Problématiques », « Existant », « Chiffres clés », « Cas d'entreprises », « Solutions », « Préconisations », « Conclusion ». DÉCLINAISON OBLIGATOIRE : dès qu'une catégorie occupe PLUSIEURS slides, chaque slide porte le titre principal suivi de DEUX OU TROIS MOTS de précision différenciatrice, séparés par un tiret, qui identifient ce que la slide a d'unique — « Enjeux — Volet humain », « Solutions — Continuité d'activité », « Préconisations — Avant la crise », « Cas d'entreprises — Thalès ». Deux slides ne portent JAMAIS le même titre. Le détail va dans les puces et les notes.
+   - Type de la slide (contexte, enjeux, existant…) : x 13,33 − 2,2 / y 0,14 / w 1,8 / h 0,8, corps 10 pt, couleur #8A7A00, aligné à droite, centré verticalement, en minuscules, sans underscore.
+2. BARRE DE PROGRESSION : à l'intérieur du bandeau, en bas de celui-ci.
+   - Rail complet : x 0,5 / y 0,86 / w 13,33 − 1,0 (= 12,33) / h 0,09, couleur #8A7A00, sans bordure.
+   - Partie remplie : même origine et même hauteur, largeur = 12,33 × (numéro de la slide ÷ nombre total de slides), couleur #E0C200. La progression est calculée sur l'ensemble du diaporama, page de titre incluse.
+   - Compteur : juste sous la barre, x 13,33 − 1,7 / y 0,97 / w 1,2 / h 0,24, corps 9 pt, couleur #8A7A00, aligné à droite, au format « n / total » (ex. « 5 / 25 »).
+   - Elle est fine et discrète : elle ne doit jamais dominer le contenu.
+3. CORPS : liste à puces, x 0,55 / y 1,3 / w 13,33 − 1,1, corps 15 pt, gris très foncé, aligné en haut, avec de VRAIES puces (puces natives, jamais un caractère « • » tapé dans le texte). Une ligne par puce, espacement de 8 pt après chaque puce, 6 puces maximum — 3 à 5 puces courtes suffisent : une slide ne doit jamais être un bloc de texte, l'étudiant doit pouvoir parler en s'appuyant dessus, jamais la lire.
+   - Hauteur du corps : 4,4 pouces maximum (la phrase de transition et le rappel de la problématique occupent le bas de la slide).
+   - Si la slide n'a aucune puce, écris la mention en italique gris « Détail en notes orateur. » (x 0,5 / y 1,4 / corps 14 pt).
+4. PHRASE DE TRANSITION : dernière ligne de la slide, au-dessus du rappel de la problématique. Voir la section « LIGNE DIRECTRICE CONTINUE ».
+5. NOTES ORATEUR : le contenu du champ notes_orateur est placé dans les notes du présentateur de la slide (panneau « Notes » de l'outil), JAMAIS sur la slide elle-même. Ces notes sont COURTES et calquées sur la slide : une ligne par puce de la slide (reprise dans le même ordre), 5 lignes et 60 mots MAXIMUM par slide, chaque ligne en une phrase courte de 10-15 mots. Ce ne sont JAMAIS des paragraphes : des lignes courtes séparées par des retours à la ligne, pas un bloc de prose. Elles ne contiennent QUE ce qui figure sur la slide (aucune théorie, aucune donnée absente). Interdits : plusieurs paragraphes, plus de 5 lignes, recopie mot pour mot des puces. La page de titre n'a pas de note.
+
+LIGNE DIRECTRICE CONTINUE — PHRASE DE TRANSITION EN FIN DE SLIDE (OBLIGATOIRE)
+L'évaluation du grand oral porte d'abord sur la qualité de l'exercice oral : le support ne doit jamais donner l'impression d'une suite de slides indépendantes. Chaque slide de contenu (toutes sauf la page de titre et la dernière slide de contenu) se termine donc par UNE phrase de transition discrète, reprise du champ « transition » fourni avec la slide.
+- Position : x 0,6 / y 6,5 / w 13,33 − 2,4 / h 0,45, corps 10 pt, italique, gris, aligné à gauche, centré verticalement, retour à la ligne automatique activé. Précède la phrase d'une flèche « → ».
+- Style : petit, gris, italique — c'est un repère de continuité, jamais un élément qui domine le contenu. Aucun encadré, aucune couleur d'accent.
+- Contenu : une seule phrase courte (12 à 18 mots). Elle part de la slide courante et annonce explicitement la suivante, pour que le jury entende le fil du raisonnement (« … ce qui m'amène à… », « … voyons maintenant… »). Elle ne répète pas une puce, n'introduit ni chiffre ni terme nouveau, ne pose jamais la problématique avant sa slide dédiée et ne se réduit pas à une formule creuse. Si le champ « transition » est vide, écris une relance cohérente avec la slide suivante : la ligne directrice ne doit jamais s'interrompre.
+- Coexistence avec le rappel de la problématique : la transition reste AU-DESSUS du fil rouge (y 6,8). Sur les slides antérieures à la problématique, elle est centrée verticalement dans la zone libre jusqu'à y 6,95 + 0,35.
+- La dernière slide de contenu (la conclusion) n'affiche pas de transition.
+
+BARRE DE PROGRESSION VERSUS NUMÉRO DE SLIDE
+Le compteur « n / total » intègre la page de titre : la première slide de contenu porte donc « 2 / 25 », et la dernière « 25 / 25 ». Il doit toujours correspondre au nombre total réel de slides produites.
+
+FIL ROUGE — RAPPEL DE LA PROBLÉMATIQUE EN PIED DE SLIDE
+- Sur TOUTES les slides postérieures à la slide « Problématique », et sur la conclusion : affiche en bas de slide, en petit, la mention « Problématique : « <texte de la problématique> » ».
+- Position : x 0,6 / y 6,8 / w 13,33 − 2,4 / h 0,6, corps 9 pt, italique, gris, aligné à gauche, centré verticalement, retour à la ligne automatique activé.
+- La page de titre et les slides antérieures à la problématique n'affichent JAMAIS ce rappel.
+
+SLIDE « Plan de présentation » — RENDU IMPOSÉ (2e slide du dossier)
+Cette slide est SYSTÉMATIQUE : elle vient toujours juste après la page de titre et avant « Contexte ». Elle suit le gabarit standard (bandeau, barre de progression, phrase de transition) avec un corps particulier :
+1. 4 à 5 puces très courtes seulement, une ligne chacune, annonçant les parties du support dans l'ordre de la présentation (contexte et mots clés du sujet, enjeux, problématique, existant et chiffres clés, cas d'entreprises, solutions, conclusion).
+2. Chaque puce peut être précédée d'un petit repère numéroté #E0C200 (1, 2, 3…) : c'est un sommaire, le jury doit embrasser la construction d'un coup d'œil.
+3. Aucun chiffre d'analyse, aucune source, aucun développement, et surtout AUCUNE formulation de la problématique : elle est réservée à sa slide dédiée.
+4. La phrase de transition de cette slide annonce la slide « Contexte ».
+
+SLIDE « Mots clés » — RENDU IMPOSÉ
+1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
+2. Encadré du sujet : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 / h 1,1, fond blanc, contour #E0C200 épaisseur 1 pt. Le SUJET COMPLET y est repris tel quel, corps 16-18 pt, gras, gris très foncé, centré.
+3. Définitions des mots clés : sous l'encadré (y = 2,6), 2 à 4 mots clés du sujet, chacun sur une ligne « mot clé : définition courte » en corps 13 pt, le mot clé en gras gris très foncé et sa définition en gris. Ces définitions viennent du glossaire validé : aucun terme technique nouveau.
+
+SLIDES « Problématiques » — RENDU DÉDIÉ OBLIGATOIRE
+La question centrale est la seule chose mise en avant : on refuse toute présentation biaisée opposant deux camps. S'il y a plusieurs angles, chaque question occupe sa propre slide, titrée « Problématiques — <précision> » (une seule question par slide, jamais deux).
+1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
+2. AUCUN visuel de comparaison : jamais de deux colonnes opposées, jamais de « Pour / Contre », « Oui / Non », « Avantages / Risques », jamais de pôle A face à un pôle B. Ces formes nourrissent un débat d'opinion, alors que la problématique doit soulever un problème concret à instruire.
+3. Encadré de la question : rectangle arrondi x 1,6 / y 2,1 / w 13,33 − 3,2 / h 2,6, fond blanc, contour #E0C200 épaisseur 2 pt. La question seule est posée à l'intérieur : corps 28-32 pt, gras, gris très foncé, centrée horizontalement et verticalement, retour à la ligne automatique. Adapte la taille à la longueur (32 pt en dessous de 90 caractères, 28 pt au-delà).
+4. Optionnel : un filet #E0C200 de 2,5 pouces centré au-dessus de l'encadré (y = 1,85, épaisseur 1,5 pt) comme simple repère visuel.
+5. Aucune puce de comparaison, aucun bloc « état des lieux » : le contexte, les mots clés et les observations préliminaires sont déjà portés par les slides précédentes et ne sont pas répétés ici.
+6. Le rappel de la problématique en pied de slide ne s'affiche PAS sur cette slide (il commence sur les slides postérieures). La note du présentateur tient en 2 lignes courtes maximum.
+
+SLIDES « Cas d'entreprises » — RENDU DÉDIÉ OBLIGATOIRE
+Ces slides ne suivent PAS le gabarit ci-dessus : elles doivent montrer l'entreprise, pas la décrire. Elles illustrent CONCRÈTEMENT le problème soulevé par la problématique : le cas montre le problème à l'œuvre (ce qui a manqué, ce qui a coûté), jamais une fiche descriptive de l'entreprise. UNE SLIDE PAR ENTREPRISE : chaque cas réel occupe sa PROPRE slide, présentée de façon distincte et individualisée, jamais regroupée avec une autre. Deux entreprises ne partagent JAMAIS une slide. Le titre de chaque slide porte « Cas d'entreprises — <nom de l'entreprise> ». Reproduis cette disposition :
+1. Bandeau d'en-tête et barre de progression : identiques aux autres slides.
+2. CARTE ENTREPRISE : rectangle arrondi x 0,55 / y 1,3 / w 13,33 − 1,1 / h 1,5, fond #8A7A00, contour #E0C200 épaisseur 1 pt.
+   - LOGO RÉEL de l'entreprise, carré de 0,95 pouce, position x 0,85, centré verticalement dans la carte. Récupère-le sur le site officiel de l'entreprise (le champ « domaine » te donne son adresse exacte) ou via une API publique de logos de marques (ex. https://www.google.com/s2/favicons?domain=<domaine>&sz=256 ou https://img.logo.dev/<domaine>?size=256). Le logo est posé sur une pastille blanche arrondie (0,95 × 0,95, fond blanc, contour gris clair) avec 0,12 de marge, pour rester lisible quelle que soit la couleur de la marque. Si le logo est introuvable, remplace-le par une pastille #F2D934 portant les initiales de l'entreprise en gris très foncé, 22 pt gras : n'affiche jamais un cadre vide ni une image cassée.
+   - Nom de l'entreprise (champ « nom_entreprise ») : à droite du logo, 22 pt, gras, gris très foncé.
+   - Secteur (champ « secteur ») : sous le nom, 13 pt, gris.
+   - Source (champ « source ») : sous le secteur, 9 pt, italique, gris, préfixée de « Source : ».
+3. PASTILLES DE CHIFFRES CLÉS : sous la carte (y = 1,3 + 1,5 + 0,25), une pastille par entrée du champ « chiffres_cles » (2 à 3), réparties sur toute la largeur avec 0,25 d'écart, hauteur 1,0. Chaque pastille : rectangle arrondi fond blanc, contour #E0C200 1 pt ; la valeur en 20 pt gras gris très foncé centrée, et le libellé en 10 pt gris centré dessous.
+4. PUCES D'ANALYSE : sous les pastilles, 14 pt, mêmes règles que le corps standard (puces natives, 6 maximum).
+5. PHRASE DE TRANSITION : zone et style de la section « LIGNE DIRECTRICE CONTINUE », au-dessus du rappel de la problématique.
+Chaque entreprise occupe sa propre slide : n'empile JAMAIS deux blocs « carte + pastilles » sur la même slide, et ne cherche pas à comparer les cas d'un coup d'œil — la comparaison se fait à l'oral, en passant d'une slide à l'autre.
+
+AUTRES VISUELS (champ « visuel » non nul)
+Quand une slide porte un objet « visuel », ne te contente pas des puces : construis le graphique correspondant dans la zone de corps, en respectant le type annoncé, et place la « legende » en titre du graphique :
+- « donnees » : histogramme vertical (une barre par entrée « libelle » / « valeur »), barres #E0C200, valeurs affichées au-dessus de chaque barre.
+- « repartition » : anneau (ou camembert) des parts, palette limitée à #F2D934 et #E0C200 déclinés, pourcentages affichés.
+- « comparaison » : barres groupées par « critere », deux séries (valeur_a et valeur_b) distinguées par #F2D934 et #E0C200, avec légende reprenant les deux libellés séparés par « | » dans « legende ».
+- « chronologie » : frise horizontale d'étapes reliées par des flèches #E0C200, chaque « etape » en gras et sa « description » en dessous.
+Les axes et les étiquettes restent sobres : pas de grille lourde, pas de couleurs vives, texte en gris 10-11 pt.
+
+CONTRÔLE FINAL AVANT LIVRAISON
+Vérifie, slide par slide, que :
+- le fond est blanc et les textes lisibles (aucun texte clair sur fond clair) ;
+- chaque slide de contenu possède son bandeau jaune CESI et sa barre de progression ;
+- la barre progresse bien d'une slide à l'autre et le compteur « n / total » est exact ;
+- la 2e slide du dossier est bien le « Plan de présentation » ;
+- les titres suivent la nomenclature imposée, et chaque slide d'une catégorie déclinée porte sa précision de deux ou trois mots après un tiret : aucun titre n'est répété d'une slide à l'autre ;
+- la slide « Mots clés » reprend le sujet complet et définit chaque mot clé ;
+- chaque slide de contenu se termine par sa phrase de transition (sauf la dernière), qui annonce la slide suivante : la ligne directrice ne s'interrompt jamais et aucune slide ne paraît isolée ;
+- chaque cas d'entreprise occupe sa PROPRE slide, présentée de façon distincte et individualisée : jamais deux entreprises sur la même slide ;
+- aucune slide n'est surchargée de texte : les puces sont courtes, une ligne chacune, et l'étudiant peut présenter sans lire ses slides ;
+- le rappel de la problématique apparaît uniquement après sa slide dédiée ;
+- la slide « Problématique » ne met en avant que la question, sans aucune forme opposant deux camps ;
+- la page de titre ne mentionne ni le thème, ni la problématique ;
+- les notes du présentateur sont remplies pour chaque slide de contenu, avec une ligne par puce (5 lignes et 60 mots maximum), jamais un paragraphe ;
+- aucune slide n'est un bloc de texte brut : au moins une forme, un encadré ou un visuel structure l'information ;
+- AUCUNE image générée par l'IA, aucun visuel photoréaliste : uniquement des formes, des frises, des schémas sobres et des icônes sobres (plus le logo réel des entreprises citées et le logo CESI) ;
+- aucun acronyme ni norme technique complexe (ISO, NIST, EBIOS, ITIL…) n'est affiché sans être traduit en vocabulaire managérial ;
+- les cas d'entreprises illustrent le problème posé par la problématique, et les préconisations y répondent directement (actions humaines, organisationnelles et de gouvernance, structurées avant / pendant / après) ;
+- total EXACTEMENT 25 slides, page de titre comprise (volume imposé, ni plus ni moins) : 1 page de titre + 24 slides de contenu, conclusion incluse. Ce volume permet une slide distincte par cas d'entreprise.`;
+
+/**
  * Liste canonique des sections en base. Les contenus sont copiés tels quels
  * depuis methodologie-grand-oral.md (clés du JSON) — jamais reformulés.
  * Les étapes renommées suite à l'ajout de l'étape glossaire pointent vers
@@ -258,6 +409,13 @@ const METHODOLOGY_SECTIONS = [
     appliesToSteps: ['support'],
     content: STYLE_SUPPORT,
   },
+  {
+    sectionId: 'charte_visuelle_support',
+    title: 'Charte visuelle CESI du support (source unique, partagée par tous les exports)',
+    order: 35,
+    appliesToSteps: ['support'],
+    content: CHARTE_VISUELLE_SUPPORT,
+  },
 ];
 /** Descriptions textuelles des JSON attendus, injectées à la fin du prompt. */
 const STEP_SCHEMAS = [
@@ -335,7 +493,8 @@ const STEP_SCHEMAS = [
     jsonSchemaDescription: [
       'Objet JSON avec une clé "slides" : tableau d\'objets { "titre": chaîne, "type": chaîne, "forme_visuelle": chaîne, "puces": [chaînes], "visuel": objet|null, "transition": chaîne (OBLIGATOIRE sur chaque slide de contenu), "nom_entreprise": chaîne (slides "exemple_entreprise" uniquement), "domaine": chaîne (slides "exemple_entreprise" uniquement), "secteur": chaîne (slides "exemple_entreprise" uniquement), "source": chaîne (slides "exemple_entreprise" uniquement), "chiffres_cles": tableau (slides "exemple_entreprise" uniquement), "notes_orateur": chaîne }, PLUS une clé "notes_globales" (chaîne optionnelle).',
       '- "type" parmi : "contexte" | "enjeux" | "problematique" | "existant" | "donnees" | "exemple_entreprise" | "solutions" | "conclusion".',
-      '- "titre" : titre de la slide, JAMAIS une phrase. Deux ou trois mots maximum, en mots-clés, lisibles d\'un coup d\'œil par le jury. Nomenclature IMPOSÉE, dans cet ordre : "Plan de présentation", "Contexte", "Mots clés du sujet", "Enjeux", "Problématique", "Existant", "Chiffres clés", "Cas d\'entreprises", "Solutions", "Conclusion". Aucun verbe conjugué, aucun point, aucun sous-titre explicatif : le développement va dans les puces et les notes, jamais dans le titre.',
+      '- "titre" : titre de la slide, JAMAIS une phrase. Deux à quatre mots, en mots-clés, lisibles d\'un coup d\'œil par le jury. Nomenclature IMPOSÉE, dans cet ordre : "Plan de présentation", "Contexte", "Mots clés", "Enjeux", "Problématiques", "Existant", "Chiffres clés", "Cas d\'entreprises", "Solutions", "Préconisations", "Conclusion". Aucun verbe conjugué, aucun point, aucun sous-titre explicatif : le développement va dans les puces et les notes, jamais dans le titre.',
+      'DÉCLINAISON OBLIGATOIRE DES TITRES : dès qu\'une catégorie occupe PLUSIEURS slides, chaque slide porte le titre principal suivi de DEUX OU TROIS MOTS de précision différenciatrice, séparés par un tiret, qui disent ce que la slide a d\'unique. Exemples : "Enjeux — Volet humain", "Problématiques — Angle organisationnel", "Solutions — Continuité d\'activité", "Préconisations — Avant la crise", "Chiffres clés — Coûts et impacts". Les slides "exemple_entreprise" portent le nom de l\'entreprise : "Cas d\'entreprises — Thalès". Deux slides ne portent JAMAIS le même titre.',
       '- "transition" : phrase de transition OBLIGATOIRE sur CHAQUE slide de contenu (sauf la conclusion) — c\'est la ligne directrice continue du support. Une seule phrase courte (12 à 18 mots), discrète, qui part du contenu de la slide courante et annonce explicitement la suivante : « … ce qui m\'amène à… », « … voyons maintenant… », « … d\'où la question suivante… ». Elle s\'affiche en bas de slide, en petit. Elle ne répète pas une puce, n\'introduit aucun chiffre ni terme nouveau, et ne pose JAMAIS la problématique avant sa slide dédiée. Elle ne se réduit pas à une formule creuse (« passons à la suite ») : elle rend visible le fil du raisonnement d\'un bout à l\'autre de l\'oral. La dernière slide de contenu n\'a pas de transition.',
       'CHAMPS OBLIGATOIRES DES SLIDES "exemple_entreprise" — ils alimentent un encadré visuel avec le logo réel de l\'entreprise, donc leur exactitude conditionne le rendu :',
       '  · "nom_entreprise" : raison sociale courante de l\'entreprise (ex. "Amazon Web Services", "OVHcloud", "SNCF"). Jamais un sigle ambigu, jamais "l\'entreprise X".',
@@ -357,7 +516,7 @@ const STEP_SCHEMAS = [
       '  7. INTERDITS : paragraphe fleuve, développement théorique, définition académique, énumération de données absentes de la slide, recopie mot pour mot des puces, plus de 5 lignes, plus de 60 mots.',
       '  Pour la page de titre : aucune note. Pour la slide « problématique » : la question mise en avant, puis en une ligne le problème concret qu\'elle soulève — 2 lignes courtes maximum.',
       'SLIDE « problematique » — RENDU IMPOSÉ (une seule slide dans tout le support) : elle met en avant UNIQUEMENT la question centrale. Forme visuelle "question" : la question seule, en grand, centrée, encadrée sobrement. AUCUN visuel opposant deux camps : pas de deux colonnes, pas de « Pour / Contre », pas de « Oui / Non », pas de « Avantages / Risques », pas de pôle A face à un pôle B. Une problématique mal formulée comme un débat d\'opinion est un défaut de fond : elle doit soulever un PROBLÈME CONCRET à instruire, pas un sujet clivant. L\'état des lieux, les observations préliminaires et le contexte sont déjà portés par les slides précédentes ("contexte", "enjeux") : cette slide ne les répète pas et n\'ajoute aucune puce de comparaison. Elle appelle une réponse structurée en trois temps, développée dans les slides suivantes : voici l\'existant, voici ses limites, voici ce que je préconise.',
-      'Ordre narratif IMPOSÉ des slides — référence absolue : la spécification de structure du support Grand Oral CESI. VOLUME : le fichier final compte EXACTEMENT 20 slides, page de titre comprise, soit 19 slides de contenu produites par toi (la page de titre est ajoutée automatiquement). La progression est un entonnoir, non négociable : Contexte → Enjeux → Problématique posée → Existant (fondements & théorie) → Données statistiques sourcées et récentes → Cas réels d\'entreprise sourcés (benchmarks) → Solutions et préconisations (posture consultant) → Conclusion. Concrètement : 2e slide du dossier, une slide « Plan de présentation » (type "contexte") qui annonce les parties du support en 4 à 5 puces très courtes, sans problématique (c\'est le sommaire de l\'oral, il est systématique) ; puis une slide "contexte" et une slide « Mots clés du sujet » (type "contexte") qui rappelle le SUJET COMPLET dans ses puces, puis identifie chaque mot clé du sujet avec sa définition courte — c\'est le vocabulaire que tu réutilises ensuite sans le redéfinir ; puis les enjeux ; puis l\'unique slide "problematique" POSÉE APRÈS le contexte et les enjeux (ne la formule jamais avant sa slide dédiée, elle découle du contexte et des enjeux) ; puis, dans cet ordre, les slides "existant" (concepts académiques et état de l\'art), les slides "donnees" (chiffres du marché, chacun avec sa source en bas de slide et la plus récente possible), les slides "exemple_entreprise" (cas réels succès ET échecs, chacun sourcé en bas de slide avec une référence actualisée), et enfin les slides "solutions" (réponse stratégique actionnable, contextualisée par la taille d\'entreprise, structurée avant / pendant / après). Toutes les slides "exemple_entreprise" sont regroupées : les cas d\'entreprises tiennent sur UNE SEULE slide, DEUX au maximum en tout — une slide « Cas d\'entreprises » (type "exemple_entreprise") peut comparer 2 ou 3 entreprises, dont au moins un échec ou une limite, chacune avec sa source. Jamais un cas par slide au-delà de deux slides.',
+      'Ordre narratif IMPOSÉ des slides — référence absolue : la spécification de structure du support Grand Oral CESI. VOLUME : le fichier final compte EXACTEMENT 25 slides, page de titre comprise, soit 24 slides de contenu produites par toi (la page de titre est ajoutée automatiquement). Ce volume est volontairement large : il permet de consacrer une slide distincte à chaque cas d\'entreprise et de développer chaque idée sans condenser. La progression est un entonnoir, non négociable : Contexte → Enjeux → Problématiques posées → Existant (fondements & théorie) → Données statistiques sourcées et récentes → Cas réels d\'entreprise sourcés (benchmarks) → Solutions → Préconisations (posture consultant) → Conclusion. Concrètement : 2e slide du dossier, une slide « Plan de présentation » (type "contexte") qui annonce les parties du support en 4 à 5 puces très courtes, sans problématique (c\'est le sommaire de l\'oral, il est systématique) ; puis une slide "contexte" et une slide « Mots clés » (type "contexte") qui rappelle le SUJET COMPLET dans ses puces, puis identifie chaque mot clé du sujet avec sa définition courte — c\'est le vocabulaire que tu réutilises ensuite sans le redéfinir ; puis les enjeux ; puis les slides "problematique" POSÉES APRÈS le contexte et les enjeux (ne les formule jamais avant leur slide dédiée, elles découlent du contexte et des enjeux ; s\'il y a plusieurs angles, une question par slide, titrées « Problématiques — <précision> ») ; puis, dans cet ordre, les slides "existant" (concepts académiques et état de l\'art), les slides "donnees" (chiffres du marché, chacun avec sa source en bas de slide et la plus récente possible), les slides "exemple_entreprise" (cas réels succès ET échecs, chacun sourcé en bas de slide avec une référence actualisée), puis les slides "solutions" puis "conclusion", en passant par une partie "solutions" dédiée aux préconisations. UNE SLIDE PAR ENTREPRISE : chaque cas réel occupe sa PROPRE slide, présentée de façon distincte et individualisée, avec son titre « Cas d\'entreprises — <nom de l\'entreprise> » (la précision de deux ou trois mots est obligatoire). Deux entreprises ne partagent JAMAIS une slide : aucun regroupement, aucune comparaison sur une même slide.',
       'Exigences de fond imposées par la grille du jury (chaque exigence doit être visible sur au moins une slide) : une slide "contexte" qui présente le sujet, ses mots-clés, un ou deux chiffres clés et le positionnement stratégique (critère 1.1) ; les enjeux structurés par la grille TOHEE — Technique, Organisationnel, Humain, Économique, Environnemental — restreinte au cœur du sujet (critère 1.2) ; au moins une slide "existant" qui mobilise NOMMÉMENT les références théoriques fournies dans l\'analyse et la recherche documentaire (critère 1.3) ; au moins une slide "exemple_entreprise" présentant une entreprise réelle avec sa source, et au moins une slide rapportant un échec ou une limite, pas uniquement des réussites (critère 1.4, benchmark nuancé) ; les slides "solutions" structurées selon le champ applicatif avant / pendant / après (critère 1.6, pragmatisme) ; une slide "conclusion" qui répond explicitement à la problématique, rappelle le fil directeur et se termine par la question d\'ouverture du plan, posée sans y répondre (critères 2.1 et 2.7) ; sur au moins une slide, une prise de position affirmée formulée comme telle, avec la condition de sa réussite (critères 1.5 et 2.3).',
       'RÉPONSE À LA PROBLÉMATIQUE (cohérence obligatoire) : le support doit RÉPONDRE à la problématique retenue, pas seulement l\'exposer. Les slides "solutions" apportent des préconisations concrètes et actionnables, et la conclusion referme explicitement la question posée. Chaque slide du développement doit contribuer à cette réponse : aucune slide ne doit traiter un aspect étranger aux mots-clés du sujet (hors-sujet) ni se contenter de décrire le problème sans avancer vers sa résolution.',
       'Exigence visuelle (critère 2.4 « impact visuel ») : au moins 6 slides doivent porter un objet "visuel" non nul, réparties sur la présentation, dont au moins une dans la partie contexte. Les autres slides utilisent une "forme_visuelle" autre que "puces". Aucune slide ne doit se réduire à un bloc de texte. Chaque slide "exemple_entreprise" est rendue automatiquement sous forme d\'encadré avec le logo réel de la marque (téléchargé à partir du "domaine" fourni) et ses "chiffres_cles" en pastilles : renseigner "nom_entreprise", "domaine" et "chiffres_cles" est donc indispensable pour que le cas réel soit identifiable d\'un coup d\'œil, comme l\'attend le jury sur les benchmarks.',
@@ -368,7 +527,7 @@ const STEP_SCHEMAS = [
       'VULGARISATION ET ARGUMENTATION (posture de fond) : chaque point du support doit montrer que l\'étudiant a compris les ENJEUX (pourquoi c\'est critique pour l\'entreprise) et non le FONCTIONNEMENT technique (comment ça marche). Le fil conducteur est la vulgarisation : on expose un problème réel d\'entreprise, puis on apporte des solutions pragmatiques. Une slide se lit et s\'explique sans hésitation : si un terme demande une explication technique, il n\'a pas sa place tel quel.',
       'PROBLÉMATIQUE — ANCRAGE (posture de fond) : la problématique n\'est JAMAIS une reformulation du sujet. Elle interroge le sujet et pointe un problème réel à résoudre par l\'entreprise. Formulation attendue : une question qui met en tension un levier humain / organisationnel et un levier technique, et qui appelle une prise de position. Exemple de ton attendu : « Dans quelle mesure l\'anticipation humaine et organisationnelle est-elle plus déterminante que la simple technique pour garantir la reprise d\'activité d\'une entreprise post-cyberattaque ? » Elle reste une question, jamais un débat d\'opinion.',
       'CAS D\'ENTREPRISES ET SOLUTIONS — ANCRAGE (posture de fond) : les slides "exemple_entreprise" (l\'existant) doivent illustrer concrètement le problème soulevé par la problématique — elles montrent le problème à l\'œuvre, pas une fiche descriptive d\'entreprise. Les slides "solutions" doivent répondre DIRECTEMENT à la problématique, en se concentrant sur des actions humaines, organisationnelles et de gouvernance (l\'avant, le pendant, l\'après).',
-      'CONTRAINTES DE FORME INÉBRANLABLES : EXACTEMENT 20 slides au total, page de titre comprise (19 slides de contenu). AUCUNE image générée par l\'IA, aucun visuel photoréaliste, aucun clipart : uniquement des formes simples (rectangles arrondis, cartes, encadrés, badges), des frises, des schémas sobres et des icônes sobres. AUCUNE phrase longue sur les slides : uniquement des listes à puces très courtes, en fragments nominaux (3 à 5 puces, 6 maximum, une ligne chacune, jamais de verbe conjugué ni de point final). Les phrases complètes vont UNIQUEMENT dans les notes du présentateur. Chaque slide de contenu (sauf la page de titre et la conclusion) se termine par la petite phrase de transition en italique prévue par le champ "transition".',
+      'CONTRAINTES DE FORME INÉBRANLABLES : EXACTEMENT 25 slides au total, page de titre comprise (24 slides de contenu). AUCUNE image générée par l\'IA, aucun visuel photoréaliste, aucun clipart : uniquement des formes simples (rectangles arrondis, cartes, encadrés, badges), des frises, des schémas sobres et des icônes sobres. AUCUNE phrase longue sur les slides : uniquement des listes à puces très courtes, en fragments nominaux (3 à 5 puces, 6 maximum, une ligne chacune, jamais de verbe conjugué ni de point final). Les phrases complètes vont UNIQUEMENT dans les notes du présentateur. Chaque slide de contenu (sauf la page de titre et la conclusion) se termine par la petite phrase de transition en italique prévue par le champ "transition".',
       'Un paragraphe d\'une puce ne doit jamais dépasser une ligne ; si une idée demande plus, elle va dans les notes orateur (critères 2.4 et 2.6).',
       'RÈGLE ABSOLUE : aucun acronyme ou terme technique absent du glossaire fourni ne doit apparaître dans les puces, les visuels ou les notes orateur.',
     ].join('\n'),
@@ -407,7 +566,7 @@ async function seedMethodology() {
       {
         $set: {
           title: def.title,
-          content,
+          content: injecterIdentite(content),
           order: def.order,
           appliesToSteps: def.appliesToSteps,
         },

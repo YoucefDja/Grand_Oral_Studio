@@ -71,14 +71,17 @@ réponses pragmatiques.
 `.trim();
 
 /**
- * Bloc « contraintes de forme inébranlables » : structure en 20 slides, aucune
+ * Bloc « contraintes de forme inébranlables » : structure en 25 slides, aucune
  * image générée par IA, puces nominales courtes, phrase de transition.
  */
 const CONSIGNES_FORME_SUPPORT = `
 ### CONTRAINTES DE FORME INÉBRANLABLES (À APPLIQUER PARTOUT)
 
-- STRUCTURE : EXACTEMENT 20 slides au total, page de titre comprise (donc 19
-  slides de contenu, conclusion incluse). Ni plus, ni moins.
+- STRUCTURE : EXACTEMENT 25 slides au total, page de titre comprise (donc 24
+  slides de contenu, conclusion incluse). Ni plus, ni moins. Ce volume est
+  volontairement plus large que le strict minimum : il permet de consacrer une
+  slide distincte à chaque cas d'entreprise et de développer chaque idée sans
+  condenser.
 - IMAGES : AUCUNE image générée par l'IA, aucun visuel photoréaliste, aucun
   clipart. Uniquement des formes simples (rectangles arrondis, cartes, encadrés,
   badges), des frises, des schémas sobres et des icônes sobres.
@@ -91,10 +94,20 @@ const CONSIGNES_FORME_SUPPORT = `
 - LIGNE DIRECTRICE : chaque slide de contenu (sauf la page de titre et la
   conclusion) se termine par une petite phrase de transition en italique, en bas
   de slide, qui part de la slide courante et annonce la suivante (12 à 18 mots).
-- NOMENCLATURE DES TITRES : 2 à 3 mots maximum, jamais une phrase. Ordre imposé :
-  « Plan de présentation », « Contexte », « Mots clés du sujet », « Enjeux »,
-  « Problématique », « Existant », « Chiffres clés », « Cas d'entreprises »,
-  « Solutions », « Conclusion ».
+- NOMENCLATURE DES TITRES : jamais une phrase, jamais de verbe conjugué, jamais
+  de point. Nomenclature classique et structurée : « Plan de présentation »,
+  « Contexte », « Mots clés », « Enjeux », « Problématiques », « Solutions »,
+  « Préconisations », « Conclusion », complétée par les blocs de contenu de la
+  méthodologie (« Existant », « Chiffres clés », « Cas d'entreprises »).
+- DÉCLINAISON DES TITRES (obligatoire) : dès qu'une catégorie occupe PLUSIEURS
+  slides, chaque slide reprend le titre principal suivi de DEUX OU TROIS MOTS de
+  précision, séparés par un tiret, qui identifient ce qui la distingue des autres
+  slides de la même catégorie — par exemple « Solutions — Continuité d'activité »
+  ou « Préconisations — Avant la crise ». Deux slides ne portent JAMAIS le même
+  titre : le jury doit suivre la progression sur le seul sommaire des titres.
+- CAS D'ENTREPRISES : UNE slide par entreprise, présentée de façon distincte et
+  individualisée (titre « Cas d'entreprises — <nom> »). Aucun regroupement de
+  plusieurs entreprises sur une même slide.
 `.trim();
 
 module.exports = {
