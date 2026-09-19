@@ -1,60 +1,166 @@
-import React, { useMemo, useState } from 'react';
+import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import StepShell from '../StepShell.jsx';
 import { useSettings } from '../../settings.jsx';
-import { STEPS, STEP_EXPLANATIONS } from '../../steps.js';
+import { STEP_EXPLANATIONS, STEPS } from '../../steps.js';
+import { api } from '../../api.js';
+
+function Ligne({ label, children }) {
+  if (!children) return null;
+  return (
+    <div className="data-section">
+      <div className="data-label">{label}</div>
+      {children}
+    </div>
+  );
+}
+
+function ListeValeurs({ items, rendu, vide }) {
+  if (!Array.isArray(items) || items.length === 0) {
+    return vide ? <p className="muted">{vide}</p> : null;
+  }
+  return (
+    <ul className="ul-value">
+      {items.map((item, i) => (
+        <li key={i}>{rendu(item, i)}</li>
+      ))}
+    </ul>
+  );
+}
 
 /**
- * UI de choix de la formulation retenue. L'étudiant sélectionne LA problématique
- * qu'il défendra : le choix est persisté côté backend (recommandation) puis on
- * enchaîne sur la recherche documentaire. La ligne directrice reste modifiable.
+ * Écran de VALIDATION DU CONTRAT (gate Passe A → Passe B).
+ *
+ * L'étudiant relit le contrat métier produit par la Passe A : mots-clés, tension,
+ * l'UNIQUE question, justification, préconisations et cas d'entreprises. Il peut
+ * ÉDITER la tension, la problématique, la justification, la ligne directrice et
+ * l'ouverture — jamais les mots-clés ni les cas (qui viennent du .md et des
+ * sources). Tant que le backend refuse le contrat, la Passe B reste fermée.
  */
-function ProblemeChooser({ data, disabled, onValider }) {
+function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
   const { t } = useSettings();
-  const formulations = useMemo(
-    () => (Array.isArray(data?.formulations) ? data.formulations : []),
-    [data]
-  );
-  const recommande = typeof data?.recommandation === 'string' ? data.recommandation.trim() : '';
+  const contrat = session?.data?.contrat || {};
+  const editable = Boolean(contrat && (contrat.problematique || contrat.tension));
 
-  const defaultIndex = useMemo(() => {
-    const i = formulations.findIndex(
-      (f) => f && typeof f.formulation === 'string' && f.formulation.trim() === recommande
-    );
-    return i >= 0 ? i : 0;
-  }, [formulations, recommande]);
-
-  const [selectedIdx, setSelectedIdx] = useState(defaultIndex);
-  const [ligne, setLigne] = useState(
-    typeof data?.ligne_directrice === 'string' ? data.ligne_directrice : ''
-  );
+  const [tension, setTension] = useState('');
+  const [problematique, setProblematique] = useState('');
+  const [justification, setJustification] = useState('');
+  const [ligneDirectrice, setLigneDirectrice] = useState('');
+  const [ouverture, setOuverture] = useState('');
   const [saving, setSaving] = useState(false);
+  const [regenerant, setRegenerant] = useState(false);
   const [localError, setLocalError] = useState(null);
+  const [verification, setVerification] = useState(contrat.verification || null);
 
-  if (formulations.length === 0) return null;
-  const selected = formulations[selectedIdx];
+  // Le contrat peut changer sous nos pieds (génération, régénération) : on
+  // resynchronise les champs éditables sur la version serveur.
+  const signature = useMemo(
+    () =>
+      JSON.stringify({
+        tension: contrat.tension || '',
+        problematique: contrat.problematique || '',
+        justificationProbleme: contrat.justificationProbleme || '',
+        ligneDirectrice: contrat.ligneDirectrice || '',
+        ouverture: contrat.ouverture || '',
+        valide: contrat.valide === true,
+      }),
+    [contrat]
+  );
 
-  async function handleValider() {
-    if (!selected || disabled || saving) return;
+  useEffect(() => {
+    setTension(contrat.tension || '');
+    setProblematique(contrat.problematique || '');
+    setJustification(contrat.justificationProbleme || '');
+    setLigneDirectrice(contrat.ligneDirectrice || '');
+    setOuverture(typeof contrat.ouverture === 'string' ? contrat.ouverture : '');
+    setVerification(contrat.verification || null);
+    setLocalError(null);
+  }, [signature]);
+
+  const valideContrat = contrat.valide === true;
+  const rejets = Array.isArray(verification?.rejets) ? verification.rejets : [];
+  const avertissements = Array.isArray(verification?.avertissements)
+    ? verification.avertissements
+    : [];
+
+  // Éditer invalide la validation précédente : on repasse par le gate serveur.
+  const modifie =
+    tension !== (contrat.tension || '') ||
+    problematique !== (contrat.problematique || '') ||
+    justification !== (contrat.justificationProbleme || '') ||
+    ligneDirectrice !== (contrat.ligneDirectrice || '') ||
+    ouverture !== (typeof contrat.ouverture === 'string' ? contrat.ouverture : '');
+
+  const handleValider = useCallback(async () => {
+    if (disabled || saving) return;
     setSaving(true);
     setLocalError(null);
     try {
-      await onValider({
-        formulation: String(selected.formulation || '').trim(),
-        index: selectedIdx,
-        ligneDirectrice: ligne.trim(),
+      const updated = await onValide({
+        tension: tension.trim(),
+        problematique: problematique.trim(),
+        justificationProbleme: justification.trim(),
+        ligneDirectrice: ligneDirectrice.trim(),
+        ouverture: ouverture.trim(),
       });
+      setVerification(updated?.data?.contrat?.verification || null);
+      if (onSessionRefresh) await onSessionRefresh();
     } catch (err) {
-      setLocalError(err.message || t('steps.saveChoiceError'));
+      setLocalError(err.message || t('contrat.erreur'));
+      if (onSessionRefresh) await onSessionRefresh();
     } finally {
       setSaving(false);
     }
+  }, [
+    disabled,
+    saving,
+    tension,
+    problematique,
+    justification,
+    ligneDirectrice,
+    ouverture,
+    onValide,
+    onSessionRefresh,
+    t,
+  ]);
+
+  const handleRegenerer = useCallback(async () => {
+    if (disabled || regenerant || !session?._id) return;
+    setRegenerant(true);
+    setLocalError(null);
+    try {
+      const res = await api.post(`/api/sessions/${session._id}/regenerer-contrat`, {});
+      setVerification(res?.verification || null);
+      if (onSessionRefresh) await onSessionRefresh();
+    } catch (err) {
+      setLocalError(err.message || t('contrat.erreur'));
+    } finally {
+      setRegenerant(false);
+    }
+  }, [disabled, regenerant, session?._id, onSessionRefresh, t]);
+
+  if (!editable) {
+    return <p className="muted">{t('contrat.pasDeContrat')}</p>;
   }
+
+  const motsCles = Array.isArray(contrat.motsCles) ? contrat.motsCles : [];
+  const contexte = Array.isArray(contrat.contexte) ? contrat.contexte : [];
+  const limites = Array.isArray(contrat.limitesExistant) ? contrat.limitesExistant : [];
+  const preconisations = Array.isArray(contrat.preconisations) ? contrat.preconisations : [];
+  const cas = Array.isArray(contrat.casEntreprises) ? contrat.casEntreprises : [];
 
   return (
     <div>
       <div className="alert alert-info" style={{ marginTop: 0 }}>
-        {t('steps.iaProposed').replace('{n}', formulations.length)} <strong>{t('steps.chooseDefended')}</strong>
-        {t('steps.onlyTransmitted')}
+        {t('contrat.intro')}
+      </div>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0' }}>
+        <span className={`badge ${valideContrat && !modifie ? 'badge-done' : 'badge-progress'}`}>
+          {valideContrat && !modifie ? t('contrat.valideBadge') : t('contrat.nonValideBadge')}
+        </span>
+        <span className="badge badge-progress">
+          {t('contrat.sujet')} : {session?.titre || '—'}
+        </span>
       </div>
 
       {localError ? (
@@ -63,92 +169,194 @@ function ProblemeChooser({ data, disabled, onValider }) {
         </div>
       ) : null}
 
-      <div className="formulation-list">
-        {formulations.map((f, i) => {
-          const isSel = i === selectedIdx;
-          const texte = typeof f?.formulation === 'string' ? f.formulation : '';
-          return (
-            <button
-              type="button"
-              key={i}
-              className={`formulation-option${isSel ? ' selected' : ''}`}
-              disabled={disabled || saving}
-              onClick={() => setSelectedIdx(i)}
-            >
-              <span className="formulation-radio" aria-hidden="true">
-                {isSel ? '✓' : ''}
-              </span>
-              <span className="formulation-body">
-                <span className="formulation-text">« {texte || `${t('steps.formulationFallback')} ${i + 1}`} »</span>
-                {typeof f?.pourquoi_discutable === 'string' && f.pourquoi_discutable ? (
-                  <span className="formulation-note">
-                    {`${t('steps.whyDebatable')}${f.pourquoi_discutable}`}
-                  </span>
-                ) : null}
-                {typeof f?.pourquoi_bornee_par_le_sujet === 'string' && f.pourquoi_bornee_par_le_sujet ? (
-                  <span className="formulation-note">
-                    {`${t('steps.boundedBySubject')}${f.pourquoi_bornee_par_le_sujet}`}
-                  </span>
-                ) : null}
-              </span>
-            </button>
-          );
-        })}
-      </div>
+      {rejets.length ? (
+        <>
+          <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('contrat.rejetsTitle')}</h3>
+          <ul className="ul-value">
+            {rejets.map((r, i) => (
+              <li key={i}>
+                <strong>{r.code}</strong> — {r.message}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      {avertissements.length ? (
+        <>
+          <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('contrat.avertissementsTitle')}</h3>
+          <ul className="ul-value">
+            {avertissements.map((a, i) => (
+              <li key={i}>{a}</li>
+            ))}
+          </ul>
+        </>
+      ) : null}
 
       <div className="data-section">
-        <div className="data-label">{t('steps.ldEditableLabel')}</div>
-        <textarea
-          className="input-textarea"
-          rows={3}
-          value={ligne}
-          disabled={disabled || saving}
-          onChange={(e) => setLigne(e.target.value)}
+        <div className="data-label">{t('contrat.motsCles')}</div>
+        <ListeValeurs
+          items={motsCles}
+          rendu={(m) =>
+            typeof m === 'string' ? m : <><strong>{m?.mot}</strong> — {m?.definition}</>
+          }
         />
       </div>
 
-      <div className="actions-row" style={{ display: 'flex', gap: 10, marginTop: 8, flexWrap: 'wrap' }}>
+      <div className="data-section">
+        <div className="data-label">{t('contrat.contexte')}</div>
+        <ListeValeurs
+          items={contexte}
+          rendu={(f, i) => {
+            if (typeof f === 'string') return f;
+            return (
+              <>
+                {f?.fait}
+                {f?.source ? (
+                  <span className="muted">{` — ${t('contrat.sourceLabel')} : ${f.source}`}</span>
+                ) : null}
+              </>
+            );
+          }}
+        />
+      </div>
+
+      <div className="data-section">
+        <div className="data-label">{t('contrat.tension')}</div>
+        <p className="muted" style={{ margin: '0 0 4px' }}>{t('contrat.tensionHint')}</p>
+        <textarea
+          className="input-textarea"
+          rows={2}
+          value={tension}
+          disabled={disabled || saving}
+          onChange={(e) => setTension(e.target.value)}
+        />
+      </div>
+
+      <div className="data-section">
+        <div className="data-label">{t('contrat.problematique')}</div>
+        <p className="muted" style={{ margin: '0 0 4px' }}>{t('contrat.problematiqueHint')}</p>
+        <textarea
+          className="input-textarea"
+          rows={2}
+          value={problematique}
+          disabled={disabled || saving}
+          onChange={(e) => setProblematique(e.target.value)}
+        />
+      </div>
+
+      <div className="data-section">
+        <div className="data-label">{t('contrat.justification')}</div>
+        <textarea
+          className="input-textarea"
+          rows={3}
+          value={justification}
+          disabled={disabled || saving}
+          onChange={(e) => setJustification(e.target.value)}
+        />
+      </div>
+
+      <Ligne label={t('contrat.limitesExistant')}>
+        <ListeValeurs items={limites} rendu={(l) => (typeof l === 'string' ? l : JSON.stringify(l))} />
+      </Ligne>
+
+      <Ligne label={t('contrat.preconisations')}>
+        <ListeValeurs
+          items={preconisations}
+          rendu={(p) => {
+            if (typeof p === 'string') return p;
+            return (
+              <>
+                <strong>{p?.action || p?.intitule || p?.titre || ''}</strong>
+                {p?.detail || p?.description ? ` — ${p.detail || p.description}` : ''}
+                {p?.cible ? <span className="muted">{` (${p.cible})`}</span> : null}
+              </>
+            );
+          }}
+        />
+      </Ligne>
+
+      <Ligne label={t('contrat.casEntreprises')}>
+        <ul className="ul-value">
+          {cas.map((c, i) => {
+            const echec = /echec|limite|contre-exemple/i.test(JSON.stringify(c));
+            return (
+              <li key={i}>
+                <strong>{c?.nom}</strong>
+                <span className={`badge ${echec ? 'badge-progress' : 'badge-done'}`} style={{ marginLeft: 6 }}>
+                  {echec ? t('contrat.issueEchec') : t('contrat.issueSucces')}
+                </span>
+                {c?.chiffre ? ` — ${c.chiffre}` : ''}
+                {c?.angle ? ` — ${c.angle}` : ''}
+                {c?.source ? (
+                  <span className="muted">{` — ${t('contrat.sourceLabel')} : ${c.source}`}</span>
+                ) : null}
+              </li>
+            );
+          })}
+        </ul>
+      </Ligne>
+
+      <div className="data-section">
+        <div className="data-label">{t('contrat.ligneDirectrice')}</div>
+        <textarea
+          className="input-textarea"
+          rows={2}
+          value={ligneDirectrice}
+          disabled={disabled || saving}
+          onChange={(e) => setLigneDirectrice(e.target.value)}
+        />
+      </div>
+
+      <div className="data-section">
+        <div className="data-label">{t('contrat.ouverture')}</div>
+        <textarea
+          className="input-textarea"
+          rows={2}
+          value={ouverture}
+          disabled={disabled || saving}
+          onChange={(e) => setOuverture(e.target.value)}
+        />
+      </div>
+
+      <div className="actions-row" style={{ display: 'flex', gap: 10, marginTop: 12, flexWrap: 'wrap' }}>
         <button
           type="button"
           className="btn-primary"
-          disabled={disabled || saving || !selected}
+          disabled={disabled || saving || regenerant || (valideContrat && !modifie)}
           onClick={handleValider}
         >
-          {saving ? t('steps.savingChoice') : `✓ ${t('steps.validateChoice')}`}
+          {saving ? t('contrat.validant') : t('contrat.valider')}
+        </button>
+        <button
+          type="button"
+          className="btn-ghost"
+          disabled={disabled || saving || regenerant}
+          onClick={handleRegenerer}
+        >
+          {regenerant ? t('contrat.regenerant') : t('contrat.regenerer')}
         </button>
       </div>
-      <p className="muted" style={{ marginTop: 6 }}>
-        {t('steps.choiceHint')}
-      </p>
+
+      <p className="muted" style={{ marginTop: 6 }}>{t('contrat.regenerationHint')}</p>
+      {valideContrat && !modifie ? (
+        <div className="alert alert-success">{t('contrat.valideOk')}</div>
+      ) : null}
     </div>
   );
 }
 
-export default function StepProbleme({ session, busy, error, onGenerate, goStep, onChoisirProbleme }) {
-  const data = session?.data?.probleme;
-  const signature = useMemo(
-    () =>
-      JSON.stringify({
-        recommandation: data?.recommandation || '',
-        formulations: data?.formulations || [],
-        ligne_directrice: data?.ligne_directrice || '',
-      }),
-    [data]
-  );
+export default function StepProbleme({ session, busy, error, onGenerate, goStep, onSessionRefresh }) {
+  const contrat = session?.data?.contrat;
+  const valide = contrat?.valide === true;
 
-  const handleChoisirEtContinuer = useMemo(() => {
-    return async (payload) => {
-      if (typeof onChoisirProbleme !== 'function') return;
-      const updated = await onChoisirProbleme(payload);
-      // On enchaîne sur la prochaine étape à faire (backend : currentStep = nombre
-      // d'étapes terminées). Après un changement de formulation, le backend a
-      // re-vidé la recherche d'arrière-plan, le plan, le glossaire et le support,
-      // et ramené currentStep à 2 : on retombe sur le plan. Si le parcours est
-      // terminé, on reste sur place.
-      const next = Number(updated?.currentStep) || 0;
-      if (next >= 2 && next < STEPS.length) goStep(next);
-    };
-  }, [onChoisirProbleme, goStep]);
+  const handleValide = useCallback(
+    async (payload) => {
+      const updated = await api.post(`/api/sessions/${session._id}/valider-contrat`, payload);
+      return updated;
+    },
+    [session?._id]
+  );
 
   return (
     <StepShell
@@ -162,15 +370,22 @@ export default function StepProbleme({ session, busy, error, onGenerate, goStep,
           {STEP_EXPLANATIONS.probleme}
         </p>
       }
-      renderData={(d) => (
-        <ProblemeChooser
-          key={signature}
-          data={d}
+      renderData={() => (
+        <ValidationContrat
+          session={session}
           disabled={busy === 'probleme'}
-          onValider={handleChoisirEtContinuer}
+          onSessionRefresh={onSessionRefresh}
+          onValide={handleValide}
         />
       )}
-      next={null}
+      next={
+        valide
+          ? {
+              label: `Passer au plan détaillé →`,
+              onClick: () => goStep(STEPS.findIndex((s) => s.key === 'plan')),
+            }
+          : null
+      }
     />
   );
 }

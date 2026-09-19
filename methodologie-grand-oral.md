@@ -276,7 +276,7 @@ présentation généré sans figurer dans ce glossaire.
 
 Le support est la mise en forme visuelle du plan détaillé, pas un nouveau
 contenu. Consignes :
-- le support compte exactement 25 slides page de titre comprise (24 slides de
+- le support compte exactement 20 slides page de titre comprise (19 slides de
   contenu, conclusion incluse) : ce volume est volontairement large, il permet
   une slide distincte et individualisée par cas d'entreprise et le
   développement de chaque idée sans condenser. Une slide de titre, puis

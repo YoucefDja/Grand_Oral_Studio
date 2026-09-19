@@ -347,8 +347,8 @@ Vérifie, slide par slide, que :
 - les cas d'entreprises illustrent le problème posé par la problématique, et les
   préconisations y répondent directement (actions humaines, organisationnelles et
   de gouvernance, structurées avant / pendant / après) ;
-- total EXACTEMENT 25 slides, page de titre comprise (volume imposé, ni plus ni
-  moins) : 1 page de titre + 24 slides de contenu, conclusion incluse. Ce volume
+- total EXACTEMENT 20 slides, page de titre comprise (volume imposé, ni plus ni
+  moins) : 1 page de titre + 19 slides de contenu, conclusion incluse. Ce volume
   permet une slide distincte par cas d'entreprise.
 `.trim();
 }

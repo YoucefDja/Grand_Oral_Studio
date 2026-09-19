@@ -23,6 +23,10 @@ const sessionSchema = new mongoose.Schema(
       type: Object,
       default: () => ({
         analyse: {},
+        // Passe A : contrat métier (sujet, mots-clés, tension, problématique,
+        // préconisations, cas d'entreprises…). Tant que `contrat.valide !== true`,
+        // la Passe B (support) et l'export PPTX restent bloqués.
+        contrat: {},
         probleme: {},
         // Produit automatiquement en arrière-plan, jamais montré à l'étudiant.
         recherche: {},

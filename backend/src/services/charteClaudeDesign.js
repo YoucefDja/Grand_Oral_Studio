@@ -29,14 +29,15 @@ const { NOM, ANNEE } = require('../config/soutenance');
 const { CONSIGNES_FOND_VULGARISATION, CONSIGNES_FORME_SUPPORT } = require('./consignesSupport');
 const {
   CONSIGNE_EXEMPLES,
+  CONSIGNES_TON_HUMAIN,
   EXEMPLES_SLIDES,
   EXEMPLES_NOTES,
   TITRES_OBSERVES,
 } = require('./exemplesStyle');
 
-/** Durée et volume cibles de l'oral — alignés sur le code (25 slides exactement). */
+/** Durée et volume cibles de l'oral — alignés sur le code (20 slides exactement). */
 const DUREE_MINUTES = 20;
-const NB_SLIDES_TOTAL = 25;
+const NB_SLIDES_TOTAL = 20;
 
 /**
  * Squelette imposé du support : une entrée par slide de contenu (la page de
@@ -110,13 +111,13 @@ const SQUELETTE_SLIDES = [
   },
   {
     titre: 'Préconisations',
-    role: 'Slides 23 à 24 — approfondissement des préconisations (1 à 2 slides).',
+    role: 'Slide 19 — approfondissement des préconisations.',
     contenu:
       "Conditions de réussite, moyens à mobiliser, indicateurs de suivi, déclinaison selon la taille d'entreprise (les priorités ne sont pas les mêmes en PME et en grand groupe). Titres déclinés avec précision (ex. « Préconisations — Suivi et pilotage »).",
   },
   {
     titre: 'Conclusion',
-    role: 'Slide 25 — fermeture du dossier.',
+    role: 'Slide 20 — fermeture du dossier.',
     contenu:
       "Réponse explicite à la problématique, rappel du fil directeur, puis ouverture prospective posée comme une question et volontairement laissée sans réponse. Dernière slide : pas de phrase de transition.",
   },
@@ -267,6 +268,8 @@ ${glossaire}
 ## 6. EXEMPLES DE RÉFÉRENCE (STYLE)
 
 ${CONSIGNE_EXEMPLES}
+
+${CONSIGNES_TON_HUMAIN}
 
 ### 6.1 Slides de référence
 

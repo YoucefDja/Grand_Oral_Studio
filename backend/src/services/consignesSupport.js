@@ -71,17 +71,16 @@ réponses pragmatiques.
 `.trim();
 
 /**
- * Bloc « contraintes de forme inébranlables » : structure en 25 slides, aucune
+ * Bloc « contraintes de forme inébranlables » : structure en 20 slides, aucune
  * image générée par IA, puces nominales courtes, phrase de transition.
  */
 const CONSIGNES_FORME_SUPPORT = `
 ### CONTRAINTES DE FORME INÉBRANLABLES (À APPLIQUER PARTOUT)
 
-- STRUCTURE : EXACTEMENT 25 slides au total, page de titre comprise (donc 24
-  slides de contenu, conclusion incluse). Ni plus, ni moins. Ce volume est
-  volontairement plus large que le strict minimum : il permet de consacrer une
-  slide distincte à chaque cas d'entreprise et de développer chaque idée sans
-  condenser.
+- STRUCTURE : EXACTEMENT 20 slides au total, page de titre comprise (donc 19
+  slides de contenu, conclusion incluse). Ni plus, ni moins. Le support est
+  CONCIS : une idée par slide, pas de slide de remplissage. Si tu dépasses,
+  condense — ne splitte jamais une idée sur deux slides.
 - IMAGES : AUCUNE image générée par l'IA, aucun visuel photoréaliste, aucun
   clipart. Uniquement des formes simples (rectangles arrondis, cartes, encadrés,
   badges), des frises, des schémas sobres et des icônes sobres.
@@ -105,9 +104,9 @@ const CONSIGNES_FORME_SUPPORT = `
   slides de la même catégorie — par exemple « Solutions — Continuité d'activité »
   ou « Préconisations — Avant la crise ». Deux slides ne portent JAMAIS le même
   titre : le jury doit suivre la progression sur le seul sommaire des titres.
-- CAS D'ENTREPRISES : UNE slide par entreprise, présentée de façon distincte et
-  individualisée (titre « Cas d'entreprises — <nom> »). Aucun regroupement de
-  plusieurs entreprises sur une même slide.
+- CAS D'ENTREPRISES : UNE slide dédiée aux cas (deux maximum si ça déborde
+  vraiment), en blocs compacts : nom, pastille d'initiales jaune, UN chiffre, UN
+  angle qui prouve la problématique, la source. Au moins un échec.
 `.trim();
 
 module.exports = {

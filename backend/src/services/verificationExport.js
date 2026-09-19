@@ -48,7 +48,6 @@ const MethodologySection = require('../models/MethodologySection');
 const { httpError } = require('../utils/httpError');
 const { parserGrille, SECTION_ID } = require('./grilleEvaluation');
 const { normaliser, VOLUME_CIBLE_TOTAL } = require('./conformiteSupport');
-const { problemeRetenuPourSuite } = require('./promptBuilder');
 
 // ---------------------------------------------------------------------------
 // Barème
@@ -224,16 +223,26 @@ function diagnostiquerFilRouge(session) {
   const data = session?.data || {};
   const sujet = String(session?.titre || '').trim();
   const theme = String(session?.theme || '').trim();
-  const retenu = problemeRetenuPourSuite(data.probleme);
-  const problematique = String(retenu?.formulation_retenue?.formulation || '').trim();
+  // Le fil rouge vit désormais dans le CONTRAT MÉTIER (Passe A, data.contrat) :
+  // la problématique y est une chaîne unique et la tension une phrase de
+  // friction (plus de formulations candidates ni de pôles pole_a / pole_b).
+  const contrat = data.contrat && typeof data.contrat === 'object' ? data.contrat : {};
+  const problematique = String(contrat.problematique || '').trim();
   const ligneDirectrice = String(
-    session?.ligneDirectrice || data.probleme?.ligne_directrice || ''
+    session?.ligneDirectrice || contrat.ligneDirectrice || ''
   ).trim();
-  const tensionA = String(retenu?.formulation_retenue?.tension?.pole_a || '').trim();
-  const tensionB = String(retenu?.formulation_retenue?.tension?.pole_b || '').trim();
+  const tension = String(contrat.tension || '').trim();
 
   const constats = [];
   const ajouter = (code, message) => constats.push({ code, message });
+
+  // ---- Contrat métier validé (Passe A) ----
+  if (!contrat.valide) {
+    ajouter(
+      'contrat_non_valide',
+      "Le contrat métier (Passe A) n'est pas validé : valide la tension et la problématique à l'écran de validation avant d'exporter le support."
+    );
+  }
 
   // ---- Problématique (méthode Armelle Aymond) ----
   if (!problematique) {
@@ -279,17 +288,35 @@ function diagnostiquerFilRouge(session) {
       );
     }
 
-    // 4. Tension réelle à deux pôles distincts.
-    if (!tensionA || !tensionB) {
+    // 4. Friction réelle : la tension (phrase) doit être renseignée et ancrée
+    // dans le sujet / la question.
+    if (!tension) {
       ajouter(
         'problematique_sans_tension',
-        "La tension à deux pôles n'est pas renseignée (pole_a / pole_b) : la problématique doit naître d'une tension, pas d'un simple constat."
+        "La tension (friction d'entreprise) n'est pas renseignée : la problématique doit naître d'une tension réelle, pas d'un simple constat."
       );
-    } else if (normaliser(tensionA) === normaliser(tensionB)) {
-      ajouter(
-        'problematique_tension_identique',
-        'Les deux pôles de la tension sont identiques : il n’y a pas de tension réelle à instruire.'
-      );
+    } else {
+      const recTension = recouvrement(tension, `${problematique} ${sujet}`);
+      if (recTension < 0.1) {
+        ajouter(
+          'problematique_tension_decorrelee',
+          "La tension ne recoupe ni la question ni le sujet : la problématique est posée sans friction d'entreprise identifiable."
+        );
+      }
+    }
+
+    // 4 bis. Les préconisations doivent répondre À CETTE question (vocabulaire
+    // partagé) — sinon la réponse est décorrélée du problème posé.
+    const preconisations = liste(contrat.preconisations);
+    if (preconisations.length > 0) {
+      const textePreco = aplatir(preconisations);
+      const recPreco = recouvrement(problematique, `${textePreco} ${tension}`);
+      if (recPreco < 0.2) {
+        ajouter(
+          'contrat_solutions_decorrelees',
+          "Les préconisations ne reprennent pas le vocabulaire de la tension ni de la question : les solutions ne répondent pas à la problématique posée."
+        );
+      }
     }
 
     // 5. Le problème doit être ancré dans le sujet (jamais hors sujet).
@@ -340,7 +367,7 @@ function diagnostiquerFilRouge(session) {
     theme,
     problematique,
     ligneDirectrice,
-    tension: tensionA && tensionB ? { poleA: tensionA, poleB: tensionB } : null,
+    tension: tension || null,
     constats,
   };
 }
@@ -387,18 +414,22 @@ function texteDe(valeur) {
 function observer(session, filRouge) {
   const data = session?.data || {};
   const analyse = data.analyse || {};
-  const probleme = data.probleme || {};
+  // Le contrat métier (Passe A) remplace l'ancienne étape `probleme` : c'est lui
+  // qui porte la question, la tension, les préconisations et les cas réels.
+  const contrat = data.contrat && typeof data.contrat === 'object' ? data.contrat : {};
   const plan = data.plan || {};
   const glossaire = data.glossaire || {};
   const recherche = data.recherche || {};
+  const support = data.support || {};
 
   // ---- Textes agrégés par étape (servent aux recherches par motif) ----
   const texteAnalyse = aplatir(analyse);
-  const texteProbleme = aplatir(probleme);
+  const texteContrat = aplatir(contrat);
   const textePlan = aplatir(plan);
   const texteGlossaire = aplatir(glossaire);
   const texteRecherche = aplatir(recherche);
-  const texteAmont = [texteAnalyse, texteProbleme, textePlan, texteGlossaire, texteRecherche].join(' \n ');
+  const texteSupport = aplatir(support);
+  const texteAmont = [texteAnalyse, texteContrat, textePlan, texteGlossaire, texteRecherche].join(' \n ');
 
   const aTexte = (regex) => regex.test(texteAmont);
 
@@ -409,11 +440,15 @@ function observer(session, filRouge) {
   const positionnement = String(analyse.positionnement_strategique || '').trim();
   const reformulation = String(analyse.reformulation || '').trim();
 
-  // ---- Étape probleme ----
-  const retenu = problemeRetenuPourSuite(probleme);
-  const formulationRetenue = retenu?.formulation_retenue || {};
-  const tensionProbleme = formulationRetenue.tension || {};
-  const justification = String(probleme.justification_recommandation || '').trim();
+  // ---- Contrat métier (Passe A) ----
+  const questionContrat = String(contrat.problematique || '').trim();
+  const tensionContrat = String(contrat.tension || '').trim();
+  const justification = String(contrat.justificationProbleme || '').trim();
+  const limitesExistant = liste(contrat.limitesExistant);
+  const preconisations = liste(contrat.preconisations);
+  const casContrat = liste(contrat.casEntreprises);
+  const ouvertureContrat = String(contrat.ouverture || '').trim();
+  const motsClesContrat = liste(contrat.motsCles);
 
   // ---- Étape plan ----
   const sectionsPlan = liste(plan.sections);
@@ -438,7 +473,18 @@ function observer(session, filRouge) {
   const donneesARech = liste(recherche.donnees_a_rechercher);
   const organismes = liste(recherche.organismes_exemples);
 
-  // Cas d'entreprise réellement sourcés + au moins un échec ou une limite.
+  // Cas d'entreprise du CONTRAT (Passe A) : chaque cas doit porter un nom, un
+  // chiffre, un angle lié à la tension, une source, et au moins un échec.
+  const casContratSources = casContrat.filter(
+    (c) =>
+      String(c?.nom || '').trim() !== '' &&
+      String(c?.source || '').trim() !== '' &&
+      String(c?.chiffre || '').trim() !== ''
+  );
+  const casContratEchec = casContrat.filter((c) => /echec/i.test(String(c?.issue || '')));
+
+  // Cas d'entreprise issus de la recherche d'arrière-plan (repli si le contrat
+  // n'a pas encore produit ses cas).
   const casSources = exemplesEntreprises.filter(
     (c) => String(c?.source || '').trim() !== '' && String(c?.nom || '').trim() !== ''
   );
@@ -448,6 +494,7 @@ function observer(session, filRouge) {
 
   // Un exemple d'entreprise est « sourcé et daté » si sa source est renseignée.
   const aEchecOuLimite =
+    casContratEchec.length > 0 ||
     casEchec.length > 0 ||
     /(echec|limite|contre-exemple|insuffisan|defaillance|faiblesse)/.test(texteRecherche);
 
@@ -493,24 +540,26 @@ function observer(session, filRouge) {
   // ---- Volumétrie : le plan doit tenir dans le temps imparti ----
   const minutesSections = sectionsPlan.reduce((t, s) => t + (Number(s?.minutes) || 0), 0);
   const tempsPlan = dureePlan || minutesSections;
-  // Le support issu du Markdown compte 25 slides page de titre comprise
-  // (~1 min 15 par slide) : on vérifie la compatibilité avec le temps du plan.
+  // Le support compte 20 slides page de titre comprise (~1 min 15 par slide) :
+  // on vérifie la compatibilité avec le temps du plan.
   const estimationTemps = Math.round(VOLUME_CIBLE_TOTAL * 1.25);
 
   return {
     // données brutes
     analyse,
-    probleme,
+    contrat,
     plan,
     glossaire,
     recherche,
+    support,
     filRouge,
     // textes agrégés
     texteAnalyse,
-    texteProbleme,
+    texteContrat,
     textePlan,
     texteGlossaire,
     texteRecherche,
+    texteSupport,
     texteAmont,
     aTexte,
     // compteurs et listes exploitables
@@ -519,9 +568,14 @@ function observer(session, filRouge) {
     tensionsAnalyse,
     positionnement,
     reformulation,
-    formulationRetenue,
-    tensionProbleme,
+    questionContrat,
+    tensionContrat,
     justification,
+    limitesExistant,
+    preconisations,
+    casContrat,
+    ouvertureContrat,
+    motsClesContrat,
     sectionsPlan,
     filDirecteur,
     objections,
@@ -536,6 +590,8 @@ function observer(session, filRouge) {
     exemplesEntreprises,
     casSources,
     casEchec,
+    casContratSources,
+    casContratEchec,
     donneesARech,
     organismes,
     aEchecOuLimite,
@@ -613,10 +669,25 @@ function evaluerCritere(id, obs) {
     }
 
     case '1.4': {
-      if (obs.exemplesEntreprises.length === 0) {
-        faible('1.4-benchmark', "Aucun exemple d’entreprise réelle dans la recherche documentaire : le benchmark exigé par le jury est absent du Markdown.");
+      // Les cas du CONTRAT (Passe A) priment : c'est eux qui partent dans les
+      // slides. La recherche d'arrière-plan sert seulement de repli.
+      const nbCas = obs.casContrat.length || obs.exemplesEntreprises.length;
+      if (nbCas === 0) {
+        faible('1.4-benchmark', "Aucun cas d'entreprise réelle : le benchmark exigé par le jury est absent du contrat (Passe A) et de la recherche documentaire.");
+      } else if (obs.casContrat.length > 0) {
+        force(`${obs.casContrat.length} cas d’entreprise(s) dans le contrat (Passe A).`);
+        if (obs.casContratSources.length < obs.casContrat.length) {
+          faible('1.4-source-cas', `${obs.casContrat.length - obs.casContratSources.length} cas d'entreprise du contrat n'ont pas à la fois un nom, un chiffre et une source : chaque cas réel doit être sourcé et chiffré.`);
+        } else {
+          force('Tous les cas d’entreprise sont nommés, chiffrés et sourcés.');
+        }
+        if (!obs.aEchecOuLimite) {
+          faible('1.4-echec', "Aucun échec ni limite dans les cas d'entreprise du contrat : le jury sanctionne le plaidoyer à sens unique (au moins un succès ET un échec sont attendus).");
+        } else {
+          force('Au moins un échec ou une limite vient nuancer le propos.');
+        }
       } else {
-        force(`${obs.exemplesEntreprises.length} cas d’entreprise(s) identifié(s).`);
+        force(`${obs.exemplesEntreprises.length} cas d’entreprise(s) identifié(s) dans la recherche.`);
         if (obs.casSources.length < obs.exemplesEntreprises.length) {
           faible('1.4-source-cas', `${obs.exemplesEntreprises.length - obs.casSources.length} cas d’entreprise ne portent pas de source : chaque cas réel doit être sourcé et daté.`);
         } else {
@@ -648,10 +719,10 @@ function evaluerCritere(id, obs) {
       } else {
         force('Le plan porte une partie solutions / préconisations.');
       }
-      if (!obs.formulationRetenue.pourquoi_discutable) {
-        faible('1.5-justification', "La formulation retenue n’explique pas en quoi le problème est réellement discutable : la prise de position n’est pas justifiée.");
+      if (!obs.justification) {
+        faible('1.5-justification', "Le contrat n'explique pas en quoi le problème est réel et actuel pour l'entreprise : la prise de position n'est pas justifiée.");
       } else {
-        force('La formulation retenue est justifiée (problème discutable).');
+        force('La problématique est justifiée (problème réel, actuel, d’entreprise).');
       }
       break;
     }
@@ -760,12 +831,11 @@ function evaluerCritere(id, obs) {
       } else {
         force('La problématique retenue est analysable et bornée par le sujet.');
       }
-      const poleA = String(obs.tensionProbleme.pole_a || '').trim();
-      const poleB = String(obs.tensionProbleme.pole_b || '').trim();
-      if (poleA && poleB) {
-        force('La tension à deux pôles est explicitée.');
+      const tension = obs.tensionContrat;
+      if (tension) {
+        force('La tension (friction d’entreprise) est explicitée.');
       } else {
-        faible('2.5-tension', "La tension de la formulation retenue n’est pas explicitée (pole_a / pole_b) : le décryptage reste superficiel.");
+        faible('2.5-tension', "La tension du contrat n'est pas explicitée : le décryptage reste superficiel.");
       }
       if (obs.ordreInvalide) {
         faible('2.5-ordre', "Le décryptage n’est pas progressif : la rupture d’ordre dans le plan empêche l’analyse de se construire par étapes.");
@@ -841,6 +911,8 @@ function statuer(id, pointsFaibles) {
  * ligne directrice, pas de structure, pas de réponse stratégique.
  */
 const CODES_BLOQUANTS = new Set([
+  // Contrat métier Passe A non validé : on n'exporte pas sur une question non relue.
+  'contrat_non_valide',
   // Fil rouge et méthode Armelle Aymond
   'problematique_absente',
   'problematique_hors_sujet',
@@ -848,7 +920,8 @@ const CODES_BLOQUANTS = new Set([
   'problematique_debat',
   'problematique_descriptive',
   'problematique_sans_tension',
-  'problematique_tension_identique',
+  'problematique_tension_decorrelee',
+  'contrat_solutions_decorrelees',
   'ligne_directrice_absente',
   'ligne_directrice_hors_sujet',
   'ligne_directrice_decrochee',
@@ -876,6 +949,168 @@ const LIBELLES_STATUT = {
 
 function arrondi(n) {
   return Math.round(n * 100) / 100;
+}
+
+// ---------------------------------------------------------------------------
+// Score « LOGIQUE DU SUJET » — checklist métier affichée dans l'UI
+//
+// Les 14 critères de la grille CESI mesurent la conformité académique. Ce score
+// mesure autre chose, et c'est l'objectif n°1 du produit : le support TRAITE-T-IL
+// LE SUJET ? La question est-elle liée au sujet et pose-t-elle un problème réel,
+// solutionnable par les préconisations qui suivent ? Chaque item est binaire
+// (vert / rouge) et l'export est bloqué tant qu'un seul item est rouge.
+// ---------------------------------------------------------------------------
+
+function construireScoreLogique(session, obs, filRouge) {
+  const contrat = obs.contrat || {};
+  const slides = Array.isArray(obs.support?.slides) ? obs.support.slides : [];
+  const itemsBruts = [];
+  const item = (code, libelle, ok, detail) => itemsBruts.push({ code, libelle, ok: ok === true, detail });
+
+  const codesRejets = new Set([
+    ...(filRouge.constats || []).map((c) => c.code),
+    ...(contrat.verification?.rejets || []).map((r) => r.code),
+    ...(contrat.verification?.avertissements || []).map((a) => a.code),
+  ]);
+
+  // 1. Problématique liée au sujet (mots-clés présents, non copie).
+  const lieAuSujet =
+    !!observationsProblematique(obs) &&
+    !codesRejets.has('contrat_hors_sujet') &&
+    !codesRejets.has('contrat_copie_sujet') &&
+    !codesRejets.has('problematique_hors_sujet') &&
+    !codesRejets.has('problematique_reformulation');
+  item(
+    'logique_pb_liee_sujet',
+    'Problématique liée au sujet (mots-clés présents, pas une copie du sujet)',
+    lieAuSujet
+  );
+
+  // 2. Problème réel : tension + justification présentes et cohérentes.
+  const problemeReel =
+    !!obs.tensionContrat &&
+    !!obs.justification &&
+    !codesRejets.has('problematique_sans_tension') &&
+    !codesRejets.has('problematique_tension_decorrelee') &&
+    !codesRejets.has('contrat_tension_absente') &&
+    !codesRejets.has('contrat_justification_absente');
+  item('logique_probleme_reel', 'Problème réel (tension + justification d’entreprise)', problemeReel);
+
+  // 3. L'existant diagnostique CETTE tension (limites explicitées).
+  item(
+    'logique_existant_diagnostic',
+    'Existant = diagnostic de cette tension (limites face à elle)',
+    obs.limitesExistant.length > 0,
+    obs.limitesExistant.length > 0 ? `${obs.limitesExistant.length} limite(s) de l’existant` : 'Aucune limite de l’existant'
+  );
+
+  // 4. Les solutions répondent à la question (vocabulaire partagé).
+  item(
+    'logique_solutions_repondent',
+    'Solutions qui répondent à la question posée',
+    obs.preconisations.length > 0 && !codesRejets.has('contrat_solutions_decorrelees'),
+    obs.preconisations.length > 0 ? `${obs.preconisations.length} préconisation(s)` : 'Aucune préconisation'
+  );
+
+  // 5. Cas d'entreprises dont au moins un échec, tous sourcés.
+  const cas = obs.casContrat.length > 0 ? obs.casContrat : obs.exemplesEntreprises;
+  const casOk =
+    cas.length > 0 &&
+    obs.aEchecOuLimite &&
+    (obs.casContrat.length > 0
+      ? obs.casContratSources.length === obs.casContrat.length
+      : obs.casSources.length === obs.exemplesEntreprises.length);
+  item(
+    'logique_cas_sources',
+    'Cas d’entreprises sourcés, dont au moins un échec',
+    casOk,
+    casOk ? `${cas.length} cas, dont un échec` : 'Cas manquants, non sourcés ou sans échec'
+  );
+
+  // 6. Concision : le compresseur est passé et n'a rien laissé de bloquant.
+  const rapportCompression = obs.support?.rapport_compression || null;
+  const concisionOk =
+    slides.length > 0 &&
+    (!rapportCompression ||
+      ((rapportCompression.phrases || 0) === 0 &&
+        (rapportCompression.formulesIA || []).length === 0 &&
+        (rapportCompression.deuxCamps || 0) === 0));
+  item(
+    'logique_concision',
+    'Slides concises (une idée par puce, fragments nominaux, pas de formule IA)',
+    concisionOk
+  );
+
+  // 7. Sources sous CHAQUE chiffre (dans le contrat comme dans les slides).
+  const chiffresSansSource = (contrat.contexte || []).filter(
+    (c) => /\d/.test(String(c?.fait || '')) && !String(c?.source || '').trim()
+  );
+  item(
+    'logique_sources_chiffres',
+    'Une source sous chaque chiffre',
+    chiffresSansSource.length === 0,
+    chiffresSansSource.length === 0 ? 'Tous les chiffres sont sourcés' : `${chiffresSansSource.length} chiffre(s) sans source`
+  );
+
+  // 8. 20 slides, plan en 2e, problématique révélée seulement sur sa slide.
+  const titres = slides.map((s) => String(s?.titre || ''));
+  const nbSlidesOk = slides.length === VOLUME_CIBLE_TOTAL;
+  const planEnDeuxieme = /plan/i.test(titres[1] || '');
+  const indexPb = titres.findIndex((t) => /problematique/i.test(t));
+  const pbReveleeSeulementSurSaSlide =
+    indexPb === -1 ||
+    titres.slice(0, indexPb).every((t) => !/problematique/i.test(t)) ||
+    indexPb === titres.findIndex((t) => /problematique/i.test(t));
+  item(
+    'logique_structure_20_slides',
+    '20 slides, plan en 2e, problématique révélée seulement sur sa slide',
+    nbSlidesOk && planEnDeuxieme && pbReveleeSeulementSurSaSlide,
+    `${slides.length} slides`
+  );
+
+  // 9. Pas de débat « deux camps » (Pour / Contre, Avantages / Risques).
+  const deuxCampsSlide = slides.some((s) => {
+    const t = aplatir(s);
+    return /pour\s*\/\s*contre|avantages?\s*\/\s*risques?|d’un côté.{0,30}d’un autre/i.test(t);
+  });
+  item('logique_pas_deux_camps', 'Aucun débat à deux camps (Pour/Contre, Avantages/Risques)', !deuxCampsSlide);
+
+  // 10. Notes du présentateur conformes (présentes et non vides).
+  const notesOk =
+    slides.length > 0 &&
+    slides.every((s) => String(s?.notes || s?.notes_orateur || '').trim().length > 0);
+  item('logique_notes_conformes', 'Notes du présentateur présentes sur chaque slide', notesOk);
+
+  // 11. Texte qui sonne humain (filet anti-formules IA).
+  const formulesIA = [
+    'il convient', 'il est essentiel', 'dans un contexte en mutation', 'afin de garantir',
+    'synergie', 'au cœur de', 'veritable levier', 'véritable levier', 'a l ere du', 'à l’ère du',
+    'aujourd hui plus que jamais', 'aujourd’hui plus que jamais',
+  ];
+  const texteSlides = normaliser(slides.map((s) => aplatir(s)).join(' \n '));
+  const formulesTrouvees = formulesIA.filter((f) => texteSlides.includes(normaliser(f)));
+  item(
+    'logique_style_humain',
+    'Texte qui sonne humain (aucune formule IA)',
+    formulesTrouvees.length === 0,
+    formulesTrouvees.length === 0 ? 'Aucune formule IA détectée' : `Formules IA : ${formulesTrouvees.join(', ')}`
+  );
+
+  const items = itemsBruts.map((i) => ({ ...i, vert: i.ok === true }));
+  const verts = items.filter((i) => i.vert).length;
+  return {
+    items,
+    verts,
+    total: items.length,
+    pourcentage: items.length > 0 ? Math.round((verts / items.length) * 100) : 0,
+    conforme: verts === items.length,
+    rouges: items.filter((i) => !i.vert).map((i) => ({ code: i.code, libelle: i.libelle, detail: i.detail })),
+  };
+}
+
+/** La problématique du contrat est-elle exploitable (présente et non triviale) ? */
+function observationsProblematique(obs) {
+  return String(obs?.questionContrat || '').trim();
 }
 
 /**
@@ -935,20 +1170,35 @@ async function construireRapportVerification(session) {
     pointsFaibles: c.pointsFaibles,
   }));
 
+  // Score « logique du sujet » : checklist métier binaire. Un seul item rouge
+  // bloque l'export, au même titre qu'une non-conformité de la grille.
+  const scoreLogique = construireScoreLogique(session, obs, filRouge);
+  if (!scoreLogique.conforme) {
+    bloquants.push({
+      critere: 'logique',
+      libelle: 'Logique du sujet',
+      pointsFaibles: scoreLogique.rouges.map((r) => ({
+        code: r.code,
+        message: `${r.libelle}${r.detail ? ` — ${r.detail}` : ''}`,
+      })),
+    });
+  }
+
   return {
     genereLe: new Date().toISOString(),
     sujet: filRouge.sujet,
     theme: filRouge.theme,
     problematique: filRouge.problematique,
     ligneDirectrice: filRouge.ligneDirectrice,
-    // Volumétrie : le Markdown alimente un support cible de 25 slides, page de
+    // Volumétrie : le Markdown alimente un support cible de 20 slides, page de
     // titre comprise. On n'observe pas les slides (produit aval) mais on
     // rappelle la cible pour situer le contenu du Markdown.
     volumeCible: VOLUME_CIBLE_TOTAL,
     scoreTotal,
     scoreMax,
     pourcentage: scoreMax > 0 ? Math.round((scoreTotal / scoreMax) * 100) : 0,
-    conforme: nonConformes.length === 0,
+    conforme: nonConformes.length === 0 && scoreLogique.conforme,
+    scoreLogique,
     bloquants,
     nonConformes: nonConformes.map((c) => c.id),
     blocs: referentiels.grille.blocs.map((b) => ({
@@ -1018,6 +1268,21 @@ function rendreRapportMarkdown(rapport) {
   });
 
   const faibles = rapport.pointsFaibles;
+  lignes.push('## 1 bis. Score « logique du sujet » — le support traite-t-il le sujet ?');
+  lignes.push('');
+  if (rapport.scoreLogique) {
+    lignes.push(
+      `**${rapport.scoreLogique.verts} / ${rapport.scoreLogique.total} (${rapport.scoreLogique.pourcentage} %)** — ${
+        rapport.scoreLogique.conforme ? '✅ tous les critères sont verts' : '❌ export bloqué tant qu’un critère est rouge'
+      }`
+    );
+    lignes.push('');
+    rapport.scoreLogique.items.forEach((i) => {
+      lignes.push(`- ${i.vert ? '✅' : '❌'} ${i.libelle}${i.detail && !i.vert ? ` — ${i.detail}` : ''}`);
+    });
+  }
+  lignes.push('');
+
   lignes.push('## 2. Points faibles à recorriger');
   lignes.push('');
   if (faibles.length === 0) {

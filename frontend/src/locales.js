@@ -227,6 +227,56 @@ export const FR = {
   'steps.verifApres': 'Proposition de DeepSeek',
   'steps.verifValider': 'Valider et enregistrer',
   'steps.verifAnnuler': 'Annuler',
+
+  // ---- Passe A : contrat métier (StepProbleme) ----
+  'contrat.title': 'Validation de la problématique (contrat métier)',
+  'contrat.intro':
+    'La Passe A produit un contrat métier : mots-clés, tension réelle, une seule question, justification, préconisations et cas d’entreprises. Rien ne passe à la Passe B (les 20 slides) tant que vous n’avez pas validé la tension ET la problématique.',
+  'contrat.valideBadge': 'Contrat validé',
+  'contrat.nonValideBadge': 'À valider',
+  'contrat.sujet': 'Sujet',
+  'contrat.motsCles': 'Mots-clés du sujet',
+  'contrat.contexte': 'Contexte (faits & chiffres sourcés)',
+  'contrat.tension': 'Tension — ce qui coince réellement',
+  'contrat.tensionHint':
+    'Phrase interne, jamais affichée telle quelle sur les slides. Éditable : c’est votre lecture du problème.',
+  'contrat.problematique': 'Problématique — une seule question',
+  'contrat.problematiqueHint':
+    'Une question précise (comment / en quoi / dans quelle mesure), liée au sujet, qui appelle une réponse par vos préconisations.',
+  'contrat.justification': 'Pourquoi c’est un problème d’entreprise aujourd’hui',
+  'contrat.limitesExistant': 'Ce qui existe déjà — et pourquoi ça ne suffit pas',
+  'contrat.preconisations': 'Préconisations — la réponse à la question',
+  'contrat.casEntreprises': 'Cas d’entreprises (dont un échec)',
+  'contrat.ligneDirectrice': 'Ligne directrice (fil rouge, éditable)',
+  'contrat.ouverture': 'Ouverture (question sans réponse)',
+  'contrat.valider': '✓ Valider la problématique et passer au plan',
+  'contrat.validant': 'Validation…',
+  'contrat.regenerer': '↻ Régénérer la tension et la problématique',
+  'contrat.regenerant': 'Régénération ciblée…',
+  'contrat.rejetsTitle': 'Rejets bloquants — la problématique ne passe pas',
+  'contrat.avertissementsTitle': 'Avertissements (non bloquants)',
+  'contrat.regenerationHint':
+    'La régénération ne retouche QUE la tension, la problématique et la justification : les mots-clés, le contexte et les cas d’entreprises validés sont conservés mot pour mot.',
+  'contrat.valideOk': 'Contrat validé : vous pouvez générer les 20 slides (étape Support).',
+  'contrat.reponseOk': 'Contrat validé.',
+  'contrat.erreur': 'Impossible de traiter le contrat.',
+  'contrat.issueEchec': 'échec',
+  'contrat.issueSucces': 'succès',
+  'contrat.sourceLabel': 'Source',
+  'contrat.pasDeContrat': 'Aucun contrat pour le moment. Lancez la génération de la problématique (Passe A).',
+
+  // ---- Score « logique du sujet » (StepSupport) ----
+  'logique.title': 'Score « logique du sujet »',
+  'logique.intro':
+    'Le support traite-t-il vraiment le sujet ? Onze contrôles automatiques et bloquants : tant qu’un seul est rouge, l’export .pptx reste fermé.',
+  'logique.score': 'Score logique',
+  'logique.conforme': 'Support logique : les 20 slides traitent le sujet.',
+  'logique.bloque': 'Export bloqué : critères rouges à corriger ci-dessous.',
+  'logique.rouges': 'Critères rouges',
+  'logique.ok': 'Critères verts',
+  'logique.fallback':
+    'Score logique indisponible : relancez la vérification ci-dessus pour l’afficher.',
+
   'steps.importing': 'Validation…',
   'steps.importValidate': 'Importer et valider le support',
   'steps.claudeImportSuccess':
@@ -558,6 +608,55 @@ export const EN = {
   'steps.verifApres': 'DeepSeek proposal',
   'steps.verifValider': 'Approve and save',
   'steps.verifAnnuler': 'Cancel',
+
+  // ---- Pass A: business contract (StepProbleme) ----
+  'contrat.title': 'Problem statement validation (business contract)',
+  'contrat.intro':
+    'Pass A produces a business contract: keywords, the real friction, a single question, the justification, recommendations and company cases. Nothing moves to Pass B (the 20 slides) until you validate the friction AND the problem statement.',
+  'contrat.valideBadge': 'Contract validated',
+  'contrat.nonValideBadge': 'To validate',
+  'contrat.sujet': 'Topic',
+  'contrat.motsCles': 'Topic keywords',
+  'contrat.contexte': 'Context (sourced facts & figures)',
+  'contrat.tension': 'Friction — what actually hurts',
+  'contrat.tensionHint':
+    'Internal sentence, never shown as is on the slides. Editable: this is your reading of the problem.',
+  'contrat.problematique': 'Problem statement — a single question',
+  'contrat.problematiqueHint':
+    'A precise question (how / to what extent), tied to the topic, answered by your recommendations.',
+  'contrat.justification': 'Why this is a business problem today',
+  'contrat.limitesExistant': 'What already exists — and why it is not enough',
+  'contrat.preconisations': 'Recommendations — the answer to the question',
+  'contrat.casEntreprises': 'Company cases (one failure included)',
+  'contrat.ligneDirectrice': 'Through-line (editable)',
+  'contrat.ouverture': 'Opening (question left unanswered)',
+  'contrat.valider': '✓ Validate the problem statement and move to the plan',
+  'contrat.validant': 'Validating…',
+  'contrat.regenerer': '↻ Regenerate the friction and the problem statement',
+  'contrat.regenerant': 'Targeted regeneration…',
+  'contrat.rejetsTitle': 'Blocking rejections — the problem statement does not pass',
+  'contrat.avertissementsTitle': 'Warnings (non-blocking)',
+  'contrat.regenerationHint':
+    'Regeneration only rewrites the friction, the problem statement and the justification: validated keywords, context and company cases are kept word for word.',
+  'contrat.valideOk': 'Contract validated: you can now generate the 20 slides (Support step).',
+  'contrat.reponseOk': 'Contract validated.',
+  'contrat.erreur': 'Could not process the contract.',
+  'contrat.issueEchec': 'failure',
+  'contrat.issueSucces': 'success',
+  'contrat.sourceLabel': 'Source',
+  'contrat.pasDeContrat': 'No contract yet. Run the problem statement generation (Pass A).',
+
+  // ---- “Topic logic” score (StepSupport) ----
+  'logique.title': '“Topic logic” score',
+  'logique.intro':
+    'Does the deck really address the topic? Eleven automatic, blocking checks: as long as one is red, .pptx export stays closed.',
+  'logique.score': 'Logic score',
+  'logique.conforme': 'Logic holds: the 20 slides address the topic.',
+  'logique.bloque': 'Export blocked: red criteria to fix below.',
+  'logique.rouges': 'Red criteria',
+  'logique.ok': 'Green criteria',
+  'logique.fallback': 'Logic score unavailable: rerun the check above to display it.',
+
   'steps.importing': 'Validating…',
   'steps.importValidate': 'Import and validate the presentation',
   'steps.claudeImportSuccess':

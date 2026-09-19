@@ -14,7 +14,7 @@ Le support final doit refléter cette exactitude méthodologique et ne doit en a
 
 ## 2. Structure Narrative et Séquentielle Impérative du Support Final
 
-Le support final compte **exactement 25 slides**, page de titre comprise (soit 24 slides de contenu, conclusion incluse). Ce volume est volontairement large : il permet de consacrer une slide distincte à chaque cas d'entreprise et de développer chaque idée sans condenser. Le plan de la présentation et des slides du support final **doit strictement respecter l'enchaînement chronologique suivant** :
+Le support final compte **exactement 20 slides**, page de titre comprise (soit 19 slides de contenu, conclusion incluse, barre de progression `n / 19`). Ce volume est volontairement resserré : chaque idée tient sur une slide, sans slide de remplissage ni slide de transition. Une slide dédiée aux cas d'entreprises (deux maximum, blocs compacts), jamais une slide par entreprise. Le plan de la présentation et des slides du support final **doit strictement respecter l'enchaînement chronologique suivant** :
 
 **Nomenclature et déclinaison des titres.** Les titres suivent une nomenclature classique et structurée : « Plan de présentation », « Contexte », « Mots clés », « Enjeux », « Problématiques », « Existant », « Chiffres clés », « Cas d'entreprises », « Solutions », « Préconisations », « Conclusion ». Jamais une phrase, jamais de verbe conjugué, jamais de point. Dès qu'une catégorie occupe plusieurs slides, chaque slide porte le titre principal suivi de **deux ou trois mots de précision différenciatrice** après un tiret (« Solutions — Continuité d'activité », « Préconisations — Avant la crise », « Cas d'entreprises — Thalès »). Deux slides ne portent jamais le même titre.
 
@@ -35,7 +35,7 @@ Le support final compte **exactement 25 slides**, page de titre comprise (soit 2
    * **Règle absolue** : Les sources de ces statistiques doivent obligatoirement figurer en bas de slide, et être **le plus récent possible**.
 
 4. **Cas Réels d'Entreprise (Benchmarks)**
-   * **Une slide par entreprise** : chaque cas réel occupe sa propre slide, présentée de façon distincte et individualisée, jamais regroupée avec une autre. Aucun regroupement de deux entreprises sur une même slide. Le titre porte le nom de l'entreprise (« Cas d'entreprises — Thalès »), et au moins un cas doit être un échec ou une limite.
+   * **Une slide dédiée aux cas (deux maximum)** : les cas réels sont présentés en blocs compacts sur une seule slide, chacun avec son nom, sa pastille d'initiales jaune, **un** chiffre, **un** angle qui prouve la problématique et sa source. Au moins un cas doit être un échec ou une limite. Un cas qui n'illustre pas la tension est écarté.
    * **Règle absolue** : Les sources des cas réels doivent également être explicitement indiquées en bas de slide, avec des références actualisées.
 
 5. **Solutions et Préconisations (Posture de Consultant)**
@@ -61,9 +61,9 @@ L'évaluation du Grand Oral porte **prioritairement sur la qualité de l'exercic
 
 Avant de valider ou de générer une étape du processus ou le support final, l'assistant doit effectuer un contrôle qualité systématique :
 
-* **Vérification du volume** : Le support compte-t-il exactement 25 slides (page de titre comprise), avec une slide distincte et individualisée par cas d'entreprise ?
+* **Vérification du volume** : Le support compte-t-il exactement 20 slides (page de titre comprise), dont 19 slides de contenu, avec une slide dédiée aux cas d'entreprises (deux maximum) ?
 * **Vérification des titres** : Les titres suivent-ils la nomenclature imposée (Contexte, Mots clés, Enjeux, Problématiques, Solutions, Préconisations…), avec la précision de deux ou trois mots dès qu'une catégorie occupe plusieurs slides, sans aucun titre répété ?
-* **Vérification de l'ordre structurel** : Le support généré respecte-t-il scrupuleusement l'ordre (Contexte -> Plan de présentation -> Mots clés -> Enjeux -> Problématiques posées -> Existant -> Statistiques sourcées et récentes -> Cas d'entreprises sourcés, un par slide -> Solutions -> Préconisations -> Conclusion) ?
+* **Vérification de l'ordre structurel** : Le support généré respecte-t-il scrupuleusement l'ordre (Contexte -> Plan de présentation -> Mots clés -> Enjeux -> Problématiques posées -> Existant -> Statistiques sourcées et récentes -> Cas d'entreprises sourcés -> Solutions -> Préconisations -> Conclusion) ?
 * **Vérification de la ligne directrice** : Chaque slide de contenu (sauf la dernière) porte-t-elle sa phrase de transition, et l'enchaînement s'entend-il sans interruption d'une slide à l'autre ?
 * **Vérification de la charge de texte** : Les puces tiennent-elles en une ligne, sans qu'aucune slide ne devienne un bloc de texte à lire ?
 * **Vérification des sources** : Chaque statistique et chaque exemple d'entreprise dispose-t-il d'une source clairement indiquée et d'une date/actualité vérifiable ?

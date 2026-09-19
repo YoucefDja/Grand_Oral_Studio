@@ -29,19 +29,31 @@ const { parseJsonStrict } = require('./anthropic');
  * purement oral, par exemple) : il est ignoré, jamais deviné.
  */
 const CIBLES = {
-  // ---- Problématique (étape 2) ----
-  problematique_absente: { etape: 'probleme', chemin: 'formulations[0].formulation' },
-  problematique_reformulation: { etape: 'probleme', chemin: 'formulations[0].formulation' },
-  problematique_debat: { etape: 'probleme', chemin: 'formulations[0].formulation' },
-  problematique_descriptive: { etape: 'probleme', chemin: 'formulations[0].formulation' },
-  problematique_sans_levier: { etape: 'probleme', chemin: 'formulations[0].formulation' },
-  problematique_sans_tension: { etape: 'probleme', chemin: 'formulations[0].tension' },
-  problematique_tension_identique: { etape: 'probleme', chemin: 'formulations[0].tension' },
-  problematique_hors_sujet: { etape: 'probleme', chemin: 'formulations[0].formulation' },
-  ligne_directrice_absente: { etape: 'probleme', chemin: 'ligne_directrice' },
-  ligne_directrice_hors_sujet: { etape: 'probleme', chemin: 'ligne_directrice' },
-  ligne_directrice_decrochee: { etape: 'probleme', chemin: 'ligne_directrice' },
-  '1.5-justification': { etape: 'probleme', chemin: 'formulations[0].pourquoi_discutable' },
+  // ---- Contrat métier (Passe A, session.data.contrat) ----
+  contrat_non_valide: { etape: 'contrat', chemin: 'problematique' },
+  problematique_absente: { etape: 'contrat', chemin: 'problematique' },
+  problematique_reformulation: { etape: 'contrat', chemin: 'problematique' },
+  problematique_debat: { etape: 'contrat', chemin: 'problematique' },
+  problematique_descriptive: { etape: 'contrat', chemin: 'problematique' },
+  problematique_sans_levier: { etape: 'contrat', chemin: 'problematique' },
+  problematique_sans_tension: { etape: 'contrat', chemin: 'tension' },
+  problematique_tension_decorrelee: { etape: 'contrat', chemin: 'tension' },
+  problematique_hors_sujet: { etape: 'contrat', chemin: 'problematique' },
+  contrat_solutions_decorrelees: { etape: 'contrat', chemin: 'preconisations' },
+  contrat_hors_sujet: { etape: 'contrat', chemin: 'problematique' },
+  contrat_copie_sujet: { etape: 'contrat', chemin: 'problematique' },
+  contrat_amorce_molle: { etape: 'contrat', chemin: 'problematique' },
+  contrat_question_oui_non: { etape: 'contrat', chemin: 'problematique' },
+  contrat_question_plus_large: { etape: 'contrat', chemin: 'problematique' },
+  contrat_question_inutile: { etape: 'contrat', chemin: 'problematique' },
+  contrat_question_absente: { etape: 'contrat', chemin: 'problematique' },
+  contrat_tension_absente: { etape: 'contrat', chemin: 'tension' },
+  contrat_justification_absente: { etape: 'contrat', chemin: 'justificationProbleme' },
+  contrat_ligne_directrice_absente: { etape: 'contrat', chemin: 'ligneDirectrice' },
+  ligne_directrice_absente: { etape: 'contrat', chemin: 'ligneDirectrice' },
+  ligne_directrice_hors_sujet: { etape: 'contrat', chemin: 'ligneDirectrice' },
+  ligne_directrice_decrochee: { etape: 'contrat', chemin: 'ligneDirectrice' },
+  '1.5-justification': { etape: 'contrat', chemin: 'justificationProbleme' },
 
   // ---- Analyse (étape 1) ----
   '1.1-positionnement': { etape: 'analyse', chemin: 'positionnement_strategique' },
@@ -72,11 +84,13 @@ const CIBLES = {
   '2.6-sources': { etape: 'glossaire', chemin: 'sources' },
   '2.6-glossaire': { etape: 'glossaire', chemin: 'termes' },
 
+  // ---- Cas d'entreprises : portés par le contrat (Passe A) ----
+  '1.4-benchmark': { etape: 'contrat', chemin: 'casEntreprises' },
+  '1.4-source-cas': { etape: 'contrat', chemin: 'casEntreprises' },
+  '1.4-echec': { etape: 'contrat', chemin: 'casEntreprises' },
+  '1.4-regroupe': { etape: 'contrat', chemin: 'casEntreprises' },
+
   // ---- Recherche (étape d'arrière-plan) ----
-  '1.4-benchmark': { etape: 'recherche', chemin: 'exemples_entreprises' },
-  '1.4-source-cas': { etape: 'recherche', chemin: 'exemples_entreprises' },
-  '1.4-echec': { etape: 'recherche', chemin: 'exemples_entreprises' },
-  '1.4-regroupe': { etape: 'recherche', chemin: 'exemples_entreprises' },
   '1.7-notes': { etape: 'recherche', chemin: 'questions_du_jury' },
   '2.3-illustration': { etape: 'recherche', chemin: 'donnees_a_rechercher' },
   '2.3-nuance': { etape: 'recherche', chemin: 'exemples_entreprises' },
@@ -84,7 +98,7 @@ const CIBLES = {
 
 const LIBELLES_ETAPES = {
   analyse: 'Analyse du sujet',
-  probleme: 'Problématique',
+  contrat: 'Contrat métier (problématique)',
   plan: 'Plan détaillé',
   glossaire: 'Glossaire',
   recherche: 'Recherche documentaire',
@@ -208,7 +222,7 @@ async function corrigerChamp({ session, etape, chemin, pointsFaibles }) {
   const user = JSON.stringify({
     sujet: String(session?.titre || '').trim(),
     theme: String(session?.theme || '').trim(),
-    ligne_directrice: String(session?.ligneDirectrice || data.probleme?.ligne_directrice || '').trim(),
+    ligne_directrice: String(session?.ligneDirectrice || data.contrat?.ligneDirectrice || '').trim(),
     etape,
     champ: chemin,
     role_du_champ: roleDuChamp(chemin),
@@ -231,20 +245,38 @@ async function corrigerChamp({ session, etape, chemin, pointsFaibles }) {
 
 /** Rappel du rôle du champ, pour que le modèle ne se trompe pas de registre. */
 function roleDuChamp(chemin) {
-  if (chemin === 'ligne_directrice') {
+  if (chemin === 'problematique') {
+    return 'La problématique elle-même : UNE question précise (comment / en quoi / dans quelle mesure), liée au sujet, qui pose un problème d’entreprise réel, solutionnable par les préconisations. Jamais une copie du sujet, jamais une question oui/non, jamais un débat Pour/Contre.';
+  }
+  if (chemin === 'tension') {
+    return 'La friction réelle, en une phrase interne : ce qui coince concrètement dans l’entreprise sur ce sujet (coût, compétence, dette, conformité, dépendance, délai, taille d’entreprise…). Ce n’est pas affiché tel quel sur les slides.';
+  }
+  if (chemin === 'justificationProbleme') {
+    return 'Pourquoi c’est un problème d’entreprise aujourd’hui, en une ou deux phrases : ce que l’entreprise perd ou risque si rien ne bouge.';
+  }
+  if (chemin === 'ligneDirectrice') {
     return 'Fil rouge de toute la présentation : une phrase qui découle de la problématique et sera rappelée à chaque étape.';
+  }
+  if (chemin === 'preconisations') {
+    return 'Les préconisations qui répondent à la question, calibrées par taille d’entreprise (PME / ETI / grand groupe), actionnables avant / pendant / après. Elles doivent réutiliser le vocabulaire de la tension et de la question.';
+  }
+  if (chemin === 'limitesExistant') {
+    return 'Ce qui existe déjà sur ce sujet et POURQUOI ça ne suffit pas face à cette tension précise. Pas un inventaire de normes.';
+  }
+  if (chemin === 'contexte') {
+    return 'Les faits et chiffres d’actualité qui cadrent le sujet [{fait, source}] : chaque chiffre porte sa source.';
+  }
+  if (chemin === 'motsCles') {
+    return 'Les mots-clés du sujet [{mot, definition}] : définition métier d’une seule ligne, pas une définition de wiki.';
+  }
+  if (chemin === 'casEntreprises') {
+    return 'Les cas d’entreprise réels [{nom, chiffre, angle, source, issue (succes | echec)}] liés à la tension, avec au moins un échec. Nom d’entreprise connu + ce qu’ils ont fait (ou raté), jamais un cas vitrine hors sujet.';
+  }
+  if (chemin === 'ouverture') {
+    return 'La question d’ouverture prospective, volontairement laissée SANS réponse.';
   }
   if (chemin === 'positionnement_strategique') {
     return 'En quoi le sujet compte pour l’entreprise, et pour qui précisément.';
-  }
-  if (chemin === 'formulations[0].formulation') {
-    return 'La problématique elle-même, formulée en une question courte (240 caractères maximum).';
-  }
-  if (chemin === 'formulations[0].tension') {
-    return 'La tension à deux pôles opposés ({pole_a, pole_b}) dont naît la problématique.';
-  }
-  if (chemin === 'formulations[0].pourquoi_discutable') {
-    return 'Pourquoi le problème est réellement discutable (il existe des réponses défendables différentes).';
   }
   if (chemin === 'sections') {
     return 'Les sections du plan, chacune {partie, role, minutes, points[]}, dans l’ordre de l’entonnoir Contexte → Enjeux → Problématique → Existant → Données → Cas réels → Solutions → Conclusion.';

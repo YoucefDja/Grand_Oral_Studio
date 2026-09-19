@@ -38,7 +38,7 @@ const COULEURS = {
  * deux ou trois mots de précision séparés par un tiret (« Solutions —
  * Continuité d'activité »). Deux slides ne portent jamais le même titre.
  *
- * VOLUME : 1 page de titre + 24 slides de contenu = 25 slides au total. Les
+ * VOLUME : 1 page de titre + 19 slides de contenu = 20 slides au total. Les
  * nombres entre parenthèses ci-dessous situent chaque bloc dans ce total.
  */
 const SQUELETTE_SLIDES = [
@@ -131,10 +131,10 @@ décoratives, dégradés, ombres marquées, plus de 6 puces par slide.
 
 ## SQUELETTE DE TEXTE À COLLER (structure de référence)
 
-Ce squelette couvre les slides 2 à 25, soit 24 slides de contenu. Il est déjà
+Ce squelette couvre les slides 2 à 20, soit 19 slides de contenu. Il est déjà
 complet : chaque bloc y figure à sa place, dans l'ordre narratif imposé. Tu peux
 développer un bloc sur une slide supplémentaire si le sujet le réclame, mais le
-total reste EXACTEMENT de 25 slides, page de titre comprise.
+total reste EXACTEMENT de 20 slides, page de titre comprise.
 
 NOMENCLATURE ET DÉCLINAISON DES TITRES — deux règles non négociables :
 - Les titres suivent la nomenclature classique et structurée : « Plan de
@@ -184,7 +184,7 @@ ${squelette}
 ## CONTRÔLE FINAL AVANT EXPORT
 
 Vérifie, slide par slide, que :
-- le total est EXACTEMENT de 25 slides, page de titre comprise, soit 24 slides
+- le total est EXACTEMENT de 20 slides, page de titre comprise, soit 19 slides
   de contenu ;
 - la 2e slide du dossier est « Plan de présentation », sans aucune problématique ;
 - les titres suivent la nomenclature imposée, et chaque slide d'une catégorie

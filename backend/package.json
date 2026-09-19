@@ -10,7 +10,8 @@
   "scripts": {
     "start": "node src/index.js",
     "dev": "node --watch src/index.js",
-    "seed": "node scripts/seed-methodology.js"
+    "seed": "node scripts/seed-methodology.js",
+    "test": "node --test \"src/services/__tests__/*.test.js\""
   },
   "dependencies": {
     "cheerio": "1.0.0",

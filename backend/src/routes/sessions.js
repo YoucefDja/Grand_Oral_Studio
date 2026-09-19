@@ -7,11 +7,16 @@ const {
   STEP_KEYS,
   STEP_LABELS,
   HIDDEN_STEPS,
-  problemeRetenuPourSuite,
+  contratPourSuite,
 } = require('../services/promptBuilder');
 const { generateAnthropic, parseJsonStrict } = require('../services/anthropic');
 const { generateDeepseek } = require('../services/deepseek');
-const { verifierEtCorrigerProbleme } = require('../services/problemeVerification');
+const {
+  verifierContrat,
+  ciblerRegeneration,
+  consigneRegeneration,
+} = require('../services/contratVerification');
+const { compresserSupport } = require('../services/compresseurTexte');
 const { buildPptx } = require('../services/pptx');
 const { buildChartePptxClaude } = require('../services/chartePptxClaude');
 const { buildGammaPrompt } = require('../services/charteGamma');
@@ -86,11 +91,17 @@ function validateStepOutput(stepKey, parsed) {
     );
   }
   if (stepKey === 'probleme') {
-    if (!Array.isArray(parsed.formulations) || parsed.formulations.length === 0) {
-      throw httpError(502, 'La problématique générée ne contient aucune formulation exploitable.');
+    // Passe A : contrat métier (plus de formulations candidates). La question
+    // est contrôlée en profondeur plus loin par verifierContrat ; ici on ne
+    // vérifie que la présence des champs indispensables à la Passe B.
+    if (typeof parsed.problematique !== 'string' || !parsed.problematique.trim()) {
+      throw httpError(502, 'Le contrat généré ne contient pas de problématique exploitable.');
     }
-    if (typeof parsed.ligne_directrice !== 'string' || !parsed.ligne_directrice.trim()) {
-      throw httpError(502, 'La problématique générée ne contient pas de ligne_directrice (fil rouge).');
+    if (typeof parsed.tension !== 'string' || !parsed.tension.trim()) {
+      throw httpError(502, 'Le contrat généré ne contient pas de tension (friction d’entreprise).');
+    }
+    if (!String(parsed.ligneDirectrice || parsed.ligne_directrice || '').trim()) {
+      throw httpError(502, 'Le contrat généré ne contient pas de ligne directrice (fil rouge).');
     }
   }
   if (stepKey === 'glossaire') {
@@ -119,6 +130,30 @@ function assertGlossaireValide(session, pourEtape) {
     throw httpError(
       400,
       `L'étape « ${STEP_LABELS[pourEtape]} » exige un glossaire validé (étapes précédentes). Générez d'abord le glossaire.`
+    );
+  }
+}
+
+/**
+ * GATE PROBLÉMATIQUE — porte obligatoire entre Passe A et Passe B.
+ *
+ * Tant que l'étudiant n'a pas explicitement validé le contrat métier
+ * (`data.contrat.valide === true`), aucune slide ne peut être produite ni
+ * exportée : sinon on figerait 20 slides sur une problématique non relue.
+ */
+function assertContratValide(session, pourEtape) {
+  const contrat = session.data && session.data.contrat;
+  const question = contrat && typeof contrat.problematique === 'string' ? contrat.problematique.trim() : '';
+  if (!question) {
+    throw httpError(
+      400,
+      `L'étape « ${STEP_LABELS[pourEtape]} » exige un contrat métier généré (Passe A). Générez d'abord la problématique.`
+    );
+  }
+  if (contrat.valide !== true) {
+    throw httpError(
+      400,
+      "Le contrat métier doit être validé (Passe A) avant la génération du support. Validez ou éditez la problématique dans l'écran de validation."
     );
   }
 }
@@ -294,8 +329,10 @@ router.post(
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
-    // Règle produit : glossaire obligatoire avant le support.
+    // Règle produit : contrat métier validé (Passe A) ET glossaire obligatoires
+    // avant la Passe B (support).
     if (stepKey === 'support') {
+      assertContratValide(session, stepKey);
       assertGlossaireValide(session, stepKey);
     }
 
@@ -320,119 +357,209 @@ router.post(
     }
     validateStepOutput(stepKey, parsed);
 
-    // Filet de qualité sur la problématique : les heuristiques déterministes
-    // signalent structure / reformulation plate / hors-sujet lexical, puis un
-    // second passage du modèle re-vérifie les 5 tests anti-dérive (méthodo
-    // Armelle) et corrige les formulations défaillantes.
+    // Passe A : le contrat métier est vérifié par des rejets BLOQUANTS. S'il est
+    // invalide, on le stocke quand même (pour que l'étudiant voie ce qui a été
+    // produit), marqué `valide: false`, et on renvoie le diagnostic au front :
+    // la régénération ciblée porte uniquement sur tension + problématique +
+    // justification, jamais sur les mots-clés déjà produits.
     if (stepKey === 'probleme') {
-      parsed = await verifierEtCorrigerProbleme({ system, session, problemeGenere: parsed });
+      const verification = verifierContrat({
+        sujet: session.titre,
+        theme: session.theme,
+        contrat: parsed,
+      });
+      parsed.valide = verification.valide === true;
+      parsed.verification = {
+        valide: verification.valide,
+        rejets: verification.rejets,
+        avertissements: verification.avertissements,
+        observations: verification.observations,
+      };
+      if (!verification.valide) {
+        parsed.champsARegenerer = ciblerRegeneration(verification.rejets);
+      }
     }
 
+    // Passe B : le compresseur de texte passe AVANT le stockage et l'export. Le
+    // support doit être concis par construction (fragments nominaux, une idée
+    // par puce) : les phrases complètes et formules IA migrent dans les notes du
+    // présentateur au lieu d'être supprimées silencieusement.
+    if (stepKey === 'support') {
+      const { support: compresse, rapport } = compresserSupport(parsed);
+      parsed = compresse;
+      parsed.rapport_compression = rapport;
+    }
+
+    // Passe A : le contrat est stocké dans data.contrat et sert de source unique
+    // à toutes les étapes aval. Il n'est PAS validé d'office : c'est l'étudiant
+    // qui pose `valide: true` (ou qui édite puis valide) à l'écran de validation.
     let regenereProbleme = false;
     if (stepKey === 'probleme') {
-      // Régénération de la problématique : un contenu précédent existait peut-être.
-      regenereProbleme = isNonEmptyObject(session.data && session.data.probleme);
-      session.ligneDirectrice = String(parsed.ligne_directrice).trim();
+      const ancienContrat = session.data && session.data.contrat;
+      regenereProbleme = isNonEmptyObject(ancienContrat);
+      const ld = String(parsed.ligneDirectrice || parsed.ligne_directrice || '').trim();
+      session.ligneDirectrice = ld;
+      parsed.ligneDirectrice = ld;
+      // Régénération : la validation précédente est caduque, l'étudiant doit
+      // revalider ce nouveau contrat.
+      if (regenereProbleme) parsed.valide = false;
+      // Les étapes aval étaient bâties sur l'ancien contrat : elles doivent être
+      // re-générées (recherche d'arrière-plan, plan, glossaire, support).
       if (regenereProbleme) {
-        // Les étapes aval étaient bâties sur l'ancienne problématique : elles
-        // doivent être re-générées (recherche d'arrière-plan, plan, glossaire,
-        // support).
         ['recherche', 'plan', 'glossaire', 'support'].forEach((k) => {
           if (session.data && session.data[k]) session.data[k] = {};
         });
       }
+      session.data.contrat = parsed;
+    } else {
+      session.data[stepKey] = parsed;
     }
-
-    session.data[stepKey] = parsed;
     session.markModified('data');
 
-    // Avance la progression si la génération est un pas en avant. Si la
-    // problématique a été régénérée alors que le parcours était déjà avancé, on
-    // rabat currentStep sur l'étape suivante pour forcer le recommencement des
-    // étapes aval.
+    // Avance la progression si la génération est un pas en avant. Si le contrat
+    // a été régénéré alors que le parcours était déjà avancé, on rabat
+    // currentStep sur l'étape suivante pour forcer le recommencement des étapes
+    // aval (la Passe B repartira du contrat revalidé).
     const nextIndex = STEP_KEYS.indexOf(stepKey) + 1;
     session.currentStep = Math.max(session.currentStep || 0, nextIndex);
-    if (regenereProbleme) {
+    if (stepKey === 'probleme' && regenereProbleme) {
       session.currentStep = Math.min(session.currentStep, nextIndex);
     }
 
+    await session.save();
+    // La Passe A invalide : on renvoie le diagnostic au front pour l'écran de
+    // validation (l'étudiant voit les critères rouges et peut régénérer).
+    if (stepKey === 'probleme' && parsed.valide !== true) {
+      return res.json({ session, verification: parsed.verification || null });
+    }
+    res.json(session);
+  })
+);
+
+// POST /api/sessions/:id/valider-contrat
+// GATE PROBLÉMATIQUE (Passe A → Passe B). L'étudiant valide — éventuellement
+// après édition — la tension et la problématique du contrat. On re-vérifie le
+// contrat édité avec les mêmes règles bloquantes : impossible de forcer le
+// passage avec une question molle. Body : { tension?, problematique?,
+// justificationProbleme?, ligneDirectrice?, ouverture? }.
+router.post(
+  '/:id/valider-contrat',
+  asyncHandler(async (req, res) => {
+    const session = await findSessionOr404(req.params.id, req.userId);
+    if (!session) throw httpError(404, 'Session introuvable.');
+
+    const contrat = session.data && session.data.contrat;
+    if (!isNonEmptyObject(contrat)) {
+      throw httpError(400, 'Aucun contrat à valider : générez d’abord la problématique (Passe A).');
+    }
+
+    // Édition : on ne laisse toucher qu'aux champs de fond éditables, jamais aux
+    // mots-clés ni aux cas d'entreprises (qui viennent du .md et des sources).
+    const champsEditables = ['tension', 'problematique', 'justificationProbleme', 'ligneDirectrice', 'ouverture'];
+    champsEditables.forEach((champ) => {
+      if (req.body && req.body[champ] !== undefined) {
+        contrat[champ] = String(req.body[champ] || '').trim();
+      }
+    });
+
+    const verification = verifierContrat({
+      sujet: session.titre,
+      theme: session.theme,
+      contrat,
+    });
+    contrat.verification = {
+      valide: verification.valide,
+      rejets: verification.rejets,
+      avertissements: verification.avertissements,
+      observations: verification.observations,
+    };
+
+    if (!verification.valide) {
+      contrat.valide = false;
+      contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
+      session.markModified('data');
+      await session.save();
+      return res.status(422).json({
+        session,
+        verification: contrat.verification,
+        message: 'Contrat refusé : la problématique ne passe pas encore les règles de fond.',
+      });
+    }
+
+    // Contrat validé : la Passe B peut démarrer.
+    contrat.valide = true;
+    delete contrat.champsARegenerer;
+    if (contrat.ligneDirectrice) session.ligneDirectrice = contrat.ligneDirectrice;
+
+    session.markModified('data');
     await session.save();
     res.json(session);
   })
 );
 
-// POST /api/sessions/:id/choisir-probleme
-// L'étudiant choisit, parmi les formulations générées à l'étape 2, celle qu'il
-// défendra : met à jour "recommandation" (utilisée ensuite par promptBuilder
-// pour ne réinjecter que cette formulation dans les étapes 3 à 6) et permet
-// d'affiner la ligne directrice. Body : { formulation, ligneDirectrice? }.
+// POST /api/sessions/:id/regenerer-contrat
+// Régénération CIBLÉE après rejet : on ne redemande au modèle QUE la tension, la
+// problématique et la justification (via consigneRegeneration). Les mots-clés, le
+// contexte et les cas d'entreprises déjà produits sont conservés MOT POUR MOT.
 router.post(
-  '/:id/choisir-probleme',
+  '/:id/regenerer-contrat',
   asyncHandler(async (req, res) => {
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
 
-    const probleme = session.data && session.data.probleme;
-    const formulations = Array.isArray(probleme?.formulations) ? probleme.formulations : [];
-    if (formulations.length === 0) {
-      throw httpError(400, 'Aucune formulation à choisir : générez d’abord la problématique (étape 2).');
+    const contrat = session.data && session.data.contrat;
+    if (!isNonEmptyObject(contrat)) {
+      throw httpError(400, 'Aucun contrat à régénérer : générez d’abord la problématique (Passe A).');
     }
 
-    const formulation = String(req.body?.formulation || '').trim();
-    const index = Number.isInteger(req.body?.index) ? req.body.index : -1;
-    const retenue =
-      formulations.find((f) => f && typeof f === 'object' && String(f.formulation || '').trim() === formulation) ??
-      (index >= 0 && index < formulations.length ? formulations[index] : null);
-    if (!retenue || typeof retenue !== 'object') {
-      throw httpError(400, 'La formulation choisie ne correspond à aucune des formulations générées.');
-    }
+    const rejets = Array.isArray(contrat.verification?.rejets) ? contrat.verification.rejets : [];
+    const champs = ciblerRegeneration(rejets);
 
-    const ancienneRecommandation = String(probleme.recommandation || '').trim();
-    const nouvelleRecommandation = String(retenue.formulation || '').trim();
-    const ancienneLD = String(probleme.ligne_directrice || '').trim();
+    const { system, user } = await buildStepPrompt(session, 'probleme');
+    const consigne = consigneRegeneration(rejets, champs.length ? champs : ['tension', 'problematique', 'justificationProbleme']);
+    const userRegen = [
+      user,
+      '',
+      '---',
+      '',
+      "### RÉGÉNÉRATION CIBLÉE — le contrat actuel vient d'être refusé",
+      consigne,
+      '',
+      'Contrat actuel (conserve les champs non listés MOT POUR MOT) :',
+      '```json',
+      JSON.stringify(contratPourSuite(contrat), null, 2),
+      '```',
+      '',
+      'Renvoie le contrat COMPLET au même format JSON, avec uniquement les champs listés corrigés.',
+    ].join('\n');
 
-    // La formulation retenue devient la référence pour toute la suite du parcours.
-    probleme.recommandation = nouvelleRecommandation;
-    probleme.justification_recommandation =
-      [
-        `Formulation choisie par l'étudiant.`,
-        retenue.pourquoi_discutable ? `Pourquoi elle est discutable : ${retenue.pourquoi_discutable}` : '',
-        retenue.pourquoi_bornee_par_le_sujet
-          ? `Pourquoi elle reste bornée par le sujet : ${retenue.pourquoi_bornee_par_le_sujet}`
-          : '',
-      ]
-        .filter(Boolean)
-        .join(' ');
+    const raw = await generateDeepseek(system, userRegen);
+    const parsed = parseJsonStrict(raw);
+    validateStepOutput('probleme', parsed);
 
-    // Ligne directrice éventuellement ajustée par l'étudiant après son choix.
-    let nouvelleLD = ancienneLD;
-    if (req.body?.ligneDirectrice !== undefined) {
-      nouvelleLD = String(req.body.ligneDirectrice).trim();
-      if (!nouvelleLD) {
-        throw httpError(400, 'La ligne directrice ne peut pas être vide.');
-      }
-      probleme.ligne_directrice = nouvelleLD;
-      session.ligneDirectrice = nouvelleLD;
-    } else if (ancienneLD) {
-      session.ligneDirectrice = ancienneLD;
-    }
+    // Fusion : on ne remplace QUE les champs ciblés, le reste est intouchable.
+    const champsCibles = champs.length ? champs : ['tension', 'problematique', 'justificationProbleme'];
+    champsCibles.forEach((champ) => {
+      if (parsed[champ] !== undefined) contrat[champ] = parsed[champ];
+    });
 
-    // Si la formulation retenue OU la ligne directrice CHANGE, les étapes aval
-    // (recherche d'arrière-plan → support) sont basées sur l'ancienne
-    // problématique / l'ancien fil rouge : elles doivent être re-faites.
-    const changementProbleme = ancienneRecommandation && ancienneRecommandation !== nouvelleRecommandation;
-    const changementLD = nouvelleLD && nouvelleLD !== ancienneLD;
-    if (changementProbleme || changementLD) {
-      ['recherche', 'plan', 'glossaire', 'support'].forEach((k) => {
-        if (session.data && session.data[k]) session.data[k] = {};
-      });
-      const seuil = STEP_KEYS.indexOf('probleme') + 1; // bloque à l'étape « Plan détaillé » (étape 3)
-      session.currentStep = Math.min(session.currentStep || 0, seuil);
-    }
+    const verification = verifierContrat({
+      sujet: session.titre,
+      theme: session.theme,
+      contrat,
+    });
+    contrat.valide = false; // l'étudiant doit (re)valider explicitement
+    contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
+    contrat.verification = {
+      valide: verification.valide,
+      rejets: verification.rejets,
+      avertissements: verification.avertissements,
+      observations: verification.observations,
+    };
 
     session.markModified('data');
     await session.save();
-    res.json(session);
+    res.json({ session, verification: contrat.verification });
   })
 );
 
@@ -446,6 +573,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
+    assertContratValide(session, 'support');
     assertGlossaireValide(session, 'support');
 
     // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT : parcourt les 14 critères de la
@@ -612,10 +740,9 @@ router.get(
     }
 
     const data = session.data || {};
-    const problemeRetenu = problemeRetenuPourSuite(data.probleme);
-    const problematique = String(problemeRetenu?.formulation_retenue?.formulation || '').trim();
-    const ligneDirectrice =
-      String(session.ligneDirectrice || data.probleme?.ligne_directrice || '').trim();
+    const contrat = data.contrat || {};
+    const problematique = String(contrat.problematique || '').trim();
+    const ligneDirectrice = String(session.ligneDirectrice || contrat.ligneDirectrice || '').trim();
 
     const md = [
       rendreEnteteVerification(rapport),
@@ -767,7 +894,7 @@ router.post(
     ecrireChemin(session.data[lot.etape], lot.chemin, proposition.apres);
     session.markModified('data');
     // Le fil rouge vit aussi à la racine de la session : on le tient à jour.
-    if (lot.etape === 'probleme' && lot.chemin === 'ligne_directrice') {
+    if (lot.etape === 'contrat' && lot.chemin === 'ligneDirectrice') {
       session.ligneDirectrice = String(proposition.apres).trim();
     }
     await session.save();
@@ -834,6 +961,10 @@ router.post(
         'Le glossaire doit être généré et validé avant d’exporter le support (règle produit).'
       );
     }
+
+    // GATE PROBLÉMATIQUE : pas d'export tant que le contrat (Passe A) n'est pas
+    // validé — sinon on exporterait 20 slides bâties sur une question non relue.
+    assertContratValide(session, 'support');
 
     const slides = Array.isArray(session.data?.support?.slides) ? session.data.support.slides : [];
     if (slides.length === 0) {

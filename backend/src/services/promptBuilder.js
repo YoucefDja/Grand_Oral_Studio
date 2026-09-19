@@ -18,6 +18,11 @@ const {
 // elle est produite automatiquement en arrière-plan (voir HIDDEN_STEPS).
 const STEP_KEYS = ['analyse', 'probleme', 'plan', 'glossaire', 'support'];
 
+// Passe A : le contrat métier est produit DANS l'étape "probleme" (pas de 6e
+// étape visible). Il est stocké dans session.data.contrat et validé par
+// l'étudiant avant toute Passe B.
+const STEP_CONTRAT = 'contrat';
+
 // Étapes techniques produites sans intervention de l'étudiant, déclenchées par
 // une étape visible (la recherche alimente le plan puis le glossaire).
 const HIDDEN_STEPS = ['recherche'];
@@ -30,26 +35,29 @@ const VOCAB_REUSE_STEPS = new Set(['analyse', 'glossaire']);
 const STEP_LABELS = {
   analyse: 'Analyse du sujet',
   probleme: 'Problématique',
+  contrat: 'Contrat métier (Passe A)',
   recherche: 'Recherche documentaire',
   plan: 'Plan détaillé',
   glossaire: 'Glossaire et résumés des sources',
   support: 'Support de présentation',
 };
 
-// La ligne directrice est formulée à l'étape "probleme", puis réinjectée à
-// toutes les étapes suivantes pour garantir le fil conducteur.
+// La ligne directrice est formulée à l'étape "probleme" (Passe A), puis
+// réinjectée à toutes les étapes suivantes pour garantir le fil conducteur.
 const LINE_DIRECTRICE_STEPS = new Set(['recherche', 'plan', 'glossaire', 'support']);
 
 // Données des étapes précédentes réinjectées dans le prompt utilisateur.
 const STEP_DEPENDENCIES = {
   analyse: [],
+  // Passe A : le contrat s'appuie sur l'analyse validée du sujet.
   probleme: ['analyse'],
   // Le plan est produit après la recherche d'arrière-plan : il s'appuie dessus.
   plan: ['probleme', 'recherche'],
   // Le glossaire vient après le plan et ne définit que les termes réellement
   // mobilisés par ce plan (plus les sources trouvées en arrière-plan).
   glossaire: ['probleme', 'recherche', 'plan'],
-  support: ['probleme', 'plan', 'glossaire'],
+  // Passe B : la découpe en slides part du CONTRAT VALIDÉ, du plan et du glossaire.
+  support: ['contrat', 'plan', 'glossaire'],
 };
 
 /** Bloc "résultats d'une étape précédente" — ignoré si l'objet est vide. */
@@ -113,7 +121,7 @@ Référence absolue : la spécification de structure du support Grand Oral CESI.
 Le .pptx ajoute automatiquement la page de titre (logo, école, candidat, sujet) : tu ne produis donc PAS de slide de titre.
 Chaque slide doit porter un "type" parmi : contexte | enjeux | problematique | existant | donnees | exemple_entreprise | solutions | conclusion.
 
-VOLUME IMPOSÉ : le fichier final compte EXACTEMENT 25 slides AU TOTAL (page de titre comprise) — ni plus, ni moins. Comme la page de titre est ajoutée automatiquement, produis donc EXACTEMENT 24 slides de contenu, LA slide de conclusion incluse dans ce nombre. Répartition cible : plan de présentation 1, contexte & mots clés 2, enjeux 1-2, problématiques 1-2, existant / état de l'art 4-5, statistiques chiffrées 2-3, cas d'entreprises 2-3 (UNE slide par entreprise), solutions & préconisations 5-6, conclusion 1. Ce volume est volontairement plus large que le strict minimum : il permet de consacrer une slide distincte à chaque cas d'entreprise et de développer chaque idée sans la condenser. Pour tenir exactement 25 slides, développe les parties existant, cas d'entreprises et solutions (chiffres supplémentaires, exemples, schémas) plutôt que d'ajouter des slides de remplissage ; si le plan produit plus de slides, supprime les redondances.
+VOLUME IMPOSÉ : le fichier final compte EXACTEMENT 20 slides AU TOTAL (page de titre comprise) — ni plus, ni moins. Comme la page de titre est ajoutée automatiquement, produis donc EXACTEMENT 19 slides de contenu, LA slide de conclusion incluse dans ce nombre. Répartition cible : plan de présentation 1, contexte & mots clés 2, enjeux 1-2, problématiques 1, existant / état de l'art 3-4, statistiques chiffrées 2, cas d'entreprises 1-2, solutions & préconisations 5-6, conclusion 1. C'est un support CONCIS : une idée par slide, pas de slide de remplissage. Si tu dépasses, condense le contenu — ne splitte jamais une idée sur deux slides et ne crée jamais de slide de transition ni de rappel.
 
 Ordre impératif des slides (6 blocs, dans cet ordre exact) :
 BLOC 1 — Introduction & Contextualisation
@@ -166,28 +174,99 @@ Le support est aux couleurs CESI : le jaune institutionnel #F2D934 remplace tout
 `.trim();
 
 /**
- * Réduit l'objet "probleme" (2 à 4 formulations) à la SEULE formulation retenue
- * pour les étapes suivantes : celle pointée par `recommandation` (choisie par
- * l'étudiant à l'étape 2). Retombe sur la première formulation si le marqueur
- * est absent ou incohérent, et conserve la ligne directrice associée.
+ * Contrat métier (Passe A) réduit à ce qui est réinjecté aux étapes suivantes.
+ * La Passe A produit UNE problématique : plus de formulations alternatives ni de
+ * choix utilisateur à l'étape suivante — l'étudiant valide ou édite le contrat.
+ * On ne réinjecte que les champs de fond (la question, la tension, la ligne
+ * directrice et le périmètre), pas les métadonnées de validation.
  */
-function problemeRetenuPourSuite(probleme) {
-  if (!probleme || typeof probleme !== 'object' || Array.isArray(probleme)) return probleme;
-  const formulations = Array.isArray(probleme.formulations) ? probleme.formulations : [];
-  if (formulations.length === 0) return probleme;
-
-  const recommandation = String(probleme.recommandation || '').trim();
-  const retenue =
-    formulations.find(
-      (f) => f && typeof f === 'object' && String(f.formulation || '').trim() === recommandation
-    ) || formulations[0];
-
+function contratPourSuite(contrat) {
+  if (!contrat || typeof contrat !== 'object' || Array.isArray(contrat)) return contrat;
   return {
-    ligne_directrice:
-      typeof probleme.ligne_directrice === 'string' ? probleme.ligne_directrice : '',
-    formulation_retenue: retenue,
+    sujet: contrat.sujet || '',
+    motsCles: Array.isArray(contrat.motsCles) ? contrat.motsCles : [],
+    tension: contrat.tension || '',
+    problematique: contrat.problematique || '',
+    justificationProbleme: contrat.justificationProbleme || '',
+    limitesExistant: Array.isArray(contrat.limitesExistant) ? contrat.limitesExistant : [],
+    preconisations: Array.isArray(contrat.preconisations) ? contrat.preconisations : [],
+    casEntreprises: Array.isArray(contrat.casEntreprises) ? contrat.casEntreprises : [],
+    ligneDirectrice: contrat.ligneDirectrice || '',
+    ouverture: contrat.ouverture || '',
   };
 }
+
+/**
+ * Style d'écriture IMPOSÉ, injecté dans les deux passes. Les slides ne sont pas
+ * un rapport : ce sont des appuis pour l'oral, écrits par quelqu'un qui parle
+ * devant un comité de direction. Toute formule qui « sonne IA » est un défaut
+ * de génération, pas un détail de style.
+ */
+const STYLE_HUMAIN = `
+### STYLE D'ÉCRITURE — HUMAIN, ORAL, CONCRET (NON NÉGOCIABLE)
+Écris comme on pense à voix haute devant un comité de direction : direct, un peu sec, concret. On doit voir l'entreprise, pas un cours.
+
+SLIDES
+- Puces en NOMS : un truc + un angle. Jamais une mini-dissertation, jamais une phrase complète.
+- Vocabulaire professionnel mais PARLÉ : on doit pouvoir le relire à l'oral sans ravaler sa salive.
+- Un cas = un nom d'entreprise connue + ce qu'ils ont FAIT (ou raté). Jamais « l'entreprise X a mis en œuvre une démarche… ».
+- Si un mot technique est indispensable, mets à côté ce que ça change pour le métier — jamais une définition de wiki.
+
+NOTES DU PRÉSENTATEUR
+- Comme à un pote du master en sortant de cours, mais propre : phrases courtes, présent, un peu d'oral.
+- Elles COMMENTENT ce qui est à l'écran, elles ne le relisent pas. Une respiration, pas un script d'allocution.
+
+FORMULES INTERDITES (elles disqualifient le texte) : « il convient », « il est essentiel de », « dans un contexte en mutation », « afin de garantir », « ainsi », « par ailleurs », « en conclusion », « synergie », « au cœur de », « véritable levier », « à l'ère du », « aujourd'hui plus que jamais ».
+RYTHMES INTERDITS : liste marketing (trois adjectifs collés), antithèse toute faite, formule miroir.
+Si ça sonne IA, le texte est à réécrire.
+`.trim();
+
+/**
+ * Passe A — contrat métier. Le modèle ne produit AUCUNE slide ici : il produit
+ * le contrat de fond (mots-clés, contexte chiffré, tension, UNE problématique,
+ * préconisations, cas d'entreprises dont un échec) que l'étudiant validera
+ * avant que la Passe B ne le découpe en 20 slides.
+ */
+const PASSE_A_CONTRAT = `
+### PASSE A — CONTRAT MÉTIER (AVANT TOUTE SLIDE)
+Tu produis le CONTRAT de fond de la présentation. Tu ne produis aucune slide, aucune mise en forme : tu fixes le raisonnement qui sera ensuite découpé en slides à la Passe B.
+
+MÉCANISME DE RESSERREMENT (ne le recopie pas comme contenu) : un sujet large devient une question resserrée du type « dans quelle mesure une approche hybride peut-elle répondre aux besoins spécifiques des entreprises ? ». Le sujet donne le décor ; la question donne le problème à instruire.
+
+EXIGENCES :
+1. ANALYSER — les mots-clés du sujet et leurs relations : c'est d'eux que sort la tension, pas d'une idée générale sur le thème.
+2. CONTEXTUALISER — 3 à 5 faits d'actualité, chacun avec un chiffre et sa source explicite (organisme + année). Aucun chiffre sans source : un chiffre non sourcé est un chiffre inventé.
+3. TENSION — la friction réelle : ce que l'entreprise doit arbitrer, ce qu'elle gagne ou perd sur CETTE question. C'est une phrase de travail interne : elle n'est jamais affichée telle quelle.
+4. PROBLÉMATIQUE — UNE seule question (comment / en quoi / dans quelle mesure / quelles conditions / par quels leviers / quelle place), qui nomme la contrainte (coût, compétence, dette, conformité, dépendance, délai, taille d'entreprise…) et au moins un mot-clé du sujet.
+5. JUSTIFICATION — pourquoi c'est un problème d'entreprise AUJOURD'HUI, appuyé sur le contexte chiffré.
+6. LIMITES DE L'EXISTANT — ce qui existe déjà et POURQUOI ça ne suffit pas face à CETTE tension. Pas de théorie orpheline, pas de norme citée sans conséquence concrète.
+7. PRÉCONISATIONS — les actions qui RÉPONDENT à la question, en posture consultant : contextualisées par taille d'entreprise (PME / ETI / grand groupe) et par moment (avant / pendant / après). Des décisions actionnables, jamais des normes listées (ITIL, NIST, ISO) sans prise de position. Elles réutilisent le vocabulaire de la tension et de la question : si on retire la question, elles doivent perdre leur raison d'être.
+8. CAS D'ENTREPRISES — 2 à 4 entreprises réelles et connues, dont AU MOINS UN ÉCHEC. Chaque cas porte un chiffre, un angle qui prouve LA tension de ce sujet et sa source. Un cas qui n'illustre pas la tension est écarté.
+9. CONCLUSION — tu prépares la phrase qui RÉPONDRA à la question, le rappel de la ligne directrice, et une ouverture : une question, explicitement sans réponse.
+
+N'invente aucun fond métier : tout vient du sujet et du .md de préparation. Zéro source inventée.
+`.trim();
+
+/**
+ * Passe B — découpe du contrat validé en 20 slides. La problématique est FIGÉE
+ * par la validation : elle ne peut plus changer ici.
+ */
+const PASSE_B_DECOUPE = `
+### PASSE B — DÉCOUPE EN SLIDES depuis le contrat validé
+Le contrat ci-dessous a été VALIDÉ par l'étudiant. Tu le découpes en slides, tu ne le remets pas en cause.
+
+INTERDIT ABSOLU : changer la problématique. Le champ "problematique" du contrat est repris MOT POUR MOT sur la slide « Problématiques ». Tu ne reformules pas, tu ne nuances pas, tu n'ajoutes pas d'angle.
+
+STRUCTURE NARRATIVE IMPOSÉE après la slide Problématique : existant → limites → préconisations.
+- EXISTANT = diagnostic de LA MÊME tension : les concepts, pratiques et chiffres n'y figurent que s'ils éclairent cette tension. Pas de théorie orpheline.
+- Les enjeux TOHEE sont générés À PARTIR de la problématique validée : chaque enjeu est un gain OU une perte sur CETTE question, une ligne. Pas d'inventaire générique.
+- CAS D'ENTREPRISES : une slide dédiée (deux maximum si ça déborde vraiment). Blocs compacts : nom, pastille initiales jaune, UN chiffre, UN angle = preuve de la problématique, source. Au moins un échec.
+- PRÉCONISATIONS : elles répondent à la question, calibrées par taille d'entreprise, actionnables.
+- CONCLUSION : la phrase qui RÉPOND à la question, le rappel de la ligne directrice, l'ouverture — sans y répondre.
+
+TITRES : nomenclature imposée uniquement, courts. Aucun acronyme hors glossaire (sinon une définition d'une ligne dans « Mots clés », puis réemploi sans redéfinir).
+VOLUME : slides concises. Une idée par puce, fragments courts. Si une slide dépasse, CONDENSE — ne splitte jamais une idée sur deux slides, ne crée jamais de slide de transition ni de rappel.
+`.trim();
 
 async function buildStepPrompt(session, stepKey, options = {}) {
   const pourPptxClaude = options.pourPptxClaude === true;
@@ -199,11 +278,11 @@ async function buildStepPrompt(session, stepKey, options = {}) {
 
   const parts = sections.map((s) => s.content).filter(Boolean);
 
-  // Ligne directrice déjà établie à l'étape "probleme".
+  // Ligne directrice déjà établie à l'étape "probleme" (Passe A).
   const ligneDirectrice =
     (session.ligneDirectrice || '').trim() ||
-    (session.data && session.data.probleme && session.data.probleme.ligne_directrice
-      ? String(session.data.probleme.ligne_directrice).trim()
+    (session.data && session.data.contrat && session.data.contrat.ligneDirectrice
+      ? String(session.data.contrat.ligneDirectrice).trim()
       : '');
 
   if (ligneDirectrice && LINE_DIRECTRICE_STEPS.has(stepKey)) {
@@ -272,6 +351,21 @@ async function buildStepPrompt(session, stepKey, options = {}) {
     );
   }
 
+  // Passe A (étape problème) : on demande le contrat métier, pas des slides.
+  // Passe B (étape support) : on part du contrat validé.
+  if (stepKey === 'probleme') {
+    parts.push(PASSE_A_CONTRAT);
+  }
+  if (stepKey === 'support') {
+    parts.push(PASSE_B_DECOUPE);
+  }
+
+  // Style d'écriture imposé : sur les deux passes du fil logique (contrat et
+  // slides). Ce n'est pas un nice-to-have : si ça sonne IA, c'est un défaut.
+  if (stepKey === 'probleme' || stepKey === 'support') {
+    parts.push(STYLE_HUMAIN);
+  }
+
   // Structure narrative du diaporama (étape Support) — fait autorité sur l'ordre
   // des slides et la révélation progressive de la problématique.
   if (stepKey === 'support') {
@@ -303,11 +397,10 @@ async function buildStepPrompt(session, stepKey, options = {}) {
 
   const deps = (STEP_DEPENDENCIES[stepKey] || []).map((key) => {
     let obj = session.data && session.data[key];
-    // La problématique peut contenir 2 à 4 formulations candidates : pour les
-    // étapes suivantes on ne réinjecte que la formulation RETENUE (celle pointée
-    // par "recommandation"), pas toutes les alternatives, afin que le fil de la
-    // démonstration reste unique.
-    if (key === 'probleme') obj = problemeRetenuPourSuite(obj);
+    // La Passe A produit UN contrat (plus de formulations candidates) : pour la
+    // Passe B on ne réinjecte que les champs de fond, pas les métadonnées de
+    // validation (valide, rejets…).
+    if (key === 'contrat') obj = contratPourSuite(obj);
     return dataBlock(STEP_LABELS[key], obj);
   });
 
@@ -320,6 +413,7 @@ module.exports = {
   buildStepPrompt,
   STEP_KEYS,
   STEP_LABELS,
+  STEP_CONTRAT,
   HIDDEN_STEPS,
-  problemeRetenuPourSuite,
+  contratPourSuite,
 };

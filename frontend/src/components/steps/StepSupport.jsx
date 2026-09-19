@@ -342,6 +342,96 @@ function VerificationCard({ session, onSessionRefresh }) {
   );
 }
 
+/** Badge + checklist du score « logique du sujet » (bloquant pour l'export .pptx). */
+function ScoreLogiqueCard({ session }) {
+  const { t } = useSettings();
+  const [rapport, setRapport] = useState(null);
+  const [chargement, setChargement] = useState(false);
+  const [erreur, setErreur] = useState(null);
+
+  useEffect(() => {
+    let annule = false;
+    async function charger() {
+      if (!session?._id) return;
+      setChargement(true);
+      setErreur(null);
+      try {
+        const res = await api.get(`/api/sessions/${session._id}/conformite-rapport`);
+        if (!annule) setRapport(res);
+      } catch (err) {
+        if (!annule) setErreur(err.message);
+      } finally {
+        if (!annule) setChargement(false);
+      }
+    }
+    charger();
+    return () => {
+      annule = true;
+    };
+  }, [session?._id, session?.data?.support?.slides?.length]);
+
+  if (chargement) return <div className="alert alert-info">{t('steps.verifLoading')}</div>;
+  if (erreur) return <div className="alert alert-error">{erreur}</div>;
+
+  const score = rapport?.scoreLogique;
+  if (!score) {
+    return (
+      <section className="card panel" style={{ marginTop: 20 }}>
+        <h2 style={{ margin: '0 0 4px' }}>{t('logique.title')}</h2>
+        <p className="muted" style={{ marginTop: 0 }}>{t('logique.fallback')}</p>
+      </section>
+    );
+  }
+
+  const items = Array.isArray(score.items) ? score.items : [];
+  const rouges = items.filter((i) => !i.vert);
+  const verts = items.filter((i) => i.vert);
+
+  return (
+    <section className="card panel" style={{ marginTop: 20 }}>
+      <h2 style={{ margin: '0 0 4px' }}>{t('logique.title')}</h2>
+      <p className="muted" style={{ marginTop: 0 }}>{t('logique.intro')}</p>
+
+      <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '8px 0' }}>
+        <span className={`badge ${score.conforme ? 'badge-done' : 'badge-progress'}`}>
+          {t('logique.score')} : {score.verts}/{score.total} ({score.pourcentage}%)
+        </span>
+      </div>
+
+      <div className={`alert ${score.conforme ? 'alert-success' : 'alert-error'}`}>
+        {score.conforme ? t('logique.conforme') : t('logique.bloque')}
+      </div>
+
+      {rouges.length ? (
+        <>
+          <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('logique.rouges')}</h3>
+          <ul className="ul-value">
+            {rouges.map((i) => (
+              <li key={i.code}>
+                <strong>{i.libelle}</strong>
+                {i.detail ? <span className="muted">{` — ${i.detail}`}</span> : null}
+              </li>
+            ))}
+          </ul>
+        </>
+      ) : null}
+
+      <details style={{ marginTop: 10 }}>
+        <summary className="muted" style={{ cursor: 'pointer' }}>
+          {t('logique.ok')} ({verts.length})
+        </summary>
+        <ul className="ul-value">
+          {verts.map((i) => (
+            <li key={i.code} className="muted">
+              ✅ {i.libelle}
+            </li>
+          ))}
+        </ul>
+      </details>
+    </section>
+  );
+}
+
 /** Mode alternatif : générer le support dans Claude (chat) sans consommer de tokens API. */
 function ClaudeModeCard({ session, onSessionRefresh }) {
   const { t } = useSettings();
@@ -566,11 +656,15 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
               <p className="muted" style={{ marginTop: 10 }}>
                 {t('steps.exportBlockedHint')}
               </p>
+              <p className="muted" style={{ marginTop: 4 }}>
+                {t('logique.bloque')}
+              </p>
             </div>
           </div>
         )}
       />
       <VerificationCard session={session} onSessionRefresh={onSessionRefresh} />
+      <ScoreLogiqueCard session={session} />
       <ClaudeModeCard session={session} onSessionRefresh={onSessionRefresh} />
     </>
   );

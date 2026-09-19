@@ -37,17 +37,14 @@ const COLORS = {
 const LAYOUT_W = 13.33;
 const LAYOUT_H = 7.5;
 
-/** Problématique retenue par l'étudiant (recommandation) ou 1re formulation. */
+/**
+ * Problématique retenue : celle du contrat métier validé (Passe A). C'est la
+ * question FIGÉE par la validation — le support ne peut plus la reformuler.
+ */
 function problematiqueRetenue(session) {
-  const probleme = session.data && session.data.probleme;
-  if (!probleme || typeof probleme !== 'object') return '';
-  const formulations = Array.isArray(probleme.formulations) ? probleme.formulations : [];
-  const recommandee = String(probleme.recommandation || '').trim();
-  const retenue =
-    formulations.find(
-      (f) => f && typeof f === 'object' && String(f.formulation || '').trim() === recommandee
-    ) || formulations[0];
-  return retenue && typeof retenue.formulation === 'string' ? retenue.formulation.trim() : '';
+  const contrat = session.data && session.data.contrat;
+  if (!contrat || typeof contrat !== 'object') return '';
+  return typeof contrat.problematique === 'string' ? contrat.problematique.trim() : '';
 }
 
 function isProblemeSlide(item) {

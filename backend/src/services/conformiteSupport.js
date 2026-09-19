@@ -72,9 +72,9 @@ const MARQUEURS_CHIFFRES = [
 // Contexte → Enjeux → Problématique → Existant → Statistiques → Cas réels →
 // Solutions → Conclusion. `null` = bloc facultatif dans une session donnée
 // (ex. un sujet peut n'avoir aucun cas d'entreprise réel à citer).
-// Rappel : le volume cible du support est de 25 slides page de titre comprise
+// Rappel : le volume cible du support est de 20 slides page de titre comprise
 // (voir services/supportLayout.js pour la ligne directrice continue).
-const VOLUME_CIBLE_TOTAL = 25;
+const VOLUME_CIBLE_TOTAL = 20;
 
 const ORDRE_BLOCS = [
   { cle: 'contexte', libelle: 'Contexte', tester: (t) => t.includes('contexte') },
@@ -301,7 +301,7 @@ function detecterManquesSupport(session) {
     );
   }
 
-  // ---- Volume cible : 24 slides de contenu, soit 25 slides page de titre comprise.
+  // ---- Volume cible : 19 slides de contenu, soit 20 slides page de titre comprise.
   //      Avertissement seulement : la génération conclut d'elle-même si la
   //      conclusion manque, et un support un peu plus long reste présentable.
   const totalAvecTitre = slides.length + 1 < VOLUME_CIBLE_TOTAL ? slides.length + 1 : VOLUME_CIBLE_TOTAL;
@@ -309,7 +309,7 @@ function detecterManquesSupport(session) {
     const ecart = slides.length + 1 - VOLUME_CIBLE_TOTAL;
     ajouter(
       '2.4',
-      `Le support compte ${totalAvecTitre} slides page de titre comprise au lieu des ${VOLUME_CIBLE_TOTAL} attendues (${ecart > 0 ? `retirez ${ecart}` : `ajoutez ${-ecart}`} slide(s) : supprimez les redondances, ou développez l’existant, les cas d’entreprises et les solutions).`
+      `Le support compte ${totalAvecTitre} slides page de titre comprise au lieu des ${VOLUME_CIBLE_TOTAL} attendues (${ecart > 0 ? `retirez ${ecart}` : `ajoutez ${-ecart}`} slide(s) : condensez le contenu plutôt que d'ajouter des slides de remplissage).`
     );
   }
 
@@ -321,7 +321,7 @@ function detecterManquesSupport(session) {
  * Utilisé avant la génération du .pptx (export et prévisualisation).
  *
  * Les attendus issus du durcissement du support (ligne directrice continue,
- * volume de 25 slides, un cas d'entreprise par slide) sont signalés à titre
+ * volume de 20 slides, un cas d'entreprise par slide) sont signalés à titre
  * d'AVERTISSEMENT : ils guident la régénération sans bloquer l'export d'un
  * support déjà généré, dont l'étudiant reste maître.
  */

@@ -18,6 +18,56 @@ const CONSIGNE_EXEMPLES = `Les extraits ci-dessous proviennent de diaporamas ré
 Point de vigilance : ces diaporamas d'origine ne comportaient PAS de phrase de transition en bas de slide. C'est un ajout récent, qui reste obligatoire — ne t'en dispense pas sous prétexte qu'ils n'en ont pas.`;
 
 /**
+ * CONSIGNES DE TON — « humain, pas IA ».
+ *
+ * Injectées dans les system prompts des deux passes (Passe A contrat, Passe B
+ * découpe) ET dans l'export Claude Design. Ce n'est pas un nice-to-have : un
+ * texte qui sonne IA est un défaut de génération au même titre qu'une
+ * problématique copiée du sujet.
+ */
+const CONSIGNES_TON_HUMAIN = `TON — écris comme un humain qui présente à un CODIR, pas comme un rapport.
+
+Slides :
+- On dirait un pensé à voix haute collé au mur, pas un document.
+- Puces en NOMS : truc + angle. Jamais une mini-dissertation, jamais une phrase complète.
+- Ton direct, un peu sec, concret. On voit l'entreprise, pas le cours.
+- Un cas = un nom d'entreprise qu'on connaît + ce qu'ils ont FAIT (ou raté). Jamais « l'entreprise X a mis en œuvre une démarche… ».
+- Vocabulaire pro mais PARLÉ : on doit pouvoir le relire à l'oral sans ravaler sa salive.
+- Si un mot technique est indispensable : une image simple à côté (ce que ça change pour le métier), jamais une définition de wiki.
+
+Notes du présentateur :
+- Comme si tu parlais à un pote du master en sortant de cours, mais propre.
+- Phrases courtes, présent, un peu d'oral (« ça, le jury l'attend », « là je m'arrête sur le chiffre »).
+- Tu COMMENTES ce qui est à l'écran, tu ne le relis pas.
+- Une respiration, pas un script d'allocution.
+
+INTERDIT (ça sonne IA, c'est un défaut de génération) :
+- « il convient », « il est essentiel de », « dans un contexte en mutation », « afin de garantir », « ainsi », « par ailleurs », « en conclusion », « synergie », « au cœur de », « véritable levier », « à l'ère du », « aujourd'hui plus que jamais ».
+- Le rythme de liste marketing : trois adjectifs collés, antithèses toutes faites, formules miroir.
+- Le « académique propre » pour faire sérieux, et le lissage jusqu'à ce que ça sonne ChatGPT.
+- Recopier la mise en page d'anciens supports.`;
+
+/** Formules qui trahissent une rédaction IA (filet anti-formules, partagé). */
+const FORMULES_IA = [
+  'il convient',
+  'il est essentiel',
+  'dans un contexte en mutation',
+  'afin de garantir',
+  'par ailleurs',
+  'en conclusion',
+  'synergie',
+  'au coeur de',
+  'au cœur de',
+  'veritable levier',
+  'véritable levier',
+  "a l'ere du",
+  'à l’ère du',
+  "à l'ere du",
+  'aujourd’hui plus que jamais',
+  "aujourd'hui plus que jamais",
+];
+
+/**
  * Exemples de slides « de contenu » : montrent la densité, la formulation
  * nominale et les tics d'écriture (Gain / Perte, TOHEE nommé en clair).
  */
@@ -112,6 +162,8 @@ const TITRES_OBSERVES = [
 
 module.exports = {
   CONSIGNE_EXEMPLES,
+  CONSIGNES_TON_HUMAIN,
+  FORMULES_IA,
   EXEMPLES_SLIDES,
   EXEMPLES_NOTES,
   TITRES_OBSERVES,

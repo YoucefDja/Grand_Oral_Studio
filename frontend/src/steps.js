@@ -20,7 +20,7 @@ export const STEP_EXPLANATIONS = {
   analyse:
     'Produit une analyse ouverte du sujet (mots-clés, tensions provisoires) — socle de toute la suite.',
   probleme:
-    'Formule 2 à 4 problématiques issues de tensions réelles + la ligne directrice (fil rouge) propagée ensuite.',
+    'Produit le contrat métier (Passe A) : mots-clés, tension, UNE problématique, justification, préconisations et cas d’entreprises — à valider avant les slides.',
   plan:
     'Découpe la démonstration en parties minutées, reliées à la problématique et à la ligne directrice. La recherche documentaire est lancée automatiquement en arrière-plan pour l’étayer.',
   glossaire:
@@ -49,10 +49,15 @@ export function glossaireValide(session) {
   return sources.length > 0 && termes.length > 0;
 }
 
-/** Ligne directrice : champ session ou repli sur la donnée de l'étape probleme. */
+/** Ligne directrice : champ session ou repli sur la ligne directrice du contrat (Passe A). */
 export function ligneDirectriceOf(session) {
   const fromSession = (session?.ligneDirectrice || '').trim();
   if (fromSession) return fromSession;
-  const ld = session?.data?.probleme?.ligne_directrice;
+  const ld = session?.data?.contrat?.ligneDirectrice;
   return typeof ld === 'string' ? ld.trim() : '';
+}
+
+/** Contrat métier (Passe A) validé : condition d'ouverture de la Passe B et de l'export. */
+export function contratValide(session) {
+  return session?.data?.contrat?.valide === true;
 }
