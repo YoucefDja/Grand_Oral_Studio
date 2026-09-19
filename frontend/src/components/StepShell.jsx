@@ -21,6 +21,7 @@ export default function StepShell({
   session,
   busy,
   error,
+  errorReference = null,
   intro,
   renderData,
   onGenerate,
@@ -47,7 +48,11 @@ export default function StepShell({
 
       {error ? (
         <div className="alert alert-error" role="alert">
-          {error}
+          <div>{error}</div>
+          {/* Référence de corrélation, volontairement discrète : elle permet au
+              candidat de citer la tentative précise sans rien comprendre de
+              technique. Aucun détail (stack, JSON, code) n'est affiché. */}
+          {errorReference ? <div className="muted error-reference">{errorReference}</div> : null}
         </div>
       ) : null}
 

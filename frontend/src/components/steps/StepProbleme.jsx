@@ -390,7 +390,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
   );
 }
 
-export default function StepProbleme({ session, busy, error, onGenerate, goStep, onSessionRefresh }) {
+export default function StepProbleme({ session, busy, error, errorReference, onGenerate, goStep, onSessionRefresh }) {
   const contrat = session?.data?.contrat;
   // Le Plan s'ouvre dès que les TROIS éléments fondamentaux sont validés : les
   // sections secondaires seront construites/vérifiées plus tard (Passe B, export).
@@ -410,6 +410,7 @@ export default function StepProbleme({ session, busy, error, onGenerate, goStep,
       session={session}
       busy={busy}
       error={error}
+      errorReference={errorReference}
       onGenerate={onGenerate}
       intro={
         <p className="muted" style={{ marginTop: 0 }}>

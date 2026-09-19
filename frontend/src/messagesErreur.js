@@ -17,6 +17,10 @@
 export const MESSAGES_PAR_CODE = {
   INVALID_LLM_JSON: 'La génération a produit un format inexploitable. Réessayez.',
   INVALID_CONTRACT_SCHEMA: 'Le contrat généré est incomplet. Réessayez.',
+  CORE_CONTRACT_FIELDS_MISSING:
+    'La génération ne contient pas les éléments nécessaires pour formuler une problématique. Réessayez.',
+  PROBLEMATIC_QUALITY_REJECTED:
+    'La problématique générée doit être reformulée pour être exploitable. Réessayez.',
   AI_PROVIDER_UNAVAILABLE:
     'Le service de génération est temporairement indisponible. Réessayez dans quelques instants.',
   AI_TIMEOUT: 'La génération a pris trop de temps. Réessayez.',
@@ -40,4 +44,17 @@ export function messageCandidat(err) {
   return err && typeof err.message === 'string' && err.message.trim()
     ? err.message
     : MESSAGE_GENERIQUE;
+}
+
+/**
+ * Libellé discret de corrélation, affiché sous l'alerte d'erreur.
+ *
+ * Objectif : permettre au candidat de citer une référence précise (« Référence :
+ * 3f2a… ») pour retrouver la tentative dans les logs serveur, sans jamais
+ * exposer de détail technique. Renvoie `null` quand aucune référence n'est
+ * disponible : on n'affiche alors simplement rien.
+ */
+export function referenceErreur(err) {
+  const requestId = err && typeof err.requestId === 'string' ? err.requestId.trim() : '';
+  return requestId ? `Référence : ${requestId}` : null;
 }

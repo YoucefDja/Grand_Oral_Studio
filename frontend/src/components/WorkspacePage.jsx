@@ -6,7 +6,7 @@ import { STEPS, ligneDirectriceOf } from '../steps.js';
 import StepTracker from './StepTracker.jsx';
 import SessionTimer from './SessionTimer.jsx';
 import { stepComponents } from './steps/index.js';
-import { messageCandidat } from '../messagesErreur.js';
+import { messageCandidat, referenceErreur } from '../messagesErreur.js';
 
 export default function WorkspacePage() {
   const { id } = useParams();
@@ -19,6 +19,7 @@ export default function WorkspacePage() {
   const [activeIndex, setActiveIndex] = useState(0);
   const [busyStep, setBusyStep] = useState(null);
   const [stepError, setStepError] = useState(null);
+  const [stepErrorRef, setStepErrorRef] = useState(null);
   const [chronoBusy, setChronoBusy] = useState(false);
   const firstLoadRef = useRef(true);
 
@@ -51,14 +52,18 @@ export default function WorkspacePage() {
     async (stepKey) => {
       setBusyStep(stepKey);
       setStepError(null);
+      setStepErrorRef(null);
       try {
         const updated = await api.post(`/api/sessions/${id}/generate/${stepKey}`);
         setSession(updated);
       } catch (err) {
         // Un échec de génération NE DOIT PAS écraser la session affichée : un
         // contrat déjà validé (et les données d'analyse) doivent rester visibles.
-        // On affiche seulement un message sûr, mappé sur le code applicatif.
+        // On affiche seulement un message sûr, mappé sur le code applicatif, et
+        // une référence de corrélation discrète (requestId serveur) pour
+        // retrouver la tentative dans les logs.
         setStepError(messageCandidat(err));
+        setStepErrorRef(referenceErreur(err));
         await loadSession();
       } finally {
         setBusyStep(null);
@@ -73,6 +78,7 @@ export default function WorkspacePage() {
       const maxReached = Math.min(session.currentStep, STEPS.length - 1);
       if (index < 0 || index > maxReached) return;
       setStepError(null);
+      setStepErrorRef(null);
       setActiveIndex(index);
     },
     [session]
@@ -159,6 +165,7 @@ export default function WorkspacePage() {
         session={session}
         busy={busyStep}
         error={stepError}
+        errorReference={stepErrorRef}
         onGenerate={handleGenerate}
         goStep={goStep}
         onSessionRefresh={loadSession}

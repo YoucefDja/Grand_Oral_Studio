@@ -264,6 +264,13 @@ button .spin {
   color: var(--danger);
   border: 1px solid #f3c9c4;
 }
+/* Référence de corrélation sous une alerte d'erreur : volontairement discrète
+   (l'utilisateur n'a rien à comprendre, il peut juste citer la référence). */
+.error-reference {
+  margin-top: 4px;
+  font-size: 12px;
+  opacity: 0.75;
+}
 .alert-success {
   background: var(--ok-bg);
   color: var(--ok);

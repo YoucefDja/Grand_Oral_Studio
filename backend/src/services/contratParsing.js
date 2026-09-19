@@ -92,6 +92,130 @@ function chaineNonVide(v) {
 }
 
 /**
+ * ALIAS DE CHAMPS — le modèle (et l'historique du prompt) produit régulièrement
+ * une clé sous un autre nom : snake_case, accent, synonyme anglais, ou ancien
+ * format. Rejeter une génération pour cette seule raison serait absurde : on
+ * accepte la variante et on la ramène TOUJOURS en camelCase en interne.
+ *
+ * L'ordre compte : le premier alias trouvé non vide gagne.
+ */
+const FIELD_ALIASES = {
+  tension: ['tension', 'tensionMetier', 'tension_metier'],
+  problematique: ['problematique', 'problématique', 'problematic', 'problem', 'question'],
+  justificationProbleme: [
+    'justificationProbleme',
+    'justification_probleme',
+    'justification',
+    'pourquoiCeProbleme',
+    'pourquoi_ce_probleme',
+  ],
+  ligneDirectrice: ['ligneDirectrice', 'ligne_directrice', 'lineDirectrice', 'line_directrice'],
+  preconisations: ['preconisations', 'préconisations', 'recommendations'],
+  motsCles: ['motsCles', 'mots_cles', 'motsClés', 'keywords'],
+  limitesExistant: ['limitesExistant', 'limites_existant', 'limites'],
+  casEntreprises: ['casEntreprises', 'cas_entreprises', 'cas'],
+  ouverture: ['ouverture', 'opening'],
+  contexte: ['contexte', 'context'],
+  sujet: ['sujet', 'subject'],
+};
+
+/**
+ * Champs de la variante historique : le prompt demandait une LISTE de
+ * `formulations` candidates (`{ question, justification }`) au lieu d'une
+ * problématique unique. Une réponse produite par un ancien déploiement — ou par
+ * un modèle qui a gardé ce réflexe — reste exploitable : on promeut la première
+ * formulation complète en `problematique` + `justificationProbleme`.
+ *
+ * On ne devine rien : la promotion n'a lieu que si le champ core est ABSENT et
+ * que la formulation porte bien une question terminée par « ? ».
+ */
+const ALIAS_FORMULATIONS = ['formulations', 'formulation', 'candidates', 'propositions'];
+
+/** Récupère la première valeur non vide parmi les alias camelCase d'un champ. */
+function valeurParAlias(source, champ) {
+  const alias = FIELD_ALIASES[champ] || [champ];
+  for (const cle of alias) {
+    if (!(cle in source)) continue;
+    const valeur = source[cle];
+    if (valeur === undefined || valeur === null) continue;
+    if (typeof valeur === 'string' && valeur.trim() === '') continue;
+    if (Array.isArray(valeur) && valeur.length === 0) continue;
+    return valeur;
+  }
+  return undefined;
+}
+
+/** Vrai si la clé est un alias connu d'un champ core (sert au diagnostic). */
+function estAliasConnu(cle) {
+  return Object.values(FIELD_ALIASES).some((liste) => liste.includes(cle));
+}
+
+/**
+ * Applique le map de compatibilité sur l'objet brut : chaque champ canonique est
+ * écrit en camelCase, les clés d'alias sont supprimées pour ne pas laisser de
+ * doublons dans le contrat stocké.
+ *
+ * @returns {{ promotions: string[], aliasUtilises: string[] }} pour le diagnostic
+ */
+function appliquerAlias(objet) {
+  const promotions = [];
+  const aliasUtilises = [];
+
+  Object.keys(FIELD_ALIASES).forEach((champ) => {
+    const valeur = valeurParAlias(objet, champ);
+    if (valeur === undefined) return;
+    if (!(champ in objet) || !chaineNonVide(objet[champ])) {
+      if (champ !== FIELD_ALIASES[champ][0] || !(champ in objet)) {
+        aliasUtilises.push(champ);
+      }
+    }
+    if (!(champ in objet)) {
+      objet[champ] = valeur;
+      promotions.push(`${champ}←alias`);
+    }
+    // Nettoyage des alias pour ne garder que camelCase dans le contrat stocké.
+    (FIELD_ALIASES[champ] || []).forEach((cle) => {
+      if (cle !== champ && cle in objet) {
+        if (objet[champ] === undefined && objet[cle] !== undefined) objet[champ] = objet[cle];
+        delete objet[cle];
+      }
+    });
+  });
+
+  // Ancien format `formulations: [{ question, justification }]`.
+  const formulations = ALIAS_FORMULATIONS.map((cle) => objet[cle]).find((v) => Array.isArray(v) && v.length > 0);
+  if (formulations) {
+    const premiere = formulations.find((f) => f && typeof f === 'object' && !Array.isArray(f)) || null;
+    if (premiere) {
+      if (!chaineNonVide(objet.problematique)) {
+        const question = [premiere.question, premiere.problematique, premiere.formulation, premiere.titre].find(
+          (v) => chaineNonVide(v)
+        );
+        if (question) {
+          objet.problematique = String(question).trim();
+          promotions.push('problematique←formulations[0].question');
+        }
+      }
+      if (!chaineNonVide(objet.justificationProbleme)) {
+        const justification = [
+          premiere.justification,
+          premiere.justificationProbleme,
+          premiere.justification_probleme,
+          premiere.pourquoi,
+        ].find((v) => chaineNonVide(v));
+        if (justification) {
+          objet.justificationProbleme = String(justification).trim();
+          promotions.push('justificationProbleme←formulations[0].justification');
+        }
+      }
+    }
+    ALIAS_FORMULATIONS.forEach((cle) => delete objet[cle]);
+  }
+
+  return { promotions, aliasUtilises };
+}
+
+/**
  * Champs BLOQUANTS : les trois éléments qui portent la logique du sujet. Sans
  * eux, aucune Passe B n'est possible — on rejette.
  */
@@ -300,12 +424,27 @@ function parseAndValidateContract(rawModelContent) {
       internalReason: cause,
       manquants: ['(objet)'],
       coreFieldsPresent: { tension: false, problematique: false, justificationProbleme: false },
-      diagnostic,
+      diagnostic: { ...diagnostic, rawTopLevelKeys: [], normalizedTopLevelKeys: [], aliasUsed: [], promotions: [] },
     };
   }
 
+  const rawTopLevelKeys = Object.keys(objet);
+  // Compatibilité de nommage AVANT toute validation : un `justification_probleme`
+  // ou un ancien `formulations[{ question, justification }]` ne doit JAMAIS
+  // provoquer un rejet, ni une régénération inutile.
+  const { promotions, aliasUtilises } = appliquerAlias(objet);
+  const normalizedTopLevelKeys = Object.keys(objet);
+
   const coreFieldsPresent = champsCorePresents(objet);
   const { ok, manquants, missingSecondaryFields } = validerSchemaContrat(objet);
+
+  const diagnosticComplet = {
+    ...diagnostic,
+    rawTopLevelKeys,
+    normalizedTopLevelKeys,
+    aliasUsed: aliasUtilises,
+    promotions,
+  };
 
   if (!ok) {
     return {
@@ -314,7 +453,7 @@ function parseAndValidateContract(rawModelContent) {
       internalReason: `champs bloquants manquants ou invalides : ${manquants.join(', ')}`,
       manquants,
       coreFieldsPresent,
-      diagnostic,
+      diagnostic: diagnosticComplet,
     };
   }
 
@@ -325,7 +464,7 @@ function parseAndValidateContract(rawModelContent) {
     message: MESSAGE_COMPLETUDE,
   };
 
-  return { ok: true, contract: objet, missingSecondaryFields, diagnostic };
+  return { ok: true, contract: objet, missingSecondaryFields, diagnostic: diagnosticComplet };
 }
 
 module.exports = {
@@ -335,6 +474,9 @@ module.exports = {
   champsCorePresents,
   retirerFences,
   extrairePremierObjet,
+  FIELD_ALIASES,
+  ALIAS_FORMULATIONS,
+  estAliasConnu,
   CHAMPS_CORE,
   CHAMPS_SECONDAIRES,
   MESSAGE_COMPLETUDE,

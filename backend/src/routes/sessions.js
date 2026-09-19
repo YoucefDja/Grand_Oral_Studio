@@ -40,6 +40,7 @@ const {
 } = require('../services/correctionPointsFaibles');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { APP_VERSION } = require('../config/version');
 const { parseAndValidateContract } = require('../services/contratParsing');
 const { appliquerContratPasseA } = require('../services/applicationContrat');
 const {
@@ -129,7 +130,7 @@ function validateStepOutput(stepKey, parsed) {
       const err = httpError(
         422,
         `Le contrat généré ne contient pas les éléments indispensables : ${bloquants.join(', ')}.`,
-        'INVALID_CONTRACT_SCHEMA'
+        'CORE_CONTRACT_FIELDS_MISSING'
       );
       err.champsManquants = bloquants;
       throw err;
@@ -155,6 +156,53 @@ function validateStepOutput(stepKey, parsed) {
     }
   }
   return true;
+}
+
+/**
+ * Diagnostic SERVEUR de la Passe A — jamais renvoyé à l'étudiant.
+ *
+ * Objectif : rendre le rejet observable en production sans fuite de données.
+ * On ne journalise QUE des noms de clés et des booléens de présence — jamais le
+ * contenu du sujet, de la réponse du modèle, des sources ou des secrets.
+ *
+ * @param {object} resultat sortie de `parseAndValidateContract`
+ * @param {{ requestId: string, sessionId: string, dureeMs: number, appVersion: string }} contexte
+ * @returns {object} bloc `contract_generation_diagnostic`
+ */
+function construireDiagnosticContrat(resultat, contexte = {}) {
+  const diagnostic = (resultat && resultat.diagnostic) || {};
+  const corePresence =
+    (resultat && resultat.coreFieldsPresent) || {
+      tension: false,
+      problematique: false,
+      justificationProbleme: false,
+    };
+  // Seuls les trois champs core qui portent la logique du sujet bloquent.
+  const coreMissing = ['tension', 'problematique', 'justificationProbleme'].filter((c) => !corePresence[c]);
+  const missingSecondaryFields = Array.isArray(resultat && resultat.missingSecondaryFields)
+    ? resultat.missingSecondaryFields
+    : [];
+
+  return {
+    stage: 'probleme',
+    requestId: contexte.requestId,
+    sessionId: contexte.sessionId,
+    appVersion: contexte.appVersion || APP_VERSION,
+    rawTopLevelKeys: Array.isArray(diagnostic.rawTopLevelKeys) ? diagnostic.rawTopLevelKeys : [],
+    normalizedTopLevelKeys: Array.isArray(diagnostic.normalizedTopLevelKeys)
+      ? diagnostic.normalizedTopLevelKeys
+      : [],
+    aliasUsed: Array.isArray(diagnostic.aliasUsed) ? diagnostic.aliasUsed : [],
+    promotions: Array.isArray(diagnostic.promotions) ? diagnostic.promotions : [],
+    corePresence,
+    coreMissing,
+    secondaryMissing: missingSecondaryFields,
+    parseStatus: resultat && resultat.ok === false && resultat.type === 'INVALID_LLM_JSON' ? 'failed' : 'ok',
+    schemaStatus: resultat && resultat.ok ? 'core_valid' : 'core_invalid',
+    verificationStatus: 'pending',
+    rejectionCode: null,
+    dureeMs: contexte.dureeMs,
+  };
 }
 
 function assertGlossaireValide(session, pourEtape) {
@@ -381,6 +429,9 @@ router.post(
       provider: null,
     };
     const debut = Date.now();
+    // Diagnostic Passe A : renseigné dès le parsing, journalisé dans tous les cas
+    // (succès comme échec) pour rendre le rejet observable en production.
+    let diagnosticContrat = null;
 
     try {
       if (![...STEP_KEYS, ...HIDDEN_STEPS].includes(stepKey)) {
@@ -423,12 +474,29 @@ router.post(
           const raw = await generateDeepseek(system, user, { temperature: 0.2, jsonObject: true });
           contexteLog.taille = raw.length;
           const resultat = parseAndValidateContract(raw);
+          // Diagnostic exploitable côté serveur : quelles clés sont réellement
+          // reçues, lesquelles manquent. Aucun contenu métier n'est journalisé.
+          diagnosticContrat = construireDiagnosticContrat(resultat, {
+            requestId: req.requestId,
+            sessionId: req.params.id,
+            dureeMs: Date.now() - debut,
+            appVersion: APP_VERSION,
+          });
           if (!resultat.ok) {
-            const err = httpError(422, 'Contenu inexploitable.', resultat.type, resultat.internalReason);
+            const code = resultat.type === 'INVALID_LLM_JSON' ? 'INVALID_LLM_JSON' : 'CORE_CONTRACT_FIELDS_MISSING';
+            const err = httpError(422, 'Contenu inexploitable.', code, resultat.internalReason);
             err.internalReason = resultat.internalReason;
             // Diagnostic de schéma : quels champs bloquent, et lesquels manquent.
             err.coreFieldsPresent = resultat.coreFieldsPresent;
             err.champsManquants = resultat.manquants;
+            // Inspection des clés reçues, en DÉVELOPPEMENT uniquement : jamais en
+            // production, et jamais le contenu des valeurs.
+            if (process.env.NODE_ENV !== 'production') {
+              err.detailTechnique = [
+                resultat.internalReason,
+                `clés reçues : ${(resultat.diagnostic.rawTopLevelKeys || []).join(', ') || '(aucune)'}`,
+              ].join(' | ');
+            }
             throw err;
           }
           parsed = resultat.contract;
@@ -485,6 +553,31 @@ router.post(
             : [],
           validationOutcome: verification.coreValide ? 'accepted' : 'rejected_core',
         };
+
+        // La problématique existe mais les règles métier la refusent : c'est un
+        // rejet distinct d'un core absent, et l'étudiant doit pouvoir le savoir.
+        if (!verification.coreValide) {
+          const motif = (verification.rejetsCore[0] && verification.rejetsCore[0].code) || 'probleme_qualite';
+          const err = httpError(
+            422,
+            'La problématique générée doit être reformulée pour être exploitable. Réessayez.',
+            'PROBLEMATIC_QUALITY_REJECTED'
+          );
+          err.detailTechnique = `règles de fond : ${(verification.rejetsCore || [])
+            .map((r) => r.code)
+            .join(', ')}`;
+          err.diagnosticContrat = {
+            ...(diagnosticContrat || {}),
+            verificationStatus: 'rejected',
+            rejectionCode: motif,
+          };
+          throw err;
+        }
+
+        if (diagnosticContrat) {
+          diagnosticContrat.verificationStatus = 'accepted';
+          diagnosticContrat.rejectionCode = null;
+        }
       }
 
       // Passe B : le compresseur de texte passe AVANT le stockage et l'export. Le
@@ -542,6 +635,19 @@ router.post(
       // Point de sortie UNIQUE des erreurs de génération : tout devient contrôlé.
       // Aucune mutation de la session n'a été persistée avant l'échec, donc un
       // contrat précédemment validé reste intact.
+      const diagErreur =
+        err && err.diagnosticContrat
+          ? { ...err.diagnosticContrat, dureeMs: Date.now() - debut, requestId: req.requestId, sessionId: req.params.id }
+          : stepKey === 'probleme' && diagnosticContrat
+            ? {
+                ...diagnosticContrat,
+                dureeMs: Date.now() - debut,
+                requestId: req.requestId,
+                sessionId: req.params.id,
+                verificationStatus:
+                  err && err.code === 'PROBLEMATIC_QUALITY_REJECTED' ? 'rejected' : diagnosticContrat.verificationStatus,
+              }
+            : null;
       throw erreurGenerationControlee(err, {
         ...contexteLog,
         dureeMs: Date.now() - debut,
@@ -553,7 +659,13 @@ router.post(
               parsed: err && err.code !== 'INVALID_LLM_JSON',
               coreFieldsPresent: err && err.coreFieldsPresent ? err.coreFieldsPresent : undefined,
               champsManquants: err && err.champsManquants ? err.champsManquants : undefined,
-              validationOutcome: err && err.code === 'INVALID_CONTRACT_SCHEMA' ? 'rejected_core' : undefined,
+              validationOutcome:
+                err && err.code === 'PROBLEMATIC_QUALITY_REJECTED'
+                  ? 'rejected_core'
+                  : err && err.code === 'CORE_CONTRACT_FIELDS_MISSING'
+                    ? 'rejected_core'
+                    : undefined,
+              diagnosticContrat: diagErreur,
             }
           : {}),
       });

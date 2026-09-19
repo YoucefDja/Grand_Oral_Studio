@@ -75,24 +75,43 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
  *
  * Le code applicatif (`error.code`) est attaché à l'erreur pour que l'appelant
  * puisse mapper un message utilisateur, sans jamais exposer de détail technique.
+ * Le `requestId` serveur (`error.requestId`, sinon header `X-Request-Id`) est
+ * attaché lui aussi : il permet au candidat de citer une référence précise pour
+ * retrouver la tentative dans les logs, sans rien divulguer d'autre.
  * La fonction renvoie toujours une `Error` (jamais une chaîne), pour que
  * `err.code` survive jusqu'au composant.
  */
 export async function messageErreur(res) {
+  const requestIdHeader = (res.headers.get('X-Request-Id') || '').trim();
   const contentType = res.headers.get('Content-Type') || '';
-  if (!contentType.includes('application/json')) return new Error(MESSAGE_GENERIQUE);
+  if (!contentType.includes('application/json')) {
+    const err = new Error(MESSAGE_GENERIQUE);
+    if (requestIdHeader) err.requestId = requestIdHeader;
+    return err;
+  }
   try {
     const data = await res.json();
     if (data && data.error && typeof data.error.message === 'string') {
       const err = new Error(data.error.message);
       if (typeof data.error.code === 'string') err.code = data.error.code;
+      const requestId =
+        typeof data.error.requestId === 'string' && data.error.requestId.trim()
+          ? data.error.requestId.trim()
+          : requestIdHeader;
+      if (requestId) err.requestId = requestId;
       return err;
     }
-    if (data && typeof data.message === 'string') return new Error(data.message);
+    if (data && typeof data.message === 'string') {
+      const err = new Error(data.message);
+      if (requestIdHeader) err.requestId = requestIdHeader;
+      return err;
+    }
   } catch {
     /* body vide ou JSON invalide → message générique */
   }
-  return new Error(MESSAGE_GENERIQUE);
+  const err = new Error(MESSAGE_GENERIQUE);
+  if (requestIdHeader) err.requestId = requestIdHeader;
+  return err;
 }
 
 export const api = {

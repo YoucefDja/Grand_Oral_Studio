@@ -1,9 +1,11 @@
 const path = require('path');
 const fs = require('fs');
+const crypto = require('crypto');
 const express = require('express');
 const cors = require('cors');
 
 const { connectDb } = require('./db');
+const { APP_VERSION, environnement } = require('./config/version');
 
 // Chargement des variables d'environnement (backend/.env en local).
 const envPath = path.join(__dirname, '..', '.env');
@@ -20,6 +22,9 @@ const settingsRouter = require('./routes/settings');
 const { ensureInitialAdmin, migrateOwnerlessSessions } = require('./bootstrap');
 
 const app = express();
+
+// Derrière un proxy (Railway), on fait confiance au premier hop pour l'IP.
+app.set('trust proxy', 1);
 
 // CORS : uniquement les origines frontend autorisées.
 // En local sans FRONTEND_URL, on tolère les origines Vite locales.
@@ -40,23 +45,51 @@ app.use(
       console.warn('[cors] Origine rejetée : ' + origin);
       return callback(new Error('Origine CORS non autorisée.'), false);
     },
+    // Le frontend lit ces deux en-têtes pour afficher la référence et vérifier
+    // la version déployée : sans exposition explicite, le navigateur les masque.
+    exposedHeaders: ['X-Request-Id', 'X-App-Version'],
   })
 );
 
 app.use(express.json({ limit: '1mb' }));
 
+/**
+ * Identifiant de requête + version, posés AVANT tout routage pour qu'ils soient
+ * présents sur TOUTES les réponses, y compris les erreurs et les 404. C'est ce
+ * qui permet de retrouver une tentative précise dans les logs de production.
+ */
+app.use((req, res, next) => {
+  const recu = typeof req.headers['x-request-id'] === 'string' ? req.headers['x-request-id'].trim() : '';
+  req.requestId = req.requestId || (recu && recu.length <= 128 ? recu : crypto.randomUUID());
+  res.setHeader('X-Request-Id', req.requestId);
+  res.setHeader('X-App-Version', APP_VERSION);
+  next();
+});
+
 // Route racine — informations générales du service.
 app.get('/', (_req, res) =>
   res.json({
-    service: 'grand-oral-studio-backend',
+    service: 'grand-oral-backend',
     message: 'API Grand Oral Studio — assistant Grand Oral CESI',
-    health: '/health',
+    version: APP_VERSION,
+    health: '/api/health',
     api: '/api',
   })
 );
 
 // Santé — utile pour les checks Railway.
 app.get('/health', (_req, res) => res.json({ status: 'ok' }));
+
+// Diagnostic de DÉPLOIEMENT : aucun secret, uniquement de quoi confirmer depuis
+// la production quelle version est réellement servie.
+app.get('/api/health', (_req, res) =>
+  res.json({
+    status: 'ok',
+    service: 'grand-oral-backend',
+    version: APP_VERSION,
+    environment: environnement(),
+  })
+);
 
 app.use('/api/themes', themesRouter);
 app.use('/api/sessions', sessionsRouter);
@@ -72,21 +105,23 @@ app.use('/api', (_req, res) => {
 
 // Handler d'erreur global — jamais d'échec silencieux, toujours un message clair.
 // Les erreurs portant un CODE APPLICATIF (INVALID_LLM_JSON, AI_TIMEOUT…) sont
-// renvoyées sous la forme { error: { code, message } } pour que le frontend
-// puisse mapper un message utilisateur sans jamais parser de HTML ni de body vide.
+// renvoyées sous la forme { error: { code, message, requestId } } pour que le
+// frontend puisse mapper un message utilisateur sans jamais parser de HTML ni de
+// body vide, et afficher une référence corrélable avec les logs serveur.
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
+  const requestId = res.getHeader('X-Request-Id') || _req.requestId || undefined;
   if (err.message && err.message.startsWith('Origine CORS')) {
-    return res.status(403).json({ message: err.message });
+    return res.status(403).json({ message: err.message, requestId });
   }
   if (err.name === 'CastError') {
-    return res.status(400).json({ message: 'Identifiant invalide.' });
+    return res.status(400).json({ message: 'Identifiant invalide.', requestId });
   }
   if (err.name === 'ValidationError') {
-    return res.status(400).json({ message: err.message });
+    return res.status(400).json({ message: err.message, requestId });
   }
   if (err.code === 11000) {
-    return res.status(409).json({ message: 'Un doublon existe déjà pour cet identifiant.' });
+    return res.status(409).json({ message: 'Un doublon existe déjà pour cet identifiant.', requestId });
   }
   // `err.code` de Mongoose est numérique (ex. 11000) : on ne traite comme code
   // applicatif que les chaînes (nos codes métier).
@@ -98,10 +133,14 @@ app.use((err, _req, res, _next) => {
       console.error('[erreur]', codeApplicatif, err.detailTechnique);
     }
     return res.status(status).json({
-      error: { code: codeApplicatif, message: err.message || 'Erreur interne du serveur.' },
+      error: {
+        code: codeApplicatif,
+        message: err.message || 'Erreur interne du serveur.',
+        requestId,
+      },
     });
   }
-  return res.status(status).json({ message: err.message || 'Erreur interne du serveur.' });
+  return res.status(status).json({ message: err.message || 'Erreur interne du serveur.', requestId });
 });
 
 const PORT = Number(process.env.PORT || 4000);

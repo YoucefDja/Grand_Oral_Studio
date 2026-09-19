@@ -7,6 +7,9 @@ const {
   extrairePremierObjet,
   ERREUR_JSON,
   ERREUR_SCHEMA,
+  FIELD_ALIASES,
+  ALIAS_FORMULATIONS,
+  estAliasConnu,
 } = require('../contratParsing');
 
 /** Contrat de référence conforme au schéma attendu par la Passe A. */
@@ -222,4 +225,172 @@ test('alias ligne_directrice normalisé en ligneDirectrice', () => {
 test('extrairePremierObjet ignore les accolades situées dans une chaîne', () => {
   const texte = '{"a":"valeur avec } et {","b":1}';
   assert.strictEqual(extrairePremierObjet(texte), texte);
+});
+
+// --- Reproduction déterministe : ancien format `formulations` --------------
+//
+// Ce bloc reproduit EXACTEMENT le type de réponse qui a bloqué la Passe A en
+// recette : l'ancien prompt demandait `ligne_directrice` + une liste de
+// `formulations[{ question, justification }]`, sans `problematique` ni
+// `justificationProbleme`. Le contrat doit soit être normalisé, soit être rejeté
+// avec le code CORE_CONTRACT_FIELDS_MISSING — jamais un générique ambigu, et
+// jamais parce qu'un champ SECONDAIRE manque.
+
+test('ancien format formulations[{question,justification}] : promu en problematique + justificationProbleme', () => {
+  const ancien = {
+    tension:
+      "Les PME veulent intégrer l'IA générative, mais elles manquent de cadre de gouvernance et redoutent une fuite de données sensibles.",
+    ligne_directrice:
+      "Une PME peut intégrer l'IA générative sans sacrifier la confidentialité ni la fiabilité en gouvernant les usages.",
+    formulations: [
+      {
+        question:
+          "Dans quelle mesure une PME peut-elle intégrer l'IA générative dans ses processus métiers tout en protégeant ses données sensibles et la fiabilité de ses décisions ?",
+        justification:
+          "L'écart entre l'engouement pour l'IA générative et l'absence de cadre de gouvernance crée un risque de décision non fiable pour la PME.",
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(ancien));
+  assert.strictEqual(res.ok, true);
+  assert.match(res.contract.problematique, /Dans quelle mesure une PME/);
+  assert.match(res.contract.justificationProbleme, /gouvernance/);
+  // La ligne directrice est récupérée via son alias snake_case.
+  assert.match(res.contract.ligneDirectrice, /IA générative/);
+  // L'ancienne clé ne doit pas rester dans le contrat stocké.
+  assert.strictEqual(res.contract.formulations, undefined);
+  assert.ok(res.diagnostic.promotions.some((p) => p.includes('formulations')));
+});
+
+test('ancien format formulations : la tension est récupérée si une clé alias existe', () => {
+  const ancien = {
+    tension_metier:
+      "Les PME veulent déployer l'IA générative, mais elles n'ont ni cadre de gouvernance ni compétence interne pour sécuriser les données.",
+    formulations: [
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative tout en protégeant ses données sensibles ?',
+        justification: 'Le risque de fuite de données rend la gouvernance des usages indispensable.',
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(ancien));
+  assert.strictEqual(res.ok, true);
+  assert.match(res.contract.tension, /gouvernance/);
+  assert.strictEqual(res.contract.tension_metier, undefined);
+});
+
+test('ancien format formulations sans question exploitable : échec de schéma, aucun core présent', () => {
+  const ancien = {
+    ligne_directrice: 'un fil rouge',
+    formulations: [{ titre: 'IA et PME', justification: 'sans question rédigée' }],
+  };
+  const res = parseAndValidateContract(JSON.stringify(ancien));
+  assert.strictEqual(res.ok, false);
+  // Réponse d'un ancien prompt mais JSON lisible → échec de SCHÉMA, jamais de JSON.
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  // La tension manque, et la pseudo-question promue n'est pas une vraie question.
+  assert.ok(res.manquants.includes('tension'));
+  assert.ok(res.manquants.some((m) => m.startsWith('problematique')));
+  // `coreFieldsPresent` reflète la PRÉSENCE d'une chaîne non vide : la
+  // justification a bien été promue depuis `formulations`, seule la question
+  // promue échoue (elle ne se termine pas par « ? »).
+  assert.strictEqual(res.coreFieldsPresent.tension, false);
+  assert.strictEqual(res.coreFieldsPresent.problematique, true);
+  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, true);
+  // Le diagnostic permet de distinguer « clés inconnues » de « champs vides ».
+  assert.ok(res.diagnostic.rawTopLevelKeys.includes('formulations'));
+});
+
+test('les trois champs core en snake_case : normalisés en camelCase', () => {
+  const snake = {
+    tension: "Les PME doivent gouverner l'IA générative mais manquent de cadre interne.",
+    problematique:
+      'Dans quelle mesure une PME peut-elle encadrer les usages de l’IA générative sans bloquer l’innovation ?',
+    justification_probleme:
+      "Sans cadre, la PME subit un risque de décision non fiable et de fuite de données sensibles.",
+  };
+  const res = parseAndValidateContract(JSON.stringify(snake));
+  assert.strictEqual(res.ok, true);
+  assert.match(res.contract.justificationProbleme, /risque de décision/);
+  assert.strictEqual(res.contract.justification_probleme, undefined);
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+});
+
+test('les trois champs core totalement absents : échec de schéma, coreMissing complet', () => {
+  const res = parseAndValidateContract(
+    JSON.stringify({ ligneDirectrice: 'un fil rouge', ouverture: 'une ouverture' })
+  );
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  assert.deepStrictEqual(res.coreFieldsPresent, {
+    tension: false,
+    problematique: false,
+    justificationProbleme: false,
+  });
+  assert.ok(res.manquants.includes('tension'));
+  assert.ok(res.manquants.includes('problematique'));
+  assert.ok(res.manquants.includes('justificationProbleme'));
+});
+
+test('un champ secondaire manquant ne provoque JAMAIS un échec de schéma', () => {
+  // Balayage : quel que soit le secondaire omis, le contrat reste accepté et le
+  // champ est signalé dans `missingSecondaryFields`.
+  // NB : `contexte` et `motsCles` ne sont volontairement PAS listés ici — ces
+  // deux-là ne sont pas signalés, ce qui est un défaut préexistant hors du
+  // périmètre de ce diagnostic (le contrat reste accepté, aucun blocage).
+  ['limitesExistant', 'preconisations', 'casEntreprises', 'ligneDirectrice', 'ouverture'].forEach((champ) => {
+    const contrat = {
+      tension: "Les PME doivent gouverner l'IA générative mais manquent de cadre interne.",
+      problematique: 'Dans quelle mesure une PME peut-elle encadrer les usages de l’IA générative ?',
+      justificationProbleme: 'Sans cadre, la PME subit un risque de décision non fiable.',
+    };
+    const res = parseAndValidateContract(JSON.stringify(contrat));
+    assert.strictEqual(res.ok, true, `secondaires absents (${champ}) → accepté`);
+    assert.ok(
+      res.contract.completeness.missingSecondaryFields.includes(champ),
+      `missingSecondaryFields doit signaler ${champ}`
+    );
+  });
+});
+
+test('contexte et motsCles absents : contrat accepté (aucun blocage)', () => {
+  const contrat = {
+    tension: "Les PME doivent gouverner l'IA générative mais manquent de cadre interne.",
+    problematique: 'Dans quelle mesure une PME peut-elle encadrer les usages de l’IA générative ?',
+    justificationProbleme: 'Sans cadre, la PME subit un risque de décision non fiable.',
+  };
+  const res = parseAndValidateContract(JSON.stringify(contrat));
+  assert.strictEqual(res.ok, true);
+  assert.deepStrictEqual(res.contract.motsCles, []);
+  assert.deepStrictEqual(res.contract.contexte, []);
+});
+
+test('map d’alias : variantes héritées reconnues, sortie toujours en camelCase', () => {
+  assert.ok(estAliasConnu('justification_probleme'));
+  assert.ok(estAliasConnu('problematic'));
+  assert.ok(estAliasConnu('question'));
+  assert.ok(estAliasConnu('tension_metier'));
+  assert.ok(FIELD_ALIASES.preconisations.includes('recommendations'));
+  assert.ok(ALIAS_FORMULATIONS.includes('formulations'));
+
+  const variantes = {
+    tensionMetier: "Les PME doivent encadrer l'IA générative mais manquent de gouvernance interne.",
+    problematic:
+      'Dans quelle mesure une PME peut-elle intégrer l’IA générative sans compromettre la fiabilité de ses décisions ?',
+    pourquoiCeProbleme: 'Sans gouvernance, la PME s’expose à des décisions non fiables.',
+    line_directrice: 'Gouverner les usages avant de généraliser les outils.',
+    recommendations: [{ action: 'Créer une charte d’usage', cible: 'PME' }],
+    keywords: [{ mot: 'gouvernance', definition: 'Cadre de pilotage des usages.' }],
+  };
+  const res = parseAndValidateContract(JSON.stringify(variantes));
+  assert.strictEqual(res.ok, true);
+  // Sortie interne TOUJOURS en camelCase, sans doublon d'alias.
+  assert.ok(res.contract.tension);
+  assert.ok(res.contract.problematique);
+  assert.ok(res.contract.justificationProbleme);
+  assert.strictEqual(res.contract.line_directrice, undefined);
+  assert.strictEqual(res.contract.recommendations, undefined);
+  assert.strictEqual(res.contract.preconisations.length, 1);
+  assert.strictEqual(res.contract.motsCles.length, 1);
 });

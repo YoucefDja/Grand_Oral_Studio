@@ -48,6 +48,7 @@ function logGeneration({
   missingSecondaryFields,
   champsManquants,
   validationOutcome,
+  diagnosticContrat,
 }) {
   const ligne = {
     requestId,
@@ -66,6 +67,25 @@ function logGeneration({
   if (Array.isArray(missingSecondaryFields)) ligne.missingSecondaryFields = missingSecondaryFields;
   if (Array.isArray(champsManquants)) ligne.champsManquants = champsManquants;
   if (validationOutcome) ligne.validationOutcome = validationOutcome;
+
+  // Diagnostic de contrat COMPLET (événement dédié) : liste des clés reçues,
+  // statuts de parsing/schéma/vérification. Aucun contenu métier, aucune source,
+  // aucun e-mail, aucune clé : seulement des noms de champs et des booléens.
+  if (diagnosticContrat) {
+    ligne.event = 'contract_generation_diagnostic';
+    ligne.appVersion = diagnosticContrat.appVersion;
+    ligne.rawTopLevelKeys = diagnosticContrat.rawTopLevelKeys || [];
+    ligne.normalizedTopLevelKeys = diagnosticContrat.normalizedTopLevelKeys || [];
+    ligne.aliasUsed = diagnosticContrat.aliasUsed || [];
+    ligne.promotions = diagnosticContrat.promotions || [];
+    ligne.corePresence = diagnosticContrat.corePresence || {};
+    ligne.coreMissing = diagnosticContrat.coreMissing || [];
+    ligne.parseStatus = diagnosticContrat.parseStatus;
+    ligne.schemaStatus = diagnosticContrat.schemaStatus;
+    ligne.verificationStatus = diagnosticContrat.verificationStatus;
+    ligne.rejectionCode = diagnosticContrat.rejectionCode ?? null;
+  }
+
   // L'extrait brut n'apparaît qu'en développement, et il est déjà tronqué.
   const estDev = process.env.NODE_ENV !== 'production';
   if (estDev && detail) ligne.detail = detail;
@@ -75,6 +95,13 @@ function logGeneration({
 /**
  * Codes applicatifs renvoyés au frontend. Le message est VOLONTAIREMENT simple :
  * ni extrait brut, ni JSON technique, ni détail fournisseur.
+ *
+ * Passe A : deux échecs internes distincts, pour ne plus renvoyer un générique
+ * ambigu impossible à diagnostiquer en recette.
+ *  - `CORE_CONTRACT_FIELDS_MISSING` : le modèle n'a pas produit les trois
+ *    éléments porteurs du sujet (tension, problématique, justification) ;
+ *  - `PROBLEMATIC_QUALITY_REJECTED` : la problématique existe mais les règles
+ *    métier de `contratVerification` la refusent (copie du sujet, oui/non…).
  */
 const MESSAGES_ERREUR = {
   INVALID_LLM_JSON: {
@@ -84,6 +111,15 @@ const MESSAGES_ERREUR = {
   INVALID_CONTRACT_SCHEMA: {
     status: 422,
     message: 'Le contrat généré est incomplet. Réessayez.',
+  },
+  CORE_CONTRACT_FIELDS_MISSING: {
+    status: 422,
+    message:
+      'La génération ne contient pas les éléments nécessaires pour formuler une problématique. Réessayez.',
+  },
+  PROBLEMATIC_QUALITY_REJECTED: {
+    status: 422,
+    message: 'La problématique générée doit être reformulée pour être exploitable. Réessayez.',
   },
   AI_PROVIDER_UNAVAILABLE: {
     status: 503,
@@ -122,16 +158,21 @@ function erreurGenerationControlee(err, contexte = {}) {
       code: err.code,
       detail: err.detailTechnique || err.internalReason || err.message,
     });
-    return httpError(
+    const controlee = httpError(
       cible.status,
       cible.message,
       err.code,
       err.detailTechnique || err.internalReason || err.message
     );
+    // Le requestId suit l'erreur jusqu'au handler global, qui le renvoie au
+    // frontend : c'est la clé de corrélation avec cette ligne de log.
+    if (contexte.requestId) controlee.requestId = contexte.requestId;
+    return controlee;
   }
 
   // Erreur portant déjà un statut (404, 400… de nos garde-fous) : on la garde.
   if (err && Number.isInteger(err.status) && err.status < 500) {
+    if (contexte.requestId && !err.requestId) err.requestId = contexte.requestId;
     return err;
   }
 
@@ -142,12 +183,14 @@ function erreurGenerationControlee(err, contexte = {}) {
     code: err?.code || 'INTERNAL_ERROR',
     detail: err?.stack || err?.message,
   });
-  return httpError(
+  const controlee = httpError(
     500,
     MESSAGES_ERREUR.INTERNAL_ERROR.message,
     'INTERNAL_ERROR',
     err?.stack || err?.message
   );
+  if (contexte.requestId) controlee.requestId = contexte.requestId;
+  return controlee;
 }
 
 module.exports = {

@@ -13,6 +13,7 @@ import {
   MESSAGES_PAR_CODE,
   MESSAGE_GENERIQUE,
   messageCandidat,
+  referenceErreur,
 } from '../messagesErreur.js';
 import {
   construireVueContrat,
@@ -92,12 +93,47 @@ test('le mapping frontend couvre exactement les codes du backend', () => {
   const codesBackend = [
     'INVALID_LLM_JSON',
     'INVALID_CONTRACT_SCHEMA',
+    'CORE_CONTRACT_FIELDS_MISSING',
+    'PROBLEMATIC_QUALITY_REJECTED',
     'AI_PROVIDER_UNAVAILABLE',
     'AI_TIMEOUT',
   ];
   for (const code of codesBackend) {
     assert.ok(MESSAGES_PAR_CODE[code], `code manquant côté frontend : ${code}`);
   }
+});
+
+// --- Diagnostic : codes distincts + référence de corrélation ----------------
+
+test('CORE_CONTRACT_FIELDS_MISSING → message « éléments nécessaires », sans jargon', () => {
+  const err = Object.assign(new Error('champs bloquants : tension'), {
+    code: 'CORE_CONTRACT_FIELDS_MISSING',
+    requestId: 'req-core-123',
+  });
+  const message = messageCandidat(err);
+  assert.match(message, /éléments nécessaires/);
+  assert.ok(!contientFuiteTechnique(message));
+  // Le code applicatif n'est JAMAIS affiché à l'utilisateur.
+  assert.ok(!/CORE_CONTRACT_FIELDS_MISSING/.test(message));
+});
+
+test('PROBLEMATIC_QUALITY_REJECTED → message « reformulée », distinct du précédent', () => {
+  const err = Object.assign(new Error('règles de fond : contrat_amorce_invalide'), {
+    code: 'PROBLEMATIC_QUALITY_REJECTED',
+    requestId: 'req-qual-456',
+  });
+  const message = messageCandidat(err);
+  assert.match(message, /reformulée/);
+  assert.ok(!contientFuiteTechnique(message));
+  assert.notStrictEqual(message, MESSAGES_PAR_CODE.CORE_CONTRACT_FIELDS_MISSING);
+});
+
+test('referenceErreur → libellé discret, et rien du tout sans requestId', () => {
+  assert.strictEqual(referenceErreur({ requestId: 'abc-123' }), 'Référence : abc-123');
+  assert.strictEqual(referenceErreur({ requestId: '  abc-123  ' }), 'Référence : abc-123');
+  assert.strictEqual(referenceErreur({}), null);
+  assert.strictEqual(referenceErreur(undefined), null);
+  assert.strictEqual(referenceErreur({ requestId: 42 }), null);
 });
 
 // --- Correctif Passe A : contrat core valide avec sections secondaires vides --
