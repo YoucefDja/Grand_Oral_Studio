@@ -42,7 +42,8 @@ async function sendEmail({ to, subject, html, text }) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
       throw httpError(504, 'Délai dépassé lors de l’envoi de l’e-mail Resend. Réessayez.');
     }
-    throw httpError(502, `Erreur réseau vers Resend : ${err.message}`);
+    // Jamais de 502 : une panne réseau du fournisseur est une indisponibilité.
+    throw httpError(503, 'Le service d’envoi d’e-mails est temporairement indisponible. Réessayez dans quelques instants.');
   }
 
   if (!response.ok) {
@@ -53,9 +54,12 @@ async function sendEmail({ to, subject, html, text }) {
     } catch (_e) {
       detail = response.statusText;
     }
+    const indisponible = response.status >= 500 || response.status === 429 || response.status === 401 || response.status === 403;
     throw httpError(
-      response.status === 401 || response.status === 403 ? 502 : response.status,
-      `Resend a renvoyé une erreur (${response.status}) : ${detail}`
+      indisponible ? 503 : response.status,
+      indisponible
+        ? 'Le service d’envoi d’e-mails est temporairement indisponible. Réessayez dans quelques instants.'
+        : `Resend a renvoyé une erreur (${response.status}).`
     );
   }
   return response.json();

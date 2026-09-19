@@ -301,12 +301,12 @@ function detecterSignalements({ sujet, theme, analyse, formulations }) {
  * - s'assure que « recommandation » pointe bien une formulation présente et
  *   que la ligne directrice / justification restent non vides (repli sur la
  *   génération initiale si le second passage les a omises).
- * Renvoie un objet « probleme » propre, ou lève une erreur 502 si moins de
- * MIN_FORMULATIONS formulations exploitables subsistent.
+ * Renvoie un objet « probleme » propre. Ses propres manques sont traités comme
+ * n'importe quel échec de génération contrôlé (jamais un 502).
  */
 function assainirProbleme(corrige, original) {
   if (!corrige || typeof corrige !== 'object' || Array.isArray(corrige)) {
-    throw httpError(502, 'Le second passage de vérification n’a pas renvoyé d’objet utilisable. Réessayez.');
+    throw httpError(422, 'Le second passage de vérification n’a pas renvoyé d’objet utilisable. Réessayez.');
   }
 
   let formulations = (Array.isArray(corrige.formulations) ? corrige.formulations : [])
@@ -321,12 +321,12 @@ function assainirProbleme(corrige, original) {
     (original && typeof original.ligne_directrice === 'string' && original.ligne_directrice.trim()) ||
     '';
   if (!ligneDirectrice) {
-    throw httpError(502, 'La problématique vérifiée n’a pas de ligne directrice exploitable. Réessayez.');
+    throw httpError(422, 'La problématique vérifiée n’a pas de ligne directrice exploitable. Réessayez.');
   }
 
   if (formulations.length < MIN_FORMULATIONS) {
     throw httpError(
-      502,
+      422,
       'Après vérification, moins de 2 formulations de problématique conformes subsistent. ' +
         'Relancez la génération pour obtenir de nouvelles propositions.'
     );
@@ -363,7 +363,8 @@ function assainirProbleme(corrige, original) {
  * En cas d'échec d'infrastructure du second passage (réseau, parsing, budget),
  * on renonce au filet plutôt que de bloquer l'étudiant : la génération initiale
  * est conservée — le comportement reste celui d'avant. Les erreurs de NON
- * conformité (moins de 2 formulations valides) lèvent en revanche un 502.
+ * conformité (moins de 2 formulations valides) restent elles aussi contrôlées :
+ * elles remontent en 422, jamais en 502.
  */
 async function verifierEtCorrigerProbleme({ system, session, problemeGenere }) {
   const original = problemeGenere && typeof problemeGenere === 'object' ? problemeGenere : {};

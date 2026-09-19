@@ -3,6 +3,7 @@ import StepShell from '../StepShell.jsx';
 import { useSettings } from '../../settings.jsx';
 import { STEP_EXPLANATIONS, STEPS } from '../../steps.js';
 import { api } from '../../api.js';
+import { messageCandidat } from '../../messagesErreur.js';
 
 function Ligne({ label, children }) {
   if (!children) return null;
@@ -105,7 +106,9 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
       setVerification(updated?.data?.contrat?.verification || null);
       if (onSessionRefresh) await onSessionRefresh();
     } catch (err) {
-      setLocalError(err.message || t('contrat.erreur'));
+      // Un échec de validation ne doit pas effacer le contrat affiché : on garde
+      // les champs locaux et on resynchronise depuis le serveur.
+      setLocalError(messageCandidat(err));
       if (onSessionRefresh) await onSessionRefresh();
     } finally {
       setSaving(false);
@@ -132,7 +135,10 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
       setVerification(res?.verification || null);
       if (onSessionRefresh) await onSessionRefresh();
     } catch (err) {
-      setLocalError(err.message || t('contrat.erreur'));
+      // Le contrat déjà validé reste en base : on se contente d'afficher le
+      // message mappé sur le code applicatif, puis on resynchronise l'écran.
+      setLocalError(messageCandidat(err));
+      if (onSessionRefresh) await onSessionRefresh();
     } finally {
       setRegenerant(false);
     }

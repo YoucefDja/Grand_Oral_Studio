@@ -245,7 +245,23 @@ EXIGENCES :
 9. CONCLUSION — tu prépares la phrase qui RÉPONDRA à la question, le rappel de la ligne directrice, et une ouverture : une question, explicitement sans réponse.
 
 N'invente aucun fond métier : tout vient du sujet et du .md de préparation. Zéro source inventée.
-`.trim();
+
+SCHÉMA JSON EXACT — toutes ces clés sont OBLIGATOIRES, à ce niveau racine :
+{
+  "sujet": "le sujet tel quel",
+  "motsCles": [{ "mot": "…", "definition": "une ligne, langage clair" }],
+  "contexte": [{ "fait": "…", "source": "organisme + année" }],
+  "tension": "la friction réelle que l'entreprise doit arbitrer (phrase interne, jamais affichée)",
+  "problematique": "UNE question précise, terminée par « ? »",
+  "justificationProbleme": "pourquoi c'est un problème d'entreprise aujourd'hui",
+  "limitesExistant": ["ce qui existe déjà et pourquoi ça ne suffit pas face à cette tension"],
+  "preconisations": [{ "action": "…", "detail": "…", "cible": "PME | ETI | grand groupe" }],
+  "casEntreprises": [{ "nom": "…", "chiffre": "…", "angle": "preuve de la tension", "source": "…", "issue": "succès | échec" }],
+  "ligneDirectrice": "le fil rouge de l'oral, en une phrase",
+  "ouverture": "une question prospective, sans réponse"
+}
+
+Réponds exclusivement avec UN objet JSON valide RFC 8259. N'ajoute aucun texte, aucun commentaire, aucune balise Markdown. Utilise uniquement des guillemets doubles " pour les clés et les chaînes. N'utilise jamais d'apostrophe simple en guise de guillemet.`.trim();
 
 /**
  * Passe B — découpe du contrat validé en 20 slides. La problématique est FIGÉE

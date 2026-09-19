@@ -6,6 +6,7 @@ import { STEPS, ligneDirectriceOf } from '../steps.js';
 import StepTracker from './StepTracker.jsx';
 import SessionTimer from './SessionTimer.jsx';
 import { stepComponents } from './steps/index.js';
+import { messageCandidat } from '../messagesErreur.js';
 
 export default function WorkspacePage() {
   const { id } = useParams();
@@ -54,12 +55,16 @@ export default function WorkspacePage() {
         const updated = await api.post(`/api/sessions/${id}/generate/${stepKey}`);
         setSession(updated);
       } catch (err) {
-        setStepError(err.message);
+        // Un échec de génération NE DOIT PAS écraser la session affichée : un
+        // contrat déjà validé (et les données d'analyse) doivent rester visibles.
+        // On affiche seulement un message sûr, mappé sur le code applicatif.
+        setStepError(messageCandidat(err));
+        await loadSession();
       } finally {
         setBusyStep(null);
       }
     },
-    [id]
+    [id, loadSession]
   );
 
   const goStep = useCallback(

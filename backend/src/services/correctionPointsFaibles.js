@@ -234,9 +234,10 @@ async function corrigerChamp({ session, etape, chemin, pointsFaibles }) {
   const brut = await generateDeepseek(system, user);
   const parsed = parseJsonStrict(brut);
   if (!parsed || parsed.valeur === undefined) {
+    // Sortie du modèle inexploitable : erreur contrôlée (jamais un 502 de proxy).
     throw Object.assign(
       new Error('La correction proposée par le modèle est inutilisable. Réessayez.'),
-      { status: 502 }
+      { status: 422, code: 'INVALID_LLM_JSON' }
     );
   }
 

@@ -9,9 +9,15 @@ const ANTHROPIC_API_URL = 'https://api.anthropic.com/v1/messages';
 const MAX_TOKENS = parseInt(process.env.ANTHROPIC_MAX_TOKENS || '8192', 10) || 8192;
 const TIMEOUT_MS = 120000;
 
-function httpError(status, message) {
+/**
+ * Erreur portant un statut HTTP, un code applicatif optionnel et un détail
+ * technique (journalisé côté serveur, jamais renvoyé au client).
+ */
+function httpError(status, message, code, detailTechnique) {
   const err = new Error(message);
   err.status = status;
+  if (code) err.code = code;
+  if (detailTechnique) err.detailTechnique = detailTechnique;
   return err;
 }
 
@@ -41,9 +47,13 @@ function parseJsonStrict(raw) {
       }
     }
     const extrait = cleaned.slice(0, 200).replace(/\n/g, ' ');
+    // Le contenu illisible n'est JAMAIS renvoyé au client (il part uniquement
+    // dans les logs) et l'erreur reste contrôlée : 422, jamais un 502.
     throw httpError(
-      502,
-      `La réponse de l'IA n'est pas un JSON valide (extrait : "${extrait}..."). Réessayez.`
+      422,
+      'La réponse de l’IA n’est pas un JSON valide. Réessayez.',
+      'INVALID_LLM_JSON',
+      `extrait : "${extrait}..."` 
     );
   }
 }
@@ -89,9 +99,14 @@ async function generateAnthropic(promptSystem, promptUser) {
     });
   } catch (err) {
     if (err.name === 'TimeoutError' || err.name === 'AbortError') {
-      throw httpError(504, 'Délai dépassé lors de l’appel à l’API Anthropic. Réessayez.');
+      throw httpError(504, 'Délai dépassé lors de l’appel à l’API Anthropic. Réessayez.', 'AI_TIMEOUT', err.message);
     }
-    throw httpError(502, `Erreur réseau vers l’API Anthropic : ${err.message}`);
+    throw httpError(
+      503,
+      'Le service de génération est temporairement indisponible. Réessayez dans quelques instants.',
+      'AI_PROVIDER_UNAVAILABLE',
+      `Erreur réseau vers l’API Anthropic : ${err.message}`
+    );
   }
 
   if (!response.ok) {
@@ -102,19 +117,25 @@ async function generateAnthropic(promptSystem, promptUser) {
     } catch (_e) {
       detail = response.statusText;
     }
+    const indisponible = response.status >= 500 || response.status === 429;
+    const statut = indisponible ? 503 : response.status === 401 || response.status === 403 ? 503 : response.status;
     throw httpError(
-      response.status === 401 || response.status === 403 ? 502 : response.status,
-      `L’API Anthropic a renvoyé une erreur (${response.status}) : ${detail}`
+      statut,
+      indisponible || statut === 503
+        ? 'Le service de génération est temporairement indisponible. Réessayez dans quelques instants.'
+        : `L’API Anthropic a renvoyé une erreur (${response.status}).`,
+      indisponible || statut === 503 ? 'AI_PROVIDER_UNAVAILABLE' : 'AI_PROVIDER_ERROR',
+      `HTTP ${response.status} renvoyé par Anthropic : ${detail}`
     );
   }
 
   const data = await response.json();
   if (data.stop_reason === 'max_tokens') {
     throw httpError(
-      502,
-      'La réponse de l’IA a été tronquée (budget de sortie atteint). ' +
-        'Augmentez ANTHROPIC_MAX_TOKENS côté backend (valeur actuelle : ' +
-        MAX_TOKENS + ') puis réessayez.'
+      500,
+      'La génération a été interrompue. Réessayez.',
+      'AI_OUTPUT_TRUNCATED',
+      'Budget de sortie atteint (ANTHROPIC_MAX_TOKENS=' + MAX_TOKENS + ')'
     );
   }
 
@@ -125,7 +146,12 @@ async function generateAnthropic(promptSystem, promptUser) {
 
   const parsed = parseJsonStrict(text);
   if (!parsed || typeof parsed !== 'object' || Array.isArray(parsed)) {
-    throw httpError(502, 'La réponse de l’IA ne contient pas un objet JSON utilisable.');
+    throw httpError(
+      422,
+      'La génération a produit un format inexploitable. Réessayez.',
+      'INVALID_LLM_JSON',
+      'la réponse de l’IA ne contient pas un objet JSON exploitable'
+    );
   }
   return parsed;
 }

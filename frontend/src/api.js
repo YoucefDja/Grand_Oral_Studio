@@ -3,6 +3,8 @@
  * Le token JWT (auth) est automatiquement attaché en `Authorization: Bearer`.
  */
 
+import { MESSAGE_GENERIQUE } from './messagesErreur.js';
+
 const BASE = (import.meta.env.VITE_API_URL || '').replace(/\/+$/, '');
 
 // --- Gestion de l'authentification persistée (token + user) ---
@@ -48,13 +50,7 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
   }
 
   if (!res.ok) {
-    let message = `Erreur ${res.status}`;
-    try {
-      const data = await res.json();
-      if (data && data.message) message = data.message;
-    } catch {
-      /* réponse non JSON */
-    }
+    const err = await messageErreur(res);
     // Session expirée → on nettoie la session locale (sauf sur les routes publiques de login).
     if (
       res.status === 401 &&
@@ -64,9 +60,39 @@ async function request(path, { method = 'GET', body, headers = {} } = {}) {
       clearAuth();
       window.dispatchEvent(new Event('grand_oral_studio:logout'));
     }
-    throw new Error(message);
+    throw err;
   }
   return res;
+}
+
+/**
+ * Construit le message d'erreur à partir d'une réponse HTTP en échec, en
+ * n'essayant de parser du JSON QUE si le serveur annonce du JSON.
+ *
+ * Objectif : ne jamais tenter de parser un body vide, du HTML (page d'erreur
+ * d'un proxy) ou une réponse tronquée — ce qui produirait une exception de
+ * parsing côté navigateur et masquerait la vraie cause.
+ *
+ * Le code applicatif (`error.code`) est attaché à l'erreur pour que l'appelant
+ * puisse mapper un message utilisateur, sans jamais exposer de détail technique.
+ * La fonction renvoie toujours une `Error` (jamais une chaîne), pour que
+ * `err.code` survive jusqu'au composant.
+ */
+export async function messageErreur(res) {
+  const contentType = res.headers.get('Content-Type') || '';
+  if (!contentType.includes('application/json')) return new Error(MESSAGE_GENERIQUE);
+  try {
+    const data = await res.json();
+    if (data && data.error && typeof data.error.message === 'string') {
+      const err = new Error(data.error.message);
+      if (typeof data.error.code === 'string') err.code = data.error.code;
+      return err;
+    }
+    if (data && typeof data.message === 'string') return new Error(data.message);
+  } catch {
+    /* body vide ou JSON invalide → message générique */
+  }
+  return new Error(MESSAGE_GENERIQUE);
 }
 
 export const api = {

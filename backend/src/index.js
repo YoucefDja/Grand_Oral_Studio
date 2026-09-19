@@ -71,6 +71,9 @@ app.use('/api', (_req, res) => {
 });
 
 // Handler d'erreur global — jamais d'échec silencieux, toujours un message clair.
+// Les erreurs portant un CODE APPLICATIF (INVALID_LLM_JSON, AI_TIMEOUT…) sont
+// renvoyées sous la forme { error: { code, message } } pour que le frontend
+// puisse mapper un message utilisateur sans jamais parser de HTML ni de body vide.
 // eslint-disable-next-line no-unused-vars
 app.use((err, _req, res, _next) => {
   if (err.message && err.message.startsWith('Origine CORS')) {
@@ -85,7 +88,19 @@ app.use((err, _req, res, _next) => {
   if (err.code === 11000) {
     return res.status(409).json({ message: 'Un doublon existe déjà pour cet identifiant.' });
   }
+  // `err.code` de Mongoose est numérique (ex. 11000) : on ne traite comme code
+  // applicatif que les chaînes (nos codes métier).
+  const codeApplicatif = typeof err.code === 'string' ? err.code : undefined;
   const status = Number.isInteger(err.status) ? err.status : 500;
+  if (codeApplicatif) {
+    // Le détail technique reste côté serveur : il ne part jamais au client.
+    if (err.detailTechnique) {
+      console.error('[erreur]', codeApplicatif, err.detailTechnique);
+    }
+    return res.status(status).json({
+      error: { code: codeApplicatif, message: err.message || 'Erreur interne du serveur.' },
+    });
+  }
   return res.status(status).json({ message: err.message || 'Erreur interne du serveur.' });
 });
 

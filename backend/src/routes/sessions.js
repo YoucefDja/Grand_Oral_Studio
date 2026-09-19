@@ -1,4 +1,5 @@
 const express = require('express');
+const { randomUUID } = require('crypto');
 const mongoose = require('mongoose');
 const Session = require('../models/Session');
 const MethodologySection = require('../models/MethodologySection');
@@ -39,12 +40,27 @@ const {
 } = require('../services/correctionPointsFaibles');
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
+const { parseAndValidateContract } = require('../services/contratParsing');
+const { appliquerContratPasseA } = require('../services/applicationContrat');
+const {
+  httpError,
+  logGeneration,
+  MESSAGES_ERREUR,
+  erreurGenerationControlee,
+} = require('../services/erreursGeneration');
 
 const router = express.Router();
 
 // Toutes les routes de session exigent un utilisateur connecté ; chaque
 // utilisateur n'accède qu'à ses propres sessions (owner).
 router.use(requireAuth);
+
+// Identifiant de requête, pour corréler les logs serveur d'une même génération
+// (utile quand un utilisateur signale « ça a échoué » sans autre détail).
+router.use((req, _res, next) => {
+  req.requestId = req.requestId || randomUUID();
+  next();
+});
 
 // Routage des providers selon l'étape IA :
 //  - étapes DeepSeek : parcours visible + recherche d'arrière-plan (deepseek-v4-flash, non-thinking)
@@ -56,12 +72,6 @@ function getProviderForStep(step) {
   if (DEEPSEEK_STEPS.includes(step)) return 'deepseek';
   if (CLAUDE_STEPS.includes(step)) return 'claude';
   throw httpError(400, `Étape inconnue : ${step}`);
-}
-
-function httpError(status, message) {
-  const err = new Error(message);
-  err.status = status;
-  return err;
 }
 
 function findSessionOr404(id, userId) {
@@ -82,12 +92,20 @@ function isNonEmptyObject(obj) {
   });
 }
 
-/** Contrôles de cohérence minimale sur le JSON renvoyé par l'IA — erreur explicite sinon. */
+/**
+ * Contrôles de cohérence minimale sur le JSON renvoyé par l'IA.
+ *
+ * Renvoie `true` si le contenu est exploitable pour l'étape, sinon lève une
+ * erreur PORTANT UN CODE APPLICATIF — jamais un 502 : c'est
+ * `erreurGenerationControlee` qui décide du statut HTTP final (422 pour un
+ * contenu inexploitable/inexploitable, 500 pour un périmètre inattendu).
+ */
 function validateStepOutput(stepKey, parsed) {
   if (!isNonEmptyObject(parsed)) {
     throw httpError(
-      502,
-      `Le contenu généré pour l'étape « ${STEP_LABELS[stepKey]} » est vide ou inutilisable. Réessayez.`
+      422,
+      `Le contenu généré pour l'étape « ${STEP_LABELS[stepKey]} » est vide ou inutilisable. Réessayez.`,
+      'INVALID_CONTRACT_SCHEMA'
     );
   }
   if (stepKey === 'probleme') {
@@ -95,28 +113,44 @@ function validateStepOutput(stepKey, parsed) {
     // est contrôlée en profondeur plus loin par verifierContrat ; ici on ne
     // vérifie que la présence des champs indispensables à la Passe B.
     if (typeof parsed.problematique !== 'string' || !parsed.problematique.trim()) {
-      throw httpError(502, 'Le contrat généré ne contient pas de problématique exploitable.');
+      throw httpError(
+        422,
+        'Le contrat généré ne contient pas de problématique exploitable.',
+        'INVALID_CONTRACT_SCHEMA'
+      );
     }
     if (typeof parsed.tension !== 'string' || !parsed.tension.trim()) {
-      throw httpError(502, 'Le contrat généré ne contient pas de tension (friction d’entreprise).');
+      throw httpError(
+        422,
+        'Le contrat généré ne contient pas de tension (friction d’entreprise).',
+        'INVALID_CONTRACT_SCHEMA'
+      );
     }
     if (!String(parsed.ligneDirectrice || parsed.ligne_directrice || '').trim()) {
-      throw httpError(502, 'Le contrat généré ne contient pas de ligne directrice (fil rouge).');
+      throw httpError(
+        422,
+        'Le contrat généré ne contient pas de ligne directrice (fil rouge).',
+        'INVALID_CONTRACT_SCHEMA'
+      );
     }
   }
   if (stepKey === 'glossaire') {
     const sources = Array.isArray(parsed.sources) ? parsed.sources : [];
     const termes = Array.isArray(parsed.termes) ? parsed.termes : [];
     if (sources.length === 0 || termes.length === 0) {
-      throw httpError(502, 'Le glossaire généré doit contenir au moins une source résumée et un terme défini.');
+      throw httpError(
+        422,
+        'Le glossaire généré doit contenir au moins une source résumée et un terme défini.',
+        'INVALID_CONTRACT_SCHEMA'
+      );
     }
   }
   if (stepKey === 'plan' && (!Array.isArray(parsed.sections) || parsed.sections.length === 0)) {
-    throw httpError(502, 'Le plan généré ne contient aucune section exploitable.');
+    throw httpError(422, 'Le plan généré ne contient aucune section exploitable.', 'INVALID_CONTRACT_SCHEMA');
   }
   if (stepKey === 'support') {
     if (!Array.isArray(parsed.slides) || parsed.slides.length === 0) {
-      throw httpError(502, 'Le support généré ne contient aucune slide exploitable.');
+      throw httpError(422, 'Le support généré ne contient aucune slide exploitable.', 'INVALID_CONTRACT_SCHEMA');
     }
   }
   return true;
@@ -175,6 +209,8 @@ async function genererRechercheArrierePlan(session) {
     }
   } catch (err) {
     // Non bloquant : le plan et le glossaire restent générables sans recherche.
+    // On journalise tout de même la cause (sans contenu métier) pour diagnostic.
+    logGeneration({ etape: 'recherche', provider: 'deepseek', statut: 'ignore', code: err?.code || null });
   }
 }
 
@@ -236,6 +272,7 @@ router.post(
     });
 
     let sujets = [];
+    const debut = Date.now();
     try {
       const raw = await generateDeepseek(system, user);
       const parsed = parseJsonStrict(raw);
@@ -243,10 +280,20 @@ router.post(
         ? parsed.sujets.map((s) => String(s).trim()).filter((s) => s.length >= 10)
         : [];
     } catch (err) {
-      throw httpError(502, `Génération d’idées impossible (${err.message}). Réessayez.`);
+      throw erreurGenerationControlee(err, {
+        requestId: req.requestId,
+        sessionId: null,
+        etape: 'ideas',
+        provider: 'deepseek',
+        dureeMs: Date.now() - debut,
+      });
     }
     if (sujets.length < 2) {
-      throw httpError(502, 'Aucune idée exploitable générée pour ce thème. Réessayez.');
+      throw httpError(
+        422,
+        'Aucune idée exploitable générée pour ce thème. Réessayez.',
+        'INVALID_LLM_JSON'
+      );
     }
     res.json({ sujets: sujets.slice(0, nb) });
   })
@@ -315,124 +362,164 @@ router.post(
 
 // POST /api/sessions/:id/generate/:step
 // step = analyse | probleme | plan | glossaire | support
+//
+// ROBUSTESSE (correctif 502) : le handler est intégralement encadré. Aucune
+// erreur de génération ne remonte telle quelle — elle devient un couple
+// (statut HTTP, code applicatif, message utilisateur simple) via
+// `erreurGenerationControlee`. En particulier, un JSON LLM invalide ne peut
+// plus produire un 502 : c'est un 422 `INVALID_LLM_JSON`. Et un échec
+// n'écrase JAMAIS le contrat déjà validé dans la session.
 router.post(
   '/:id/generate/:step',
   asyncHandler(async (req, res) => {
     const stepKey = String(req.params.step || '').trim().toLowerCase();
-    if (![...STEP_KEYS, ...HIDDEN_STEPS].includes(stepKey)) {
-      throw httpError(
-        400,
-        `Étape inconnue "${stepKey}". Attendue : ${STEP_KEYS.join(' | ')}.`
-      );
-    }
+    const contexteLog = {
+      requestId: req.requestId,
+      sessionId: req.params.id,
+      etape: stepKey,
+      provider: null,
+    };
+    const debut = Date.now();
 
-    const session = await findSessionOr404(req.params.id, req.userId);
-    if (!session) throw httpError(404, 'Session introuvable.');
-
-    // Règle produit : contrat métier validé (Passe A) ET glossaire obligatoires
-    // avant la Passe B (support).
-    if (stepKey === 'support') {
-      assertContratValide(session, stepKey);
-      assertGlossaireValide(session, stepKey);
-    }
-
-    // La recherche documentaire n'est plus une étape visible : elle est produite
-    // automatiquement en arrière-plan juste avant le plan, pour que le plan (puis
-    // le glossaire) s'appuient sur des sources réelles. Un échec n'est pas
-    // bloquant : le plan sera simplement généré sans socle documentaire.
-    if (stepKey === 'plan' && !isNonEmptyObject(session.data && session.data.recherche)) {
-      await genererRechercheArrierePlan(session);
-    }
-
-    const { system, user } = await buildStepPrompt(session, stepKey);
-
-    // Sélection du provider : DeepSeek pour les étapes 1-5, Claude pour le support.
-    const provider = getProviderForStep(stepKey);
-    let parsed;
-    if (provider === 'deepseek') {
-      const raw = await generateDeepseek(system, user);
-      parsed = parseJsonStrict(raw);
-    } else {
-      parsed = await generateAnthropic(system, user);
-    }
-    validateStepOutput(stepKey, parsed);
-
-    // Passe A : le contrat métier est vérifié par des rejets BLOQUANTS. S'il est
-    // invalide, on le stocke quand même (pour que l'étudiant voie ce qui a été
-    // produit), marqué `valide: false`, et on renvoie le diagnostic au front :
-    // la régénération ciblée porte uniquement sur tension + problématique +
-    // justification, jamais sur les mots-clés déjà produits.
-    if (stepKey === 'probleme') {
-      const verification = verifierContrat({
-        sujet: session.titre,
-        theme: session.theme,
-        contrat: parsed,
-      });
-      parsed.valide = verification.valide === true;
-      parsed.verification = {
-        valide: verification.valide,
-        rejets: verification.rejets,
-        avertissements: verification.avertissements,
-        observations: verification.observations,
-      };
-      if (!verification.valide) {
-        parsed.champsARegenerer = ciblerRegeneration(verification.rejets);
+    try {
+      if (![...STEP_KEYS, ...HIDDEN_STEPS].includes(stepKey)) {
+        throw httpError(
+          400,
+          `Étape inconnue "${stepKey}". Attendue : ${STEP_KEYS.join(' | ')}.`
+        );
       }
-    }
 
-    // Passe B : le compresseur de texte passe AVANT le stockage et l'export. Le
-    // support doit être concis par construction (fragments nominaux, une idée
-    // par puce) : les phrases complètes et formules IA migrent dans les notes du
-    // présentateur au lieu d'être supprimées silencieusement.
-    if (stepKey === 'support') {
-      const { support: compresse, rapport } = compresserSupport(parsed);
-      parsed = compresse;
-      parsed.rapport_compression = rapport;
-    }
+      const session = await findSessionOr404(req.params.id, req.userId);
+      if (!session) throw httpError(404, 'Session introuvable.');
 
-    // Passe A : le contrat est stocké dans data.contrat et sert de source unique
-    // à toutes les étapes aval. Il n'est PAS validé d'office : c'est l'étudiant
-    // qui pose `valide: true` (ou qui édite puis valide) à l'écran de validation.
-    let regenereProbleme = false;
-    if (stepKey === 'probleme') {
-      const ancienContrat = session.data && session.data.contrat;
-      regenereProbleme = isNonEmptyObject(ancienContrat);
-      const ld = String(parsed.ligneDirectrice || parsed.ligne_directrice || '').trim();
-      session.ligneDirectrice = ld;
-      parsed.ligneDirectrice = ld;
-      // Régénération : la validation précédente est caduque, l'étudiant doit
-      // revalider ce nouveau contrat.
-      if (regenereProbleme) parsed.valide = false;
-      // Les étapes aval étaient bâties sur l'ancien contrat : elles doivent être
-      // re-générées (recherche d'arrière-plan, plan, glossaire, support).
-      if (regenereProbleme) {
-        ['recherche', 'plan', 'glossaire', 'support'].forEach((k) => {
-          if (session.data && session.data[k]) session.data[k] = {};
+      // Règle produit : contrat métier validé (Passe A) ET glossaire obligatoires
+      // avant la Passe B (support).
+      if (stepKey === 'support') {
+        assertContratValide(session, stepKey);
+        assertGlossaireValide(session, stepKey);
+      }
+
+      // La recherche documentaire n'est plus une étape visible : elle est produite
+      // automatiquement en arrière-plan juste avant le plan, pour que le plan (puis
+      // le glossaire) s'appuient sur des sources réelles. Un échec n'est pas
+      // bloquant : le plan sera simplement généré sans socle documentaire.
+      if (stepKey === 'plan' && !isNonEmptyObject(session.data && session.data.recherche)) {
+        await genererRechercheArrierePlan(session);
+      }
+
+      const { system, user } = await buildStepPrompt(session, stepKey);
+
+      // Sélection du provider : DeepSeek pour les étapes 1-5, Claude pour le support.
+      const provider = getProviderForStep(stepKey);
+      contexteLog.provider = provider;
+
+      let parsed;
+      if (provider === 'deepseek') {
+        if (stepKey === 'probleme') {
+          // PASSE A — mode JSON strict : le fournisseur ne peut plus encadrer sa
+          // réponse de prose, et la température basse évite la variation créative
+          // qui produisait le pseudo-JSON à guillemets simples.
+          const raw = await generateDeepseek(system, user, { temperature: 0.2, jsonObject: true });
+          contexteLog.taille = raw.length;
+          const resultat = parseAndValidateContract(raw);
+          if (!resultat.ok) {
+            const err = httpError(422, 'Contenu inexploitable.', resultat.type, resultat.internalReason);
+            err.internalReason = resultat.internalReason;
+            throw err;
+          }
+          parsed = resultat.contract;
+        } else {
+          const raw = await generateDeepseek(system, user);
+          contexteLog.taille = raw.length;
+          parsed = parseJsonStrict(raw);
+        }
+      } else {
+        parsed = await generateAnthropic(system, user);
+      }
+      validateStepOutput(stepKey, parsed);
+
+      // Passe A : le contrat métier est vérifié par des rejets BLOQUANTS. S'il est
+      // invalide, on le stocke quand même (pour que l'étudiant voie ce qui a été
+      // produit), marqué `valide: false`, et on renvoie le diagnostic au front :
+      // la régénération ciblée porte uniquement sur tension + problématique +
+      // justification, jamais sur les mots-clés déjà produits.
+      if (stepKey === 'probleme') {
+        const verification = verifierContrat({
+          sujet: session.titre,
+          theme: session.theme,
+          contrat: parsed,
         });
+        parsed.valide = verification.valide === true;
+        parsed.verification = {
+          valide: verification.valide,
+          rejets: verification.rejets,
+          avertissements: verification.avertissements,
+          observations: verification.observations,
+        };
+        if (!verification.valide) {
+          parsed.champsARegenerer = ciblerRegeneration(verification.rejets);
+        }
       }
-      session.data.contrat = parsed;
-    } else {
-      session.data[stepKey] = parsed;
-    }
-    session.markModified('data');
 
-    // Avance la progression si la génération est un pas en avant. Si le contrat
-    // a été régénéré alors que le parcours était déjà avancé, on rabat
-    // currentStep sur l'étape suivante pour forcer le recommencement des étapes
-    // aval (la Passe B repartira du contrat revalidé).
-    const nextIndex = STEP_KEYS.indexOf(stepKey) + 1;
-    session.currentStep = Math.max(session.currentStep || 0, nextIndex);
-    if (stepKey === 'probleme' && regenereProbleme) {
-      session.currentStep = Math.min(session.currentStep, nextIndex);
-    }
+      // Passe B : le compresseur de texte passe AVANT le stockage et l'export. Le
+      // support doit être concis par construction (fragments nominaux, une idée
+      // par puce) : les phrases complètes et formules IA migrent dans les notes du
+      // présentateur au lieu d'être supprimées silencieusement.
+      if (stepKey === 'support') {
+        const { support: compresse, rapport } = compresserSupport(parsed);
+        parsed = compresse;
+        parsed.rapport_compression = rapport;
+      }
 
-    await session.save();
-    // La Passe A invalide : on renvoie le diagnostic au front pour l'écran de
-    // validation (l'étudiant voit les critères rouges et peut régénérer).
-    if (stepKey === 'probleme' && parsed.valide !== true) {
-      return res.json({ session, verification: parsed.verification || null });
+      // Passe A : le contrat est stocké dans data.contrat et sert de source unique
+      // à toutes les étapes aval. Il n'est PAS validé d'office : c'est l'étudiant
+      // qui pose `valide: true` (ou qui édite puis valide) à l'écran de validation.
+      let regenereProbleme = false;
+      if (stepKey === 'probleme') {
+        // L'écriture du contrat est isolée dans un module testable : elle n'a lieu
+        // qu'ici, donc APRÈS un parsing et une validation réussis. Un échec en
+        // amont laisse le contrat précédemment validé strictement intact.
+        ({ regenere: regenereProbleme } = appliquerContratPasseA(
+          session,
+          parsed,
+          isNonEmptyObject
+        ));
+      } else {
+        session.data[stepKey] = parsed;
+      }
+      session.markModified('data');
+
+      // Avance la progression si la génération est un pas en avant. Si le contrat
+      // a été régénéré alors que le parcours était déjà avancé, on rabat
+      // currentStep sur l'étape suivante pour forcer le recommencement des étapes
+      // aval (la Passe B repartira du contrat revalidé).
+      const nextIndex = STEP_KEYS.indexOf(stepKey) + 1;
+      session.currentStep = Math.max(session.currentStep || 0, nextIndex);
+      if (stepKey === 'probleme' && regenereProbleme) {
+        session.currentStep = Math.min(session.currentStep, nextIndex);
+      }
+
+      await session.save();
+      logGeneration({
+        ...contexteLog,
+        dureeMs: Date.now() - debut,
+        statut: 200,
+      });
+      // La Passe A invalide : on renvoie le diagnostic au front pour l'écran de
+      // validation (l'étudiant voit les critères rouges et peut régénérer).
+      if (stepKey === 'probleme' && parsed.valide !== true) {
+        return res.json({ session, verification: parsed.verification || null });
+      }
+      return res.json(session);
+    } catch (err) {
+      // Point de sortie UNIQUE des erreurs de génération : tout devient contrôlé.
+      // Aucune mutation de la session n'a été persistée avant l'échec, donc un
+      // contrat précédemment validé reste intact.
+      throw erreurGenerationControlee(err, {
+        ...contexteLog,
+        dureeMs: Date.now() - debut,
+      });
     }
-    res.json(session);
   })
 );
 
@@ -504,62 +591,90 @@ router.post(
 router.post(
   '/:id/regenerer-contrat',
   asyncHandler(async (req, res) => {
-    const session = await findSessionOr404(req.params.id, req.userId);
-    if (!session) throw httpError(404, 'Session introuvable.');
-
-    const contrat = session.data && session.data.contrat;
-    if (!isNonEmptyObject(contrat)) {
-      throw httpError(400, 'Aucun contrat à régénérer : générez d’abord la problématique (Passe A).');
-    }
-
-    const rejets = Array.isArray(contrat.verification?.rejets) ? contrat.verification.rejets : [];
-    const champs = ciblerRegeneration(rejets);
-
-    const { system, user } = await buildStepPrompt(session, 'probleme');
-    const consigne = consigneRegeneration(rejets, champs.length ? champs : ['tension', 'problematique', 'justificationProbleme']);
-    const userRegen = [
-      user,
-      '',
-      '---',
-      '',
-      "### RÉGÉNÉRATION CIBLÉE — le contrat actuel vient d'être refusé",
-      consigne,
-      '',
-      'Contrat actuel (conserve les champs non listés MOT POUR MOT) :',
-      '```json',
-      JSON.stringify(contratPourSuite(contrat), null, 2),
-      '```',
-      '',
-      'Renvoie le contrat COMPLET au même format JSON, avec uniquement les champs listés corrigés.',
-    ].join('\n');
-
-    const raw = await generateDeepseek(system, userRegen);
-    const parsed = parseJsonStrict(raw);
-    validateStepOutput('probleme', parsed);
-
-    // Fusion : on ne remplace QUE les champs ciblés, le reste est intouchable.
-    const champsCibles = champs.length ? champs : ['tension', 'problematique', 'justificationProbleme'];
-    champsCibles.forEach((champ) => {
-      if (parsed[champ] !== undefined) contrat[champ] = parsed[champ];
-    });
-
-    const verification = verifierContrat({
-      sujet: session.titre,
-      theme: session.theme,
-      contrat,
-    });
-    contrat.valide = false; // l'étudiant doit (re)valider explicitement
-    contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
-    contrat.verification = {
-      valide: verification.valide,
-      rejets: verification.rejets,
-      avertissements: verification.avertissements,
-      observations: verification.observations,
+    const contexteLog = {
+      requestId: req.requestId,
+      sessionId: req.params.id,
+      etape: 'probleme',
+      provider: 'deepseek',
     };
+    const debut = Date.now();
+    let session;
+    let contrat;
+    try {
+      session = await findSessionOr404(req.params.id, req.userId);
+      if (!session) throw httpError(404, 'Session introuvable.');
 
-    session.markModified('data');
-    await session.save();
-    res.json({ session, verification: contrat.verification });
+      contrat = session.data && session.data.contrat;
+      if (!isNonEmptyObject(contrat)) {
+        throw httpError(400, 'Aucun contrat à régénérer : générez d’abord la problématique (Passe A).');
+      }
+
+      const rejets = Array.isArray(contrat.verification?.rejets) ? contrat.verification.rejets : [];
+      const champs = ciblerRegeneration(rejets);
+
+      const { system, user } = await buildStepPrompt(session, 'probleme');
+      const consigne = consigneRegeneration(rejets, champs.length ? champs : ['tension', 'problematique', 'justificationProbleme']);
+      const userRegen = [
+        user,
+        '',
+        '---',
+        '',
+        "### RÉGÉNÉRATION CIBLÉE — le contrat actuel vient d'être refusé",
+        consigne,
+        '',
+        'Contrat actuel (conserve les champs non listés MOT POUR MOT) :',
+        '```json',
+        JSON.stringify(contratPourSuite(contrat), null, 2),
+        '```',
+        '',
+        'Renvoie le contrat COMPLET au même format JSON, avec uniquement les champs listés corrigés.',
+      ].join('\n');
+
+      // Même mode JSON strict qu'en Passe A : la régénération ciblée ne doit pas
+      // réintroduire le pseudo-JSON à guillemets simples.
+      const raw = await generateDeepseek(system, userRegen, { temperature: 0.2, jsonObject: true });
+      contexteLog.taille = raw.length;
+      const resultat = parseAndValidateContract(raw);
+      if (!resultat.ok) {
+        const err = httpError(422, 'Contenu inexploitable.', resultat.type, resultat.internalReason);
+        err.internalReason = resultat.internalReason;
+        throw err;
+      }
+      const parsed = resultat.contract;
+      validateStepOutput('probleme', parsed);
+
+      // Fusion : on ne remplace QUE les champs ciblés, le reste est intouchable.
+      const champsCibles = champs.length ? champs : ['tension', 'problematique', 'justificationProbleme'];
+      champsCibles.forEach((champ) => {
+        if (parsed[champ] !== undefined) contrat[champ] = parsed[champ];
+      });
+
+      const verification = verifierContrat({
+        sujet: session.titre,
+        theme: session.theme,
+        contrat,
+      });
+      contrat.valide = false; // l'étudiant doit (re)valider explicitement
+      contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
+      contrat.verification = {
+        valide: verification.valide,
+        rejets: verification.rejets,
+        avertissements: verification.avertissements,
+        observations: verification.observations,
+      };
+
+      session.markModified('data');
+      await session.save();
+      logGeneration({ ...contexteLog, dureeMs: Date.now() - debut, statut: 200 });
+      return res.json({ session, verification: contrat.verification });
+    } catch (err) {
+      // Un échec de régénération ne doit pas détruire le contrat existant : la
+      // fusion n'a lieu qu'APRÈS un parsing réussi, et rien n'est persisté ici.
+      throw erreurGenerationControlee(err, {
+        ...contexteLog,
+        dureeMs: Date.now() - debut,
+      });
+    }
   })
 );
 
@@ -886,8 +1001,9 @@ router.post(
       (Array.isArray(proposition.apres) && proposition.apres.length === 0);
     if (vide) {
       throw httpError(
-        502,
-        `La correction proposée pour « ${cheminDemande} » est vide : elle n'a pas été appliquée. Réessayez ou corrige le champ à la main dans l'étape concernée.`
+        422,
+        `La correction proposée pour « ${cheminDemande} » est vide : elle n'a pas été appliquée. Réessayez ou corrige le champ à la main dans l'étape concernée.`,
+        'INVALID_LLM_JSON'
       );
     }
 
