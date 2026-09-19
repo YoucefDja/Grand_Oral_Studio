@@ -14,6 +14,11 @@ import {
   MESSAGE_GENERIQUE,
   messageCandidat,
 } from '../messagesErreur.js';
+import {
+  construireVueContrat,
+  vuesSecondaires,
+  statutSection,
+} from '../contratAffichage.mjs';
 
 /** Marqueurs techniques qui ne doivent JAMAIS apparaître chez le candidat. */
 function contientFuiteTechnique(texte) {
@@ -93,4 +98,58 @@ test('le mapping frontend couvre exactement les codes du backend', () => {
   for (const code of codesBackend) {
     assert.ok(MESSAGES_PAR_CODE[code], `code manquant côté frontend : ${code}`);
   }
+});
+
+// --- Correctif Passe A : contrat core valide avec sections secondaires vides --
+//
+// On teste le module PUR `contratAffichage.mjs` (aucun import React/DOM). Les cas
+// couverts sont ceux du cahier des charges : un contrat dont seuls les trois
+// champs fondamentaux sont présents doit rester affichable/validable, et aucune
+// section vide ne doit produire « undefined » à l'écran.
+
+test('contrat core valide : affichable et validable malgré les secondaires vides', () => {
+  const contrat = {
+    tension: 'Les PME veulent intégrer l’IA, mais craignent de perdre la confidentialité des données.',
+    problematique:
+      'Comment une PME peut-elle intégrer l’IA générative sans compromettre la confidentialité de ses données ?',
+    justificationProbleme: 'Le sujet de la confidentialité revient dans toutes les sources du dossier.',
+    motsCles: [],
+    limitesExistant: [],
+    preconisations: [],
+    casEntreprises: [],
+    ligneDirectrice: '',
+    ouverture: '',
+    completeness: {
+      isCoreValid: true,
+      missingSecondaryFields: ['limitesExistant', 'casEntreprises', 'ouverture'],
+      message: 'La problématique est exploitable. Certains éléments seront complétés ensuite.',
+    },
+  };
+  const vue = construireVueContrat(contrat);
+  assert.strictEqual(vue.isCoreValid, true);
+  assert.strictEqual(vue.editable, true);
+  assert.deepStrictEqual(vue.motsCles, []);
+  assert.deepStrictEqual(vue.contexte, []);
+  assert.deepStrictEqual(vue.limites, []);
+  assert.deepStrictEqual(vue.preconisations, []);
+  assert.deepStrictEqual(vue.cas, []);
+  assert.ok(vue.missingSecondaryFields.includes('casEntreprises'));
+});
+
+test('contrat core incomplet : non affichable (aucun contrat métier présenté)', () => {
+  const vue = construireVueContrat({ tension: 'Une tension seule, sans question.' });
+  assert.strictEqual(vue.isCoreValid, false);
+  assert.strictEqual(vue.editable, false);
+});
+
+test('contrat secondaire incomplet : aucune fuite « undefined » dans les sections', () => {
+  const vue = construireVueContrat({
+    tension: 'Tension présente.',
+    problematique: 'Comment faire ?',
+    justificationProbleme: 'Justification présente.',
+  });
+  const textes = vuesSecondaires(vue).map((s) => statutSection(s)).join(' | ');
+  assert.ok(textes.length > 0);
+  assert.ok(!/undefined|null|\[object Object\]/.test(textes), `fuite détectée : ${textes}`);
+  assert.ok(!/undefined|\[object Object\]/.test(JSON.stringify(vue)));
 });

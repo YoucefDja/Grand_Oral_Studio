@@ -109,29 +109,30 @@ function validateStepOutput(stepKey, parsed) {
     );
   }
   if (stepKey === 'probleme') {
-    // Passe A : contrat métier (plus de formulations candidates). La question
-    // est contrôlée en profondeur plus loin par verifierContrat ; ici on ne
-    // vérifie que la présence des champs indispensables à la Passe B.
+    // Passe A : contrat métier (plus de formulations candidates). Seuls les TROIS
+    // champs qui portent la logique du sujet sont exigés ici : la question, la
+    // tension et la justification. Tout le reste (mots-clés, cas d'entreprises,
+    // ligne directrice, ouverture…) est un élément secondaire que la Passe B et
+    // l'export construiront ou exigeront plus tard : l'exiger en « tout ou rien »
+    // bloquait tout le parcours dès qu'une clé secondaire manquait.
+    const bloquants = [];
     if (typeof parsed.problematique !== 'string' || !parsed.problematique.trim()) {
-      throw httpError(
-        422,
-        'Le contrat généré ne contient pas de problématique exploitable.',
-        'INVALID_CONTRACT_SCHEMA'
-      );
+      bloquants.push('problematique');
     }
     if (typeof parsed.tension !== 'string' || !parsed.tension.trim()) {
-      throw httpError(
-        422,
-        'Le contrat généré ne contient pas de tension (friction d’entreprise).',
-        'INVALID_CONTRACT_SCHEMA'
-      );
+      bloquants.push('tension');
     }
-    if (!String(parsed.ligneDirectrice || parsed.ligne_directrice || '').trim()) {
-      throw httpError(
+    if (typeof parsed.justificationProbleme !== 'string' || !parsed.justificationProbleme.trim()) {
+      bloquants.push('justificationProbleme');
+    }
+    if (bloquants.length > 0) {
+      const err = httpError(
         422,
-        'Le contrat généré ne contient pas de ligne directrice (fil rouge).',
+        `Le contrat généré ne contient pas les éléments indispensables : ${bloquants.join(', ')}.`,
         'INVALID_CONTRACT_SCHEMA'
       );
+      err.champsManquants = bloquants;
+      throw err;
     }
   }
   if (stepKey === 'glossaire') {
@@ -425,6 +426,9 @@ router.post(
           if (!resultat.ok) {
             const err = httpError(422, 'Contenu inexploitable.', resultat.type, resultat.internalReason);
             err.internalReason = resultat.internalReason;
+            // Diagnostic de schéma : quels champs bloquent, et lesquels manquent.
+            err.coreFieldsPresent = resultat.coreFieldsPresent;
+            err.champsManquants = resultat.manquants;
             throw err;
           }
           parsed = resultat.contract;
@@ -438,27 +442,49 @@ router.post(
       }
       validateStepOutput(stepKey, parsed);
 
-      // Passe A : le contrat métier est vérifié par des rejets BLOQUANTS. S'il est
-      // invalide, on le stocke quand même (pour que l'étudiant voie ce qui a été
-      // produit), marqué `valide: false`, et on renvoie le diagnostic au front :
-      // la régénération ciblée porte uniquement sur tension + problématique +
-      // justification, jamais sur les mots-clés déjà produits.
+      // Passe A : le contrat métier est vérifié, mais seuls les rejets qui
+      // portent la LOGIQUE DU SUJET (question, tension, justification) bloquent
+      // l'affichage. Les manques secondaires (cas d'entreprises, préconisations,
+      // ouverture…) sont normalisés en amont et deviennent des avertissements :
+      // l'étudiant voit et édite le contrat, la Passe B complétera ensuite.
+      let diagnosticProbleme = null;
       if (stepKey === 'probleme') {
         const verification = verifierContrat({
           sujet: session.titre,
           theme: session.theme,
           contrat: parsed,
+          mode: 'creation',
         });
-        parsed.valide = verification.valide === true;
+        parsed.valide = verification.coreValide === true;
         parsed.verification = {
           valide: verification.valide,
+          coreValide: verification.coreValide,
           rejets: verification.rejets,
+          rejetsCore: verification.rejetsCore,
+          rejetsSecondaires: verification.rejetsSecondaires,
           avertissements: verification.avertissements,
           observations: verification.observations,
         };
-        if (!verification.valide) {
-          parsed.champsARegenerer = ciblerRegeneration(verification.rejets);
+        if (!verification.coreValide) {
+          parsed.champsARegenerer = ciblerRegeneration(verification.rejetsCore);
         }
+        const completeness = parsed.completeness || {};
+        diagnosticProbleme = {
+          requestId: req.requestId,
+          sessionId: req.params.id,
+          stage: 'probleme',
+          parsed: true,
+          coreFieldsPresent: {
+            tension: typeof parsed.tension === 'string' && parsed.tension.trim() !== '',
+            problematique: typeof parsed.problematique === 'string' && parsed.problematique.trim() !== '',
+            justificationProbleme:
+              typeof parsed.justificationProbleme === 'string' && parsed.justificationProbleme.trim() !== '',
+          },
+          missingSecondaryFields: Array.isArray(completeness.missingSecondaryFields)
+            ? completeness.missingSecondaryFields
+            : [],
+          validationOutcome: verification.coreValide ? 'accepted' : 'rejected_core',
+        };
       }
 
       // Passe B : le compresseur de texte passe AVANT le stockage et l'export. Le
@@ -504,6 +530,7 @@ router.post(
         ...contexteLog,
         dureeMs: Date.now() - debut,
         statut: 200,
+        ...(diagnosticProbleme || {}),
       });
       // La Passe A invalide : on renvoie le diagnostic au front pour l'écran de
       // validation (l'étudiant voit les critères rouges et peut régénérer).
@@ -518,6 +545,17 @@ router.post(
       throw erreurGenerationControlee(err, {
         ...contexteLog,
         dureeMs: Date.now() - debut,
+        // Diagnostic Passe A quand le schéma core est en défaut : on journalise
+        // précisément les champs bloquants, jamais exposés à l'étudiant.
+        ...(stepKey === 'probleme'
+          ? {
+              stage: 'probleme',
+              parsed: err && err.code !== 'INVALID_LLM_JSON',
+              coreFieldsPresent: err && err.coreFieldsPresent ? err.coreFieldsPresent : undefined,
+              champsManquants: err && err.champsManquants ? err.champsManquants : undefined,
+              validationOutcome: err && err.code === 'INVALID_CONTRACT_SCHEMA' ? 'rejected_core' : undefined,
+            }
+          : {}),
       });
     }
   })
@@ -553,10 +591,18 @@ router.post(
       sujet: session.titre,
       theme: session.theme,
       contrat,
+      // Validation explicite : on repasse en mode STRICT. À ce stade l'étudiant
+      // a vu le contrat et peut l'éditer ; on refuse une question molle, une
+      // copie du sujet ou un décrochage. La tolérance de la création ne joue
+      // que sur la première génération.
+      mode: 'regeneration',
     });
     contrat.verification = {
       valide: verification.valide,
+      coreValide: verification.coreValide,
       rejets: verification.rejets,
+      rejetsCore: verification.rejetsCore,
+      rejetsSecondaires: verification.rejetsSecondaires,
       avertissements: verification.avertissements,
       observations: verification.observations,
     };
@@ -653,12 +699,16 @@ router.post(
         sujet: session.titre,
         theme: session.theme,
         contrat,
+        mode: 'regeneration',
       });
       contrat.valide = false; // l'étudiant doit (re)valider explicitement
       contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
       contrat.verification = {
         valide: verification.valide,
+        coreValide: verification.coreValide,
         rejets: verification.rejets,
+        rejetsCore: verification.rejetsCore,
+        rejetsSecondaires: verification.rejetsSecondaires,
         avertissements: verification.avertissements,
         observations: verification.observations,
       };

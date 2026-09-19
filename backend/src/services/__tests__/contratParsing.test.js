@@ -121,15 +121,90 @@ test('problematique non terminée par « ? » : INVALID_CONTRACT_SCHEMA', () => 
   assert.strictEqual(res.type, ERREUR_SCHEMA);
 });
 
-test('limitesExistant / preconisations non tableaux : INVALID_CONTRACT_SCHEMA', () => {
+test('limitesExistant / preconisations non tableaux : normalisés, contrat accepté', () => {
+  // Correctif Passe A : ces champs sont SECONDAIRES. Ils ne doivent plus
+  // déclencher un rejet « tout ou rien » mais être ramenés à un tableau.
   const contrat = contratBrut();
   contrat.limitesExistant = 'une chaîne au lieu d’un tableau';
   contrat.preconisations = 'une chaîne au lieu d’un tableau';
   const res = parseAndValidateContract(JSON.stringify(contrat));
+  assert.strictEqual(res.ok, true);
+  assert.deepStrictEqual(res.contract.limitesExistant, ['une chaîne au lieu d’un tableau']);
+  assert.deepStrictEqual(res.contract.preconisations, ['une chaîne au lieu d’un tableau']);
+});
+
+// --- Cas 6 : tolérance aux champs secondaires (correctif Passe A) ----------
+test('3 champs fondamentaux seuls : contrat accepté, secondaires normalisés à vide', () => {
+  const minimal = {
+    tension: "Les PME doivent se numériser mais n'ont ni budget ni compétence interne.",
+    problematique:
+      'Dans quelle mesure une PME peut-elle se numériser sans recruter un profil informatique dédié ?',
+    justificationProbleme:
+      "Le coût du maintien du système existant rend la transformation urgente pour les PME.",
+  };
+  const res = parseAndValidateContract(JSON.stringify(minimal));
+  assert.strictEqual(res.ok, true);
+  // Aucune clé `undefined` ne doit atteindre le frontend.
+  assert.deepStrictEqual(res.contract.motsCles, []);
+  assert.deepStrictEqual(res.contract.contexte, []);
+  assert.deepStrictEqual(res.contract.limitesExistant, []);
+  assert.deepStrictEqual(res.contract.preconisations, []);
+  assert.deepStrictEqual(res.contract.casEntreprises, []);
+  assert.strictEqual(res.contract.ligneDirectrice, '');
+  assert.strictEqual(res.contract.ouverture, '');
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.contract.completeness.missingSecondaryFields.length > 0);
+});
+
+test('justificationProbleme absente : INVALID_CONTRACT_SCHEMA, champ bloquant journalisé', () => {
+  const contrat = contratBrut();
+  delete contrat.justificationProbleme;
+  const res = parseAndValidateContract(JSON.stringify(contrat));
   assert.strictEqual(res.ok, false);
   assert.strictEqual(res.type, ERREUR_SCHEMA);
-  assert.match(res.internalReason, /limitesExistant/);
-  assert.match(res.internalReason, /preconisations/);
+  assert.ok(res.manquants.includes('justificationProbleme'));
+  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, false);
+  assert.strictEqual(res.coreFieldsPresent.tension, true);
+});
+
+test('casEntreprises et ouverture absents : accepté, missingSecondaryFields renseigné', () => {
+  const contrat = contratBrut();
+  delete contrat.casEntreprises;
+  delete contrat.ouverture;
+  const res = parseAndValidateContract(JSON.stringify(contrat));
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.contract.completeness.missingSecondaryFields.includes('casEntreprises'));
+  assert.ok(res.contract.completeness.missingSecondaryFields.includes('ouverture'));
+});
+
+test('tableaux avec éléments nuls : filtrés sans crash', () => {
+  const contrat = contratBrut();
+  contrat.motsCles = [null, { mot: 'PME', definition: '' }, undefined, 42];
+  contrat.preconisations = [null, undefined];
+  const res = parseAndValidateContract(JSON.stringify(contrat));
+  assert.strictEqual(res.ok, true);
+  assert.deepStrictEqual(res.contract.preconisations, []);
+  assert.strictEqual(res.contract.motsCles.length, 1);
+  assert.strictEqual(res.contract.motsCles[0].mot, 'PME');
+});
+
+test('champ mal typé mais convertible (nombre) : normalisé sans crash', () => {
+  const contrat = contratBrut();
+  contrat.ouverture = 42;
+  contrat.limitesExistant = { texte: 'objet isolé' };
+  const res = parseAndValidateContract(JSON.stringify(contrat));
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.contract.ouverture, '42');
+  assert.deepStrictEqual(res.contract.limitesExistant, [{ texte: 'objet isolé' }]);
+});
+
+test('completeness.message accompagne un contrat core incomplet', () => {
+  const contrat = contratBrut();
+  delete contrat.casEntreprises;
+  const res = parseAndValidateContract(JSON.stringify(contrat));
+  assert.strictEqual(res.ok, true);
+  assert.match(res.contract.completeness.message, /exploitable/);
 });
 
 // --- Cas supplémentaire : alias `ligne_directrice` normalisé ---------------

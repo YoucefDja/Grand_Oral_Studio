@@ -264,6 +264,10 @@ export const FR = {
   'contrat.issueSucces': 'succès',
   'contrat.sourceLabel': 'Source',
   'contrat.pasDeContrat': 'Aucun contrat pour le moment. Lancez la génération de la problématique (Passe A).',
+  'contrat.exploitable': 'Contrat exploitable — éléments complémentaires à construire ensuite',
+  'contrat.aCompleterEtapeSuivante': 'À compléter à l’étape suivante.',
+  'contrat.nonGenere': 'Non généré — vous pourrez compléter ce point ensuite.',
+  'contrat.aucunCas': 'Aucun cas d’entreprise pour le moment — non généré, à construire ensuite.',
 
   // ---- Score « logique du sujet » (StepSupport) ----
   'logique.title': 'Score « logique du sujet »',
@@ -645,6 +649,10 @@ export const EN = {
   'contrat.issueSucces': 'success',
   'contrat.sourceLabel': 'Source',
   'contrat.pasDeContrat': 'No contract yet. Run the problem statement generation (Pass A).',
+  'contrat.exploitable': 'Usable contract — extra items to build at the next step',
+  'contrat.aCompleterEtapeSuivante': 'To complete at the next step.',
+  'contrat.nonGenere': 'Not generated — you will be able to complete this later.',
+  'contrat.aucunCas': 'No company case yet — not generated, to build later.',
 
   // ---- “Topic logic” score (StepSupport) ----
   'logique.title': '“Topic logic” score',

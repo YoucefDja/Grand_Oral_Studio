@@ -246,7 +246,13 @@ EXIGENCES :
 
 N'invente aucun fond métier : tout vient du sujet et du .md de préparation. Zéro source inventée.
 
-SCHÉMA JSON EXACT — toutes ces clés sont OBLIGATOIRES, à ce niveau racine :
+### ORDRE DE PRODUCTION ET CHAMPS À VIDE (RÈGLE DE SORTIE)
+- Produis D'ABORD et IMPÉRATIVEMENT ces trois champs : "tension", "problematique", "justificationProbleme". Sans eux le contrat est refusé et le parcours est bloqué.
+- Produis ENSUITE les autres champs. Si les sources fournies ne permettent pas de les justifier, renvoie une liste vide [] ou une chaîne vide "" : un champ vide est accepté, un champ inventé est refusé.
+- Les champs tension, problematique et justificationProbleme sont obligatoires. Pour toute information secondaire non présente dans les sources fournies, renvoie une liste vide [] ou une chaîne vide "". N'invente jamais une donnée, un chiffre, une entreprise ou une source pour remplir le schéma.
+- Ne remplis JAMAIS un champ par défaut avec du contenu plausible : pas de cas d'entreprise « exemple », pas de chiffre « environ », pas de source « étude récente ». Vide vaut mieux que faux.
+
+SCHÉMA JSON EXACT — toutes ces clés sont attendues à ce niveau racine :
 {
   "sujet": "le sujet tel quel",
   "motsCles": [{ "mot": "…", "definition": "une ligne, langage clair" }],

@@ -27,8 +27,10 @@ function httpError(status, message, code, detailTechnique) {
  * Log structuré d'une génération IA — sans fuite de données.
  *
  * On journalise UNIQUEMENT des métadonnées techniques (durée, statut, taille,
- * code d'erreur). Jamais le contenu de la session, jamais la clé API, jamais la
- * réponse complète du modèle.
+ * code d'erreur, diagnostic de schéma Passe A). Jamais le contenu de la
+ * session, jamais la clé API, jamais la réponse complète du modèle : les
+ * diagnostics ne portent que des NOMS de champs et des booléens, ce qui permet
+ * de savoir ce qui a bloqué sans journaliser de contenu métier.
  */
 function logGeneration({
   requestId,
@@ -40,6 +42,12 @@ function logGeneration({
   code,
   taille,
   detail,
+  stage,
+  parsed,
+  coreFieldsPresent,
+  missingSecondaryFields,
+  champsManquants,
+  validationOutcome,
 }) {
   const ligne = {
     requestId,
@@ -51,6 +59,13 @@ function logGeneration({
     code: code || null,
   };
   if (Number.isFinite(taille)) ligne.tailleReponse = taille;
+  // Diagnostic Passe A : uniquement des noms de champs et des booléens.
+  if (stage) ligne.stage = stage;
+  if (typeof parsed === 'boolean') ligne.parsed = parsed;
+  if (coreFieldsPresent) ligne.coreFieldsPresent = coreFieldsPresent;
+  if (Array.isArray(missingSecondaryFields)) ligne.missingSecondaryFields = missingSecondaryFields;
+  if (Array.isArray(champsManquants)) ligne.champsManquants = champsManquants;
+  if (validationOutcome) ligne.validationOutcome = validationOutcome;
   // L'extrait brut n'apparaît qu'en développement, et il est déjà tronqué.
   const estDev = process.env.NODE_ENV !== 'production';
   if (estDev && detail) ligne.detail = detail;

@@ -205,18 +205,51 @@ function contientMot(textePlat, tournure) {
 }
 
 /**
+ * Rejets qui portent la LOGIQUE DU SUJET : la présence et la qualité de la
+ * question, la tension et la justification. Eux seuls bloquent l'affichage du
+ * contrat.
+ *
+ * Les autres rejets (cas d'entreprises, préconisations, ligne directrice,
+ * mots-clés…) portent sur des éléments que la Passe B, la recherche et l'export
+ * savent construire ou exiger plus tard : les bloquer dès la Passe A bloquait
+ * tout le parcours pour une clé secondaire oubliée par le modèle.
+ */
+const REJETS_CORE = new Set([
+  'contrat_question_absente',
+  'contrat_tension_absente',
+  'contrat_justification_absente',
+  'contrat_pas_une_question',
+  'contrat_question_courte',
+  'contrat_question_longue',
+  'contrat_amorce_invalide',
+  'contrat_question_oui_non',
+  'contrat_amorce_molle',
+  'contrat_copie_sujet',
+  'contrat_hors_sujet',
+  'contrat_question_plus_large',
+  'contrat_tension_decorrelee',
+]);
+
+/**
  * Vérifie un contrat métier (Passe A).
  *
  * @param {object} params
  * @param {string} params.sujet  Intitulé du sujet (session.titre).
  * @param {string} [params.theme]
  * @param {object} params.contrat Contrat issu de la Passe A.
- * @returns {{ valide: boolean, rejets: Array<{code, message}>, avertissements: string[], observations: object }}
+ * @returns {{ valide: boolean, coreValide: boolean, rejets: Array<{code, message}>,
+ *             rejetsCore: Array<{code, message}>, rejetsSecondaires: Array<{code, message}>,
+ *             avertissements: string[], observations: object }}
  */
-function verifierContrat({ sujet, theme = '', contrat }) {
+function verifierContrat({ sujet, theme = '', contrat, mode = 'creation' }) {
   const rejets = [];
   const avertissements = [];
   const rejeter = (code, message) => rejets.push({ code, message });
+  // En CREATION, on n'exige de la question que ce qui la rend exploitable : les
+  // règles de qualité (tournures molles, vocabulaire étranger…) restent des
+  // avertissements, que l'étudiant lève en éditant. En REGENERATION, elles
+  // redeviennent bloquantes : on ne rappelle pas le modèle pour rien.
+  const stricts = mode !== 'creation';
 
   const c = contrat && typeof contrat === 'object' ? contrat : {};
   const question = String(c.problematique || '').trim();
@@ -242,7 +275,13 @@ function verifierContrat({ sujet, theme = '', contrat }) {
     rejeter('contrat_justification_absente', "La justification du problème est absente : rien ne démontre que le problème se pose aujourd'hui.");
   }
   if (motsCles.length < MIN_RECOUVREMENT_MOT_CLE) {
-    rejeter('contrat_mots_cles_absents', 'Aucun mot clé défini : la question ne peut pas être bornée par le sujet.');
+    // Élément SECONDAIRE : les mots-clés seront construits par la Passe B et
+    // exigés à l'export. En création, leur absence ne bloque pas la validation
+    // de la problématique — seuls la question, la tension et la justification
+    // portent la logique du sujet.
+    const message = 'Aucun mot clé défini : la question ne peut pas être bornée par le sujet.';
+    if (stricts) rejeter('contrat_mots_cles_absents', message);
+    else avertissements.push(message);
   }
 
   // ---- La question doit être une question ----
@@ -276,46 +315,53 @@ function verifierContrat({ sujet, theme = '', contrat }) {
   const jac = jaccard(sujet, question);
   const copieSujet = Boolean(sujet) && (rec >= 0.9 || jac >= 0.7);
   if (copieSujet) {
-    rejeter(
-      'contrat_copie_sujet',
-      `La question recouvre ${Math.round(rec * 100)} % du vocabulaire du sujet : c'est le sujet avec un point d'interrogation, pas une problématique.`
+    (stricts ? rejeter : avertissements.push.bind(avertissements))(
+      ...(stricts
+        ? [
+            'contrat_copie_sujet',
+            `La question recouvre ${Math.round(rec * 100)} % du vocabulaire du sujet : c'est le sujet avec un point d'interrogation, pas une problématique.`,
+          ]
+        : [
+            `La question reprend largement le vocabulaire du sujet (${Math.round(rec * 100)} %). Une reformulation plus resserrée est attendue.`,
+          ])
     );
-    const communs = [...new Set(jetonsPleins(question))].filter((j) =>
-      new Set(jetonsPleins(sujet)).has(j)
-    );
-    rejeter(
-      'contrat_amorce_molle',
-      `La question ne fait que reprendre les termes du sujet (${communs.join(', ')}) sans nommer la moindre contrainte (coût, compétence, dette, conformité, dépendance, délai, taille d'entreprise…). C'est un vœu, pas un problème d'entreprise.`
-    );
+    if (stricts) {
+      const communs = [...new Set(jetonsPleins(question))].filter((j) =>
+        new Set(jetonsPleins(sujet)).has(j)
+      );
+      rejeter(
+        'contrat_amorce_molle',
+        `La question ne fait que reprendre les termes du sujet (${communs.join(', ')}) sans nommer la moindre contrainte (coût, compétence, dette, conformité, dépendance, délai, taille d'entreprise…). C'est un vœu, pas un problème d'entreprise.`
+      );
+    }
   }
 
   // ---- Question oui / non ----
   const ouiNon = copieSujet ? null : contientUne(questionPlat, TOURNURES_OUI_NON);
   if (ouiNon) {
-    rejeter(
-      'contrat_question_oui_non',
-      `La tournure « ${ouiNon} » ouvre une question fermée (oui / non) ou un débat d'opinion : le jury attend un problème à instruire, pas un verdict.`
-    );
+    const message = `La tournure « ${ouiNon} » ouvre une question fermée (oui / non) ou un débat d'opinion : le jury attend un problème à instruire, pas un verdict.`;
+    if (stricts) rejeter('contrat_question_oui_non', message);
+    else avertissements.push(message);
   }
 
   // ---- Amorce molle sans contrainte ----
   const amorceMolle = copieSujet ? null : contientUne(questionPlat, AMORCES_MOLLES);
   const copieDejaRejetee = rejets.some((r) => r.code === 'contrat_copie_sujet');
   if (amorceMolle && !copieDejaRejetee && !CONTRAINTES.some((ct) => contientMot(questionPlat, ct))) {
-    rejeter(
-      'contrat_amorce_molle',
-      `La question s'ouvre sur « ${amorceMolle} » sans nommer la moindre contrainte (coût, compétence, dette, conformité, dépendance, délai, taille d'entreprise…). C'est un vœu, pas un problème d'entreprise.`
-    );
+    const message = `La question s'ouvre sur « ${amorceMolle} » sans nommer la moindre contrainte (coût, compétence, dette, conformité, dépendance, délai, taille d'entreprise…). C'est un vœu, pas un problème d'entreprise.`;
+    if (stricts) rejeter('contrat_amorce_molle', message);
+    else avertissements.push(message);
   }
 
   // ---- Ancrage : au moins un mot-clé du sujet présent dans la question ----
+  const motsClesBloquants = stricts ? 1 : 0;
   if (question && motsCles.length > 0) {
     const ancrage = motsCles.some((mc) => {
       const jetonsMc = jetonsPleins(mc);
       if (jetonsMc.length === 0) return false;
       return jetonsMc.some((j) => questionPlat.includes(j));
     });
-    if (!ancrage) {
+    if (!ancrage && motsClesBloquants) {
       rejeter(
         'contrat_hors_sujet',
         `Aucun mot-clé du sujet (${motsCles.join(', ')}) n'apparaît dans la question : elle a décroché du sujet.`
@@ -324,7 +370,7 @@ function verifierContrat({ sujet, theme = '', contrat }) {
   }
 
   // ---- La question ne doit pas être plus large que le sujet ----
-  if (sujet) {
+  if (sujet && stricts) {
     const recSujet = recouvrement(question, sujet);
     if (recSujet === 0 && question) {
       rejeter(
@@ -358,40 +404,53 @@ function verifierContrat({ sujet, theme = '', contrat }) {
   }
 
   // ---- Préconisations branchées sur la tension / la question ----
+  // Éléments SECONDAIRES : ils ne bloquent pas la validation de la problématique.
+  // En création, un manque ou un décrochage devient un avertissement — l'export
+  // final reste strict, lui.
   if (texteSolutions) {
     const recSolTension = tension ? recouvrement(tension, texteSolutions) : 0;
     const recSolQuestion = question ? recouvrement(question, texteSolutions) : 0;
     if (Math.max(recSolTension, recSolQuestion) < MIN_RECOUVREMENT_SOLUTIONS) {
-      rejeter(
-        'contrat_solutions_decorrelees',
-        "Les préconisations ne réutilisent ni le vocabulaire de la tension ni celui de la question : elles ne répondent pas au problème posé."
-      );
+      const message =
+        "Les préconisations ne réutilisent ni le vocabulaire de la tension ni celui de la question : elles ne répondent pas au problème posé.";
+      if (stricts) rejeter('contrat_solutions_decorrelees', message);
+      else avertissements.push(message);
     }
     const rejetsPourQuestionSeule = rejets.filter((r) => r.code !== 'contrat_solutions_decorrelees');
-    if (rejetsPourQuestionSeule.length === 0 && Math.max(recSolTension, recSolQuestion) < 0.25) {
+    if (
+      stricts &&
+      rejetsPourQuestionSeule.length === 0 &&
+      Math.max(recSolTension, recSolQuestion) < 0.25
+    ) {
       rejeter(
         'contrat_question_inutile',
         "Test inverse : les préconisations tiennent sans la question. La problématique n'oriente rien — elle est trop molle."
       );
     }
   } else {
-    rejeter('contrat_solutions_absentes', 'Aucune préconisation dans le contrat : rien ne peut répondre à la question.');
+    const message = 'Aucune préconisation dans le contrat : rien ne peut répondre à la question.';
+    if (stricts) rejeter('contrat_solutions_absentes', message);
+    else avertissements.push(message);
   }
 
   // ---- Cas d'entreprises : sourcés, dont un échec ----
+  // Également secondaire : la Passe B et l'export les exigent, pas la Passe A.
   if (cas.length === 0) {
-    rejeter('contrat_cas_absents', 'Aucun cas d’entreprise dans le contrat : le jury attend des cas réels et sourcés.');
+    const message = 'Aucun cas d’entreprise dans le contrat : le jury attend des cas réels et sourcés.';
+    if (stricts) rejeter('contrat_cas_absents', message);
+    else avertissements.push(message);
   } else {
     const sansSource = cas.filter((x) => !String((x && x.source) || '').trim());
     if (sansSource.length > 0) {
-      rejeter(
-        'contrat_cas_sans_source',
-        `${sansSource.length} cas d'entreprise ne portent pas de source : zéro source inventée, chaque cas doit être sourcé depuis le .md.`
-      );
+      const message = `${sansSource.length} cas d'entreprise ne portent pas de source : zéro source inventée, chaque cas doit être sourcé depuis le .md.`;
+      if (stricts) rejeter('contrat_cas_sans_source', message);
+      else avertissements.push(message);
     }
     const aEchec = cas.some((x) => /echec|echec_ou_limite|limite|contre-exemple|insuffisan/i.test(JSON.stringify(x)));
     if (!aEchec) {
-      rejeter('contrat_cas_sans_echec', "Aucun cas d'échec parmi les cas d'entreprise : le jury sanctionne le plaidoyer à sens unique.");
+      const message = "Aucun cas d'échec parmi les cas d'entreprise : le jury sanctionne le plaidoyer à sens unique.";
+      if (stricts) rejeter('contrat_cas_sans_echec', message);
+      else avertissements.push(message);
     }
   }
 
@@ -404,13 +463,24 @@ function verifierContrat({ sujet, theme = '', contrat }) {
   }
 
   // ---- Ligne directrice ----
-  if (!String(c.ligneDirectrice || '').trim()) {
-    rejeter('contrat_ligne_directrice_absente', 'Aucune ligne directrice : le fil rouge de la présentation est absent.');
+  const ligneDirectrice = String(c.ligneDirectrice || c.ligne_directrice || '').trim();
+  if (!ligneDirectrice) {
+    const message = 'Aucune ligne directrice : le fil rouge de la présentation est absent.';
+    if (stricts) rejeter('contrat_ligne_directrice_absente', message);
+    else avertissements.push(message);
   }
+
+  // Décomposition : ce qui bloque la logique du sujet vs ce qui sera construit
+  // ou exigé plus tard (Passe B, export).
+  const rejetsCore = rejets.filter((r) => REJETS_CORE.has(r.code));
+  const rejetsSecondaires = rejets.filter((r) => !REJETS_CORE.has(r.code));
 
   return {
     valide: rejets.length === 0,
+    coreValide: rejetsCore.length === 0,
     rejets,
+    rejetsCore,
+    rejetsSecondaires,
     avertissements,
     observations: {
       nbMotsQuestion: nbMots,

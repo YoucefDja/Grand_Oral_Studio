@@ -40,7 +40,18 @@ function ListeValeurs({ items, rendu, vide }) {
 function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
   const { t } = useSettings();
   const contrat = session?.data?.contrat || {};
-  const editable = Boolean(contrat && (contrat.problematique || contrat.tension));
+  const completeness = contrat.completeness || {};
+  // Les trois éléments fondamentaux (tension, problématique, justification) sont
+  // la SEULE condition d'affichage et de validation : une section secondaire
+  // vide ne doit plus cacher le contrat à l'étudiant.
+  const isCoreValid =
+    completeness.isCoreValid === true ||
+    Boolean(
+      contrat.problematique && contrat.tension && contrat.justificationProbleme
+    );
+  const editable = Boolean(
+    isCoreValid && contrat.problematique && contrat.tension
+  );
 
   const [tension, setTension] = useState('');
   const [problematique, setProblematique] = useState('');
@@ -79,9 +90,21 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
 
   const valideContrat = contrat.valide === true;
   const rejets = Array.isArray(verification?.rejets) ? verification.rejets : [];
-  const avertissements = Array.isArray(verification?.avertissements)
-    ? verification.avertissements
+  // En création, les rejets de fond non bloquants sont remontés à part : on les
+  // affiche comme des avertissements, pas comme des blocages.
+  const rejetsSec = Array.isArray(verification?.rejetsSecondaires)
+    ? verification.rejetsSecondaires
     : [];
+  const avertissements = [
+    ...(Array.isArray(verification?.avertissements) ? verification.avertissements : []),
+    ...rejetsSec.map((r) => r?.message).filter(Boolean),
+  ];
+  const missingSecondaryFields = Array.isArray(
+    contrat.completeness?.missingSecondaryFields
+  )
+    ? contrat.completeness.missingSecondaryFields
+    : [];
+  const manqueSecondaire = (champ) => missingSecondaryFields.includes(champ);
 
   // Éditer invalide la validation précédente : on repasse par le gate serveur.
   const modifie =
@@ -169,6 +192,10 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         </span>
       </div>
 
+      {isCoreValid && missingSecondaryFields.length > 0 ? (
+        <p className="muted" style={{ margin: '0 0 8px' }}>{t('contrat.exploitable')}</p>
+      ) : null}
+
       {localError ? (
         <div className="alert alert-error" role="alert">
           {localError}
@@ -203,6 +230,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         <div className="data-label">{t('contrat.motsCles')}</div>
         <ListeValeurs
           items={motsCles}
+          vide={manqueSecondaire('motsCles') ? t('contrat.aCompleterEtapeSuivante') : undefined}
           rendu={(m) =>
             typeof m === 'string' ? m : <><strong>{m?.mot}</strong> — {m?.definition}</>
           }
@@ -213,6 +241,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         <div className="data-label">{t('contrat.contexte')}</div>
         <ListeValeurs
           items={contexte}
+          vide={t('contrat.nonGenere')}
           rendu={(f, i) => {
             if (typeof f === 'string') return f;
             return (
@@ -263,12 +292,17 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
       </div>
 
       <Ligne label={t('contrat.limitesExistant')}>
-        <ListeValeurs items={limites} rendu={(l) => (typeof l === 'string' ? l : JSON.stringify(l))} />
+        <ListeValeurs
+          items={limites}
+          vide={t('contrat.nonGenere')}
+          rendu={(l) => (typeof l === 'string' ? l : JSON.stringify(l))}
+        />
       </Ligne>
 
       <Ligne label={t('contrat.preconisations')}>
         <ListeValeurs
           items={preconisations}
+          vide={t('contrat.nonGenere')}
           rendu={(p) => {
             if (typeof p === 'string') return p;
             return (
@@ -283,24 +317,28 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
       </Ligne>
 
       <Ligne label={t('contrat.casEntreprises')}>
-        <ul className="ul-value">
-          {cas.map((c, i) => {
-            const echec = /echec|limite|contre-exemple/i.test(JSON.stringify(c));
-            return (
-              <li key={i}>
-                <strong>{c?.nom}</strong>
-                <span className={`badge ${echec ? 'badge-progress' : 'badge-done'}`} style={{ marginLeft: 6 }}>
-                  {echec ? t('contrat.issueEchec') : t('contrat.issueSucces')}
-                </span>
-                {c?.chiffre ? ` — ${c.chiffre}` : ''}
-                {c?.angle ? ` — ${c.angle}` : ''}
-                {c?.source ? (
-                  <span className="muted">{` — ${t('contrat.sourceLabel')} : ${c.source}`}</span>
-                ) : null}
-              </li>
-            );
-          })}
-        </ul>
+        {cas.length === 0 ? (
+          <p className="muted">{t('contrat.aucunCas')}</p>
+        ) : (
+          <ul className="ul-value">
+            {cas.map((c, i) => {
+              const echec = /echec|limite|contre-exemple/i.test(JSON.stringify(c));
+              return (
+                <li key={i}>
+                  <strong>{c?.nom}</strong>
+                  <span className={`badge ${echec ? 'badge-progress' : 'badge-done'}`} style={{ marginLeft: 6 }}>
+                    {echec ? t('contrat.issueEchec') : t('contrat.issueSucces')}
+                  </span>
+                  {c?.chiffre ? ` — ${c.chiffre}` : ''}
+                  {c?.angle ? ` — ${c.angle}` : ''}
+                  {c?.source ? (
+                    <span className="muted">{` — ${t('contrat.sourceLabel')} : ${c.source}`}</span>
+                  ) : null}
+                </li>
+              );
+            })}
+          </ul>
+        )}
       </Ligne>
 
       <div className="data-section">
@@ -354,7 +392,9 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
 
 export default function StepProbleme({ session, busy, error, onGenerate, goStep, onSessionRefresh }) {
   const contrat = session?.data?.contrat;
-  const valide = contrat?.valide === true;
+  // Le Plan s'ouvre dès que les TROIS éléments fondamentaux sont validés : les
+  // sections secondaires seront construites/vérifiées plus tard (Passe B, export).
+  const valide = Boolean(contrat?.valide === true);
 
   const handleValide = useCallback(
     async (payload) => {
