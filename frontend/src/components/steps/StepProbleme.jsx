@@ -49,9 +49,6 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
     Boolean(
       contrat.problematique && contrat.tension && contrat.justificationProbleme
     );
-  const editable = Boolean(
-    isCoreValid && contrat.problematique && contrat.tension
-  );
 
   const [tension, setTension] = useState('');
   const [problematique, setProblematique] = useState('');
@@ -167,7 +164,12 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
     }
   }, [disabled, regenerant, session?._id, onSessionRefresh, t]);
 
-  if (!editable) {
+  // Le contrat s'affiche dès que le core est complet. Les sections secondaires
+  // (mots-clés, contexte, cas d'entreprises…) peuvent rester vides : les cacher
+  // revenait à priver l'étudiant de la tension, de la ligne directrice et de
+  // l'ouverture reconstruites par la Passe A, alors qu'il doit pouvoir les
+  // relire puis valider.
+  if (!isCoreValid) {
     return <p className="muted">{t('contrat.pasDeContrat')}</p>;
   }
 

@@ -100,7 +100,16 @@ function chaineNonVide(v) {
  * L'ordre compte : le premier alias trouvé non vide gagne.
  */
 const FIELD_ALIASES = {
-  tension: ['tension', 'tensionMetier', 'tension_metier'],
+  tension: [
+    'tension',
+    'tensionMetier',
+    'tension_metier',
+    'tensionPrincipale',
+    'tension_principale',
+    'probleme',
+    'problème',
+    'contradiction',
+  ],
   problematique: ['problematique', 'problématique', 'problematic', 'problem', 'question'],
   justificationProbleme: [
     'justificationProbleme',
@@ -110,7 +119,8 @@ const FIELD_ALIASES = {
     'pourquoi_ce_probleme',
   ],
   ligneDirectrice: ['ligneDirectrice', 'ligne_directrice', 'lineDirectrice', 'line_directrice'],
-  preconisations: ['preconisations', 'préconisations', 'recommendations'],
+  preconisations: ['preconisations', 'préconisations', 'recommendations', 'recommandation'],
+  justificationRecommandation: ['justificationRecommandation', 'justification_recommandation'],
   motsCles: ['motsCles', 'mots_cles', 'motsClés', 'keywords'],
   limitesExistant: ['limitesExistant', 'limites_existant', 'limites'],
   casEntreprises: ['casEntreprises', 'cas_entreprises', 'cas'],
@@ -123,13 +133,40 @@ const FIELD_ALIASES = {
  * Champs de la variante historique : le prompt demandait une LISTE de
  * `formulations` candidates (`{ question, justification }`) au lieu d'une
  * problématique unique. Une réponse produite par un ancien déploiement — ou par
- * un modèle qui a gardé ce réflexe — reste exploitable : on promeut la première
+ * un modèle qui a gardé ce réflexe — reste exploitable : on promeut une
  * formulation complète en `problematique` + `justificationProbleme`.
  *
- * On ne devine rien : la promotion n'a lieu que si le champ core est ABSENT et
- * que la formulation porte bien une question terminée par « ? ».
+ * On ne devine rien : la promotion n'a lieu que si le champ core est ABSENT,
+ * que la formulation porte bien une question terminée par « ? », et on continue
+ * de parcourir les formulations tant que la justification manque (la première
+ * peut ne porter qu'une question, une suivante être complète).
  */
 const ALIAS_FORMULATIONS = ['formulations', 'formulation', 'candidates', 'propositions'];
+
+/** Clés d'une formulation qui peuvent porter la question. */
+const FORMULATION_QUESTION_ALIASES = ['question', 'problematique', 'problématique', 'texte', 'formulation'];
+
+/** Clés d'une formulation qui peuvent porter la justification du problème. */
+const FORMULATION_JUSTIFICATION_ALIASES = [
+  'justificationProbleme',
+  'justification_probleme',
+  'justification',
+  'pourquoi',
+  'raison',
+  'raisons',
+  'enjeu',
+  'explication',
+  'contexte',
+  'motivation',
+];
+
+/**
+ * `justification_recommandation` justifie la PRÉCONISATION, pas le problème
+ * d'entreprise : la mapper sur `justificationProbleme` ferait passer un texte
+ * de solution pour un diagnostic. On la conserve donc comme champ SECONDAIRE
+ * dédié, en camelCase, sans jamais l'utiliser pour débloquer le core.
+ */
+const CHAMP_JUSTIFICATION_RECOMMANDATION = 'justificationRecommandation';
 
 /** Récupère la première valeur non vide parmi les alias camelCase d'un champ. */
 function valeurParAlias(source, champ) {
@@ -151,11 +188,152 @@ function estAliasConnu(cle) {
 }
 
 /**
+ * Extrait le core (question + justification) d'une liste de `formulations`.
+ *
+ * Fonction PURE et testable : c'est elle qui porte la rétrocompatibilité avec
+ * l'ancien format que le modèle continue de produire. Elle parcourt TOUTES les
+ * formulations et retient la première qui porte une vraie question ET une
+ * justification : la première peut n'avoir qu'une question, une suivante être
+ * complète. Une formulation réduite à une question ne clôt donc pas la
+ * recherche de la justification.
+ *
+ * Aucun contenu n'est inventé : une clé absente reste absente.
+ *
+ * @param {Array} formulations liste brute issue de la réponse du modèle
+ * @param {{ question?: string, justificationProbleme?: string }} dejaConnus
+ *        valeurs déjà présentes à la racine : elles ne sont JAMAIS écrasées
+ * @returns {{ problematique: string|null, justificationProbleme: string|null,
+ *             formulationCount: number, formulationIndexUsed: number|null,
+ *             questionIndex: number|null }}
+ */
+function extractCoreFromFormulations(formulations, dejaConnus = {}) {
+  const liste = Array.isArray(formulations)
+    ? formulations.filter((f) => f && typeof f === 'object' && !Array.isArray(f))
+    : [];
+  const resultat = {
+    problematique: null,
+    justificationProbleme: null,
+    formulationCount: liste.length,
+    formulationIndexUsed: null,
+    questionIndex: null,
+  };
+  if (liste.length === 0) return resultat;
+
+  const lireQuestion = (f) =>
+    FORMULATION_QUESTION_ALIASES.map((cle) => f[cle]).find((v) => chaineNonVide(v)) || null;
+  const lireJustification = (f) =>
+    FORMULATION_JUSTIFICATION_ALIASES.map((cle) => f[cle]).find((v) => chaineNonVide(v)) || null;
+
+  // Une question ne compte que si c'est VRAIMENT une question : une formulation
+  // qui ne porte qu'un titre ne doit pas être promue en problématique.
+  const estVraieQuestion = (texte) => typeof texte === 'string' && texte.trim().endsWith('?');
+
+  let questionSeule = null;
+  let questionSeuleIndex = null;
+
+  for (let i = 0; i < liste.length; i += 1) {
+    const question = lireQuestion(liste[i]);
+    const justification = lireJustification(liste[i]);
+    if (question && estVraieQuestion(question) && justification) {
+      resultat.problematique = String(question).trim();
+      resultat.justificationProbleme = String(justification).trim();
+      resultat.formulationIndexUsed = i;
+      resultat.questionIndex = i;
+      return resultat;
+    }
+    // Question exploitable sans justification : on la garde en réserve mais on
+    // CONTINUE de chercher une formulation complète.
+    if (!questionSeule && question && estVraieQuestion(question)) {
+      questionSeule = String(question).trim();
+      questionSeuleIndex = i;
+    }
+  }
+
+  // Aucune formulation complète : la question seule est promue si la racine n'a
+  // rien, la justification reste absente (le core sera donc rejeté, avec le bon
+  // code — jamais un générique ambigu).
+  if (!chaineNonVide(dejaConnus.problematique) && questionSeule) {
+    resultat.problematique = questionSeule;
+    resultat.questionIndex = questionSeuleIndex;
+  }
+  return resultat;
+}
+
+/** Clés sous lesquelles l'analyse d'une session peut porter une tension. */
+const CLES_TENSION_ANALYSE = ['tensions', 'contradictions', 'tensionsContradictions', 'enjeux'];
+
+const CLES_TEXTE_TENSION = [
+  'texte',
+  'tension',
+  'contradiction',
+  'libelle',
+  'label',
+  'intitule',
+  'description',
+  'enjeu',
+  'resume',
+  'titre',
+];
+
+/**
+ * Récupère une tension DÉJÀ ÉCRITE dans l'analyse validée de la session.
+ *
+ * Règle non négociable : on ne reformule rien, on ne résume rien, on n'invente
+ * rien. On prend le premier texte non vide réellement présent dans les
+ * structures connues de l'analyse. Si l'analyse n'en contient aucun, on renvoie
+ * `null` : le core restera invalide et le rejet 422 explicite.
+ *
+ * @returns {string|null}
+ */
+function extraireTensionAnalyse(analyse) {
+  if (!analyse || typeof analyse !== 'object' || Array.isArray(analyse)) return null;
+
+  const premierTexte = (element) => {
+    if (chaineNonVide(element)) return String(element).trim();
+    if (!element || typeof element !== 'object' || Array.isArray(element)) return null;
+    for (const cle of CLES_TEXTE_TENSION) {
+      if (chaineNonVide(element[cle])) return String(element[cle]).trim();
+    }
+    return null;
+  };
+
+  for (const cle of CLES_TENSION_ANALYSE) {
+    const valeur = analyse[cle];
+    if (!valeur) continue;
+    const elements = Array.isArray(valeur) ? valeur : [valeur];
+    for (const element of elements) {
+      const texte = premierTexte(element);
+      if (texte) return texte;
+    }
+  }
+  return null;
+}
+
+/**
+ * Récupère une tension exploitable : d'abord celle du contrat (avec tous ses
+ * alias), sinon celle de l'analyse sauvegardée. On ne devine jamais.
+ *
+ * @returns {{ tension: string, tensionSource: 'contract'|'analysis'|'missing' }}
+ */
+function resoudreTension(contrat, analyse) {
+  const duContrat = valeurParAlias(contrat, 'tension');
+  if (chaineNonVide(duContrat)) {
+    return { tension: String(duContrat).trim(), tensionSource: 'contract' };
+  }
+  const deLAnalyse = extraireTensionAnalyse(analyse);
+  if (chaineNonVide(deLAnalyse)) {
+    return { tension: String(deLAnalyse).trim(), tensionSource: 'analysis' };
+  }
+  return { tension: '', tensionSource: 'missing' };
+}
+
+/**
  * Applique le map de compatibilité sur l'objet brut : chaque champ canonique est
  * écrit en camelCase, les clés d'alias sont supprimées pour ne pas laisser de
  * doublons dans le contrat stocké.
  *
- * @returns {{ promotions: string[], aliasUtilises: string[] }} pour le diagnostic
+ * @returns {{ promotions: string[], aliasUtilises: string[], formulationCount: number,
+ *             formulationIndexUsed: number|null, justificationSource: string }}
  */
 function appliquerAlias(objet) {
   const promotions = [];
@@ -182,37 +360,40 @@ function appliquerAlias(objet) {
     });
   });
 
-  // Ancien format `formulations: [{ question, justification }]`.
+  // Ancien format `formulations: [{ question, justification }]` : on cherche une
+  // formulation COMPLÈTE, pas seulement la première.
   const formulations = ALIAS_FORMULATIONS.map((cle) => objet[cle]).find((v) => Array.isArray(v) && v.length > 0);
-  if (formulations) {
-    const premiere = formulations.find((f) => f && typeof f === 'object' && !Array.isArray(f)) || null;
-    if (premiere) {
-      if (!chaineNonVide(objet.problematique)) {
-        const question = [premiere.question, premiere.problematique, premiere.formulation, premiere.titre].find(
-          (v) => chaineNonVide(v)
-        );
-        if (question) {
-          objet.problematique = String(question).trim();
-          promotions.push('problematique←formulations[0].question');
-        }
-      }
-      if (!chaineNonVide(objet.justificationProbleme)) {
-        const justification = [
-          premiere.justification,
-          premiere.justificationProbleme,
-          premiere.justification_probleme,
-          premiere.pourquoi,
-        ].find((v) => chaineNonVide(v));
-        if (justification) {
-          objet.justificationProbleme = String(justification).trim();
-          promotions.push('justificationProbleme←formulations[0].justification');
-        }
-      }
-    }
-    ALIAS_FORMULATIONS.forEach((cle) => delete objet[cle]);
-  }
+  let formulationCount = 0;
+  let formulationIndexUsed = null;
+  let justificationSource = 'missing';
+  const justificationRacine = chaineNonVide(objet.justificationProbleme);
 
-  return { promotions, aliasUtilises };
+  if (Array.isArray(formulations)) {
+    formulationCount = formulations.filter((f) => f && typeof f === 'object' && !Array.isArray(f)).length;
+    const extrait = extractCoreFromFormulations(formulations, {
+      problematique: objet.problematique,
+      justificationProbleme: objet.justificationProbleme,
+    });
+    formulationIndexUsed = extrait.formulationIndexUsed;
+
+    // La RACINE est prioritaire : une `problematique` ou une
+    // `justificationProbleme` déjà présente n'est jamais écrasée.
+    if (!chaineNonVide(objet.problematique) && extrait.problematique) {
+      objet.problematique = extrait.problematique;
+      promotions.push(`problematique←formulations[${extrait.questionIndex}].question`);
+    }
+    if (!justificationRacine && extrait.justificationProbleme) {
+      objet.justificationProbleme = extrait.justificationProbleme;
+      promotions.push(`justificationProbleme←formulations[${extrait.formulationIndexUsed}].justification`);
+      justificationSource = 'formulation';
+    }
+  }
+  // La clé canonique déjà présente à la racine reste prioritaire sur la promotion.
+  if (justificationRacine) justificationSource = 'contract';
+
+  ALIAS_FORMULATIONS.forEach((cle) => delete objet[cle]);
+
+  return { promotions, aliasUtilises, formulationCount, formulationIndexUsed, justificationSource };
 }
 
 /**
@@ -376,12 +557,17 @@ const MESSAGE_COMPLETUDE =
  * rien » : une clé secondaire oubliée n'empêche plus d'afficher et de valider la
  * problématique.
  *
+ * @param {string} rawModelContent réponse brute du modèle
+ * @param {{ analyse?: object }} [options] analyse validée de la session : sert
+ *        UNIQUEMENT de source de repli pour la tension (jamais de contenu
+ *        inventé, jamais de reformulation).
  * @returns {{ ok: true, contract: object, missingSecondaryFields: string[], diagnostic: object }
  *          | { ok: false, type: 'INVALID_LLM_JSON'|'INVALID_CONTRACT_SCHEMA',
  *              internalReason: string, manquants: string[], coreFieldsPresent: object,
  *              diagnostic: object }}
  */
-function parseAndValidateContract(rawModelContent) {
+function parseAndValidateContract(rawModelContent, options = {}) {
+  const analyse = options && typeof options.analyse === 'object' ? options.analyse : null;
   const brut = typeof rawModelContent === 'string' ? rawModelContent : String(rawModelContent ?? '');
   const diagnostic = diagnostiquer(brut);
 
@@ -432,7 +618,19 @@ function parseAndValidateContract(rawModelContent) {
   // Compatibilité de nommage AVANT toute validation : un `justification_probleme`
   // ou un ancien `formulations[{ question, justification }]` ne doit JAMAIS
   // provoquer un rejet, ni une régénération inutile.
-  const { promotions, aliasUtilises } = appliquerAlias(objet);
+  const { promotions, aliasUtilises, formulationCount, formulationIndexUsed, justificationSource } =
+    appliquerAlias(objet);
+
+  // Tension : si la réponse Passe A n'en porte aucune (même via ses alias), on
+  // récupère celle DÉJÀ ÉCRITE dans l'analyse validée de la session. Aucune
+  // reformulation, aucune invention : si l'analyse n'en contient pas, la tension
+  // reste vide et le rejet 422 reste explicite.
+  const { tension, tensionSource } = resoudreTension(objet, analyse);
+  if (tensionSource === 'analysis' && !chaineNonVide(objet.tension)) {
+    objet.tension = tension;
+    promotions.push('tension←analyse');
+  }
+
   const normalizedTopLevelKeys = Object.keys(objet);
 
   const coreFieldsPresent = champsCorePresents(objet);
@@ -444,6 +642,10 @@ function parseAndValidateContract(rawModelContent) {
     normalizedTopLevelKeys,
     aliasUsed: aliasUtilises,
     promotions,
+    tensionSource,
+    justificationSource,
+    formulationCount,
+    formulationIndexUsed,
   };
 
   if (!ok) {
@@ -474,8 +676,16 @@ module.exports = {
   champsCorePresents,
   retirerFences,
   extrairePremierObjet,
+  appliquerAlias,
+  extractCoreFromFormulations,
+  extraireTensionAnalyse,
+  resoudreTension,
   FIELD_ALIASES,
   ALIAS_FORMULATIONS,
+  FORMULATION_QUESTION_ALIASES,
+  FORMULATION_JUSTIFICATION_ALIASES,
+  CHAMP_JUSTIFICATION_RECOMMANDATION,
+  CLES_TENSION_ANALYSE,
   estAliasConnu,
   CHAMPS_CORE,
   CHAMPS_SECONDAIRES,

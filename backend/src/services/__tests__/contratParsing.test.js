@@ -10,7 +10,10 @@ const {
   FIELD_ALIASES,
   ALIAS_FORMULATIONS,
   estAliasConnu,
+  extraireTensionAnalyse,
+  CHAMP_JUSTIFICATION_RECOMMANDATION,
 } = require('../contratParsing');
+const { verifierContrat, REJETS_CORE } = require('../contratVerification');
 
 /** Contrat de référence conforme au schéma attendu par la Passe A. */
 function contratBrut() {
@@ -289,15 +292,18 @@ test('ancien format formulations sans question exploitable : échec de schéma, 
   assert.strictEqual(res.ok, false);
   // Réponse d'un ancien prompt mais JSON lisible → échec de SCHÉMA, jamais de JSON.
   assert.strictEqual(res.type, ERREUR_SCHEMA);
-  // La tension manque, et la pseudo-question promue n'est pas une vraie question.
+  // La tension manque. Un simple intitulé n'est PAS une question : il n'est pas
+  // promu, et une justification SANS question ne peut pas débloquer le core.
   assert.ok(res.manquants.includes('tension'));
-  assert.ok(res.manquants.some((m) => m.startsWith('problematique')));
-  // `coreFieldsPresent` reflète la PRÉSENCE d'une chaîne non vide : la
-  // justification a bien été promue depuis `formulations`, seule la question
-  // promue échoue (elle ne se termine pas par « ? »).
+  assert.ok(res.manquants.includes('problematique'));
+  assert.ok(res.manquants.includes('justificationProbleme'));
   assert.strictEqual(res.coreFieldsPresent.tension, false);
-  assert.strictEqual(res.coreFieldsPresent.problematique, true);
-  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, true);
+  assert.strictEqual(res.coreFieldsPresent.problematique, false);
+  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, false);
+  // Aucune formulation n'a été retenue : la provenance le dit explicitement.
+  assert.strictEqual(res.diagnostic.justificationSource, 'missing');
+  assert.strictEqual(res.diagnostic.formulationCount, 1);
+  assert.strictEqual(res.diagnostic.formulationIndexUsed, null);
   // Le diagnostic permet de distinguer « clés inconnues » de « champs vides ».
   assert.ok(res.diagnostic.rawTopLevelKeys.includes('formulations'));
 });
@@ -393,4 +399,262 @@ test('map d’alias : variantes héritées reconnues, sortie toujours en camelCa
   assert.strictEqual(res.contract.recommendations, undefined);
   assert.strictEqual(res.contract.preconisations.length, 1);
   assert.strictEqual(res.contract.motsCles.length, 1);
+});
+
+// --- Format réellement observé en production (log Railway) ------------------
+// Le modèle renvoie `ligne_directrice` + `formulations` + `recommandation` +
+// `justification_recommandation` : la question est dans `formulations[*].question`
+// et la justification dans la même formulation. La tension, elle, n'est pas dans
+// la réponse : elle est reprise de l'analyse déjà validée de la session.
+// Fixtures anonymisées : aucun sujet réel, aucune donnée de session de recette.
+
+/** Réponse Passe A telle que produite en production (structure, pas contenu réel). */
+function contratFormatProduction() {
+  return {
+    ligne_directrice: 'Cadrer les usages avant de généraliser les outils.',
+    formulations: [
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative dans ses processus métiers tout en protégeant ses données sensibles et la fiabilité de ses décisions ?',
+        justification:
+          'Les PME doivent concilier gains de productivité, confidentialité des données et fiabilité des décisions, avec peu de ressources internes.',
+      },
+    ],
+    recommandation: 'Établir une charte d’usage et une revue des cas à risque.',
+    justification_recommandation: 'Une charte rend les usages traçables et arbitrables.',
+  };
+}
+
+/** Analyse de session : la tension y est déjà écrite, on ne fait que la reprendre. */
+function analyseAvecTension() {
+  return {
+    tensions: [
+      'Recherche de gains rapides contre maîtrise de la confidentialité et de la fiabilité.',
+    ],
+  };
+}
+
+// --- Cas 1 : format réel + analyse porteuse de tensions ---------------------
+test('cas 1 — format réel : problematique et justification depuis formulations, tension depuis l’analyse', () => {
+  const raw = contratFormatProduction();
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+
+  assert.strictEqual(res.ok, true, 'le contrat doit être accepté');
+  // Aucun rejet CORE_CONTRACT_FIELDS_MISSING : le type d'échec n'existe plus.
+  assert.strictEqual(res.type, undefined);
+  assert.deepStrictEqual(res.manquants, undefined);
+  assert.deepStrictEqual(res.coreFieldsPresent, undefined);
+
+  // Provenances, jamais les contenus.
+  assert.strictEqual(res.diagnostic.tensionSource, 'analysis');
+  assert.strictEqual(res.diagnostic.justificationSource, 'formulation');
+
+  // La problématique et la justification viennent de la formulation complète.
+  assert.strictEqual(res.contract.problematique, raw.formulations[0].question);
+  assert.strictEqual(res.contract.justificationProbleme, raw.formulations[0].justification);
+  // La tension est celle de l'analyse, mot pour mot.
+  assert.strictEqual(res.contract.tension, analyseAvecTension().tensions[0]);
+
+  // La ligne directrice reconstruite est bien récupérée de son alias snake_case.
+  assert.strictEqual(res.contract.ligneDirectrice, raw.ligne_directrice);
+  // `justification_recommandation` reste un champ SECONDAIRE : jamais promu.
+  assert.notStrictEqual(res.contract.justificationProbleme, raw.justification_recommandation);
+  assert.strictEqual(
+    res.contract[CHAMP_JUSTIFICATION_RECOMMANDATION],
+    raw.justification_recommandation
+  );
+  // Les clés de l'ancien format ne polluent pas le contrat stocké.
+  assert.strictEqual(res.contract.formulations, undefined);
+  assert.strictEqual(res.contract.ligne_directrice, undefined);
+  assert.strictEqual(res.contract.justification_recommandation, undefined);
+
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.diagnostic.promotions.includes('tension←analyse'));
+});
+
+// --- Cas 2 : formulations[0] incomplète, formulations[1] complète -----------
+test('cas 2 — la première formulation n’a qu’une question : la complète est retenue', () => {
+  const raw = {
+    tension: 'Les PME veulent avancer vite mais redoutent une décision non fiable.',
+    formulations: [
+      { question: 'L’IA générative peut-elle aider une PME à gagner du temps ?' },
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative tout en protégeant la fiabilité de ses décisions ?',
+        justification:
+          'Sans cadre, la PME arbitre entre vitesse et fiabilité sans garde-fou documenté.',
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw));
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.diagnostic.formulationCount, 2);
+  // On ne s'arrête PAS à formulations[0] : l'index retenu est celui de la
+  // formulation qui porte effectivement question + justification.
+  assert.strictEqual(res.diagnostic.formulationIndexUsed, 1);
+  assert.strictEqual(res.contract.problematique, raw.formulations[1].question);
+  assert.strictEqual(res.contract.justificationProbleme, raw.formulations[1].justification);
+  assert.strictEqual(res.diagnostic.justificationSource, 'formulation');
+});
+
+// --- Cas 3 : question sans justification dans TOUTES les formulations -------
+test('cas 3 — questions sans justification : core invalide sur justificationProbleme', () => {
+  const raw = {
+    tension: 'Les PME veulent industrialiser l’IA mais manquent de cadre interne.',
+    formulations: [
+      { question: 'Comment une PME peut-elle encadrer les usages de l’IA générative ?' },
+      { question: 'Quels garde-fous une PME peut-elle poser sur ses données sensibles ?' },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  // La question est promue, mais l'absence de justification reste bloquante.
+  assert.ok(res.manquants.includes('justificationProbleme'));
+  assert.strictEqual(res.coreFieldsPresent.problematique, true);
+  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, false);
+  // La tension était dans le contrat : l'analyse n'a PAS à être sollicitée.
+  assert.strictEqual(res.coreFieldsPresent.tension, true);
+  assert.strictEqual(res.diagnostic.tensionSource, 'contract');
+  assert.strictEqual(res.diagnostic.justificationSource, 'missing');
+  assert.strictEqual(res.diagnostic.formulationIndexUsed, null);
+});
+
+// --- Cas 4 : justification canonique à la racine, prioritaire ---------------
+test('cas 4 — justificationProbleme à la racine : prioritaire sur la formulation', () => {
+  const raw = {
+    tension: 'Les PME doivent cadrer l’IA générative sans brider leurs équipes.',
+    problematique: 'Comment une PME peut-elle cadrer les usages de l’IA générative sans brider ses équipes ?',
+    justificationProbleme: 'Sans cadre, chaque service outille son IA en silo : le risque devient systémique.',
+    formulations: [
+      {
+        question: 'Dans quelle mesure une PME peut-elle cadrer les usages de l’IA générative ?',
+        justification: 'Texte de la formulation qui ne doit PAS gagner.',
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw));
+  assert.strictEqual(res.ok, true);
+  // Le core canonique de la racine est conservé MOT POUR MOT.
+  assert.strictEqual(res.contract.justificationProbleme, raw.justificationProbleme);
+  assert.strictEqual(res.contract.problematique, raw.problematique);
+  assert.strictEqual(res.diagnostic.justificationSource, 'contract');
+  // La formulation n'écrase JAMAIS le core déjà présent à la racine.
+  assert.notStrictEqual(res.contract.justificationProbleme, raw.formulations[0].justification);
+  assert.notStrictEqual(res.contract.problematique, raw.formulations[0].question);
+});
+
+// --- Cas 5 : tension absente du contrat ET de l'analyse ---------------------
+test('cas 5 — tension absente partout : rejet de schéma, tensionSource missing', () => {
+  const raw = {
+    formulations: [
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative tout en protégeant ses données sensibles ?',
+        justification: 'La PME doit tenir la vitesse d’adoption et la maîtrise des données avec peu de ressources.',
+      },
+    ],
+  };
+  // Analyse présente mais SANS aucune structure de tension ni de contradiction.
+  const analyse = { sujets: ['usages de l’IA générative'], contexte: [] };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  assert.ok(res.manquants.includes('tension'));
+  assert.strictEqual(res.coreFieldsPresent.tension, false);
+  assert.strictEqual(res.diagnostic.tensionSource, 'missing');
+  // Aucune tension n'a été inventée : le champ reste vide.
+  assert.strictEqual(res.contract, undefined);
+});
+
+test('cas 5bis — analyse absente : même rejet explicite, tensionSource missing', () => {
+  const res = parseAndValidateContract(JSON.stringify(contratFormatProduction()));
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  assert.deepStrictEqual(res.manquants, ['tension']);
+  assert.strictEqual(res.diagnostic.tensionSource, 'missing');
+  // La justification, elle, a bien été récupérée de la formulation.
+  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, true);
+  assert.strictEqual(res.diagnostic.justificationSource, 'formulation');
+});
+
+test('extraireTensionAnalyse : prend le premier texte réel, ignore le reste', () => {
+  // Objets riches : la clé texte reconnue est lue, elle n'est pas reformulée.
+  assert.strictEqual(
+    extraireTensionAnalyse({ contradictions: [{ texte: 'Croissance contre maîtrise du risque.' }] }),
+    'Croissance contre maîtrise du risque.'
+  );
+  assert.strictEqual(
+    extraireTensionAnalyse({ enjeux: [{ label: 'Souveraineté des données' }] }),
+    'Souveraineté des données'
+  );
+  assert.strictEqual(
+    extraireTensionAnalyse({ tensionsContradictions: ['   '] }),
+    null
+  );
+  assert.strictEqual(extraireTensionAnalyse({ autreChamp: ['du texte libre'] }), null);
+  assert.strictEqual(extraireTensionAnalyse(null), null);
+  assert.strictEqual(extraireTensionAnalyse('texte brut'), null);
+});
+
+// --- Cas 6 : core récupéré mais question de mauvaise qualité ----------------
+// Le parseur a fait son travail (core complet) : le rejet éventuel de qualité
+// appartient à contratVerification, qui renvoie PROBLEMATIC_QUALITY_REJECTED.
+test('cas 6 — core récupéré mais question invalide : le core passe, la qualité tranche', () => {
+  // AUCUNE tension dans la réponse : elle vient de l'analyse, comme en production.
+  const raw = {
+    formulations: [
+      {
+        question: 'L’IA générative est-elle utile en PME ?',
+        justification: 'Les PME n’ont pas de cadre pour arbitrer entre vitesse et confidentialité.',
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+  // Le schéma est satisfait : la question, malgré sa forme, est bien une question.
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.strictEqual(res.diagnostic.justificationSource, 'formulation');
+  assert.strictEqual(res.diagnostic.tensionSource, 'analysis');
+
+  // C'est le juge du FOND qui refuse, avec son code dédié — jamais
+  // CORE_CONTRACT_FIELDS_MISSING (le core est présent).
+  const verdict = verifierContrat({
+    sujet: 'L’IA générative dans les processus métiers des PME',
+    contrat: res.contract,
+    mode: 'creation',
+  });
+  assert.strictEqual(verdict.coreValide, false);
+  assert.ok(
+    verdict.rejetsCore.some((r) => REJETS_CORE.has(r.code)),
+    `un rejet core est attendu, obtenu : ${JSON.stringify(verdict.rejetsCore.map((r) => r.code))}`
+  );
+  // La question ne s'ouvre sur aucune amorce recevable : c'est un rejet de
+  // qualité, distinct d'un champ core manquant.
+  assert.ok(verdict.rejetsCore.some((r) => r.code === 'contrat_amorce_invalide'));
+  assert.strictEqual(verdict.rejetsCore.some((r) => r.code === 'contrat_question_absente'), false);
+  assert.strictEqual(verdict.rejetsCore.some((r) => r.code === 'contrat_tension_absente'), false);
+  assert.strictEqual(verdict.rejetsCore.some((r) => r.code === 'contrat_justification_absente'), false);
+});
+
+test('cas 6bis — copie du sujet en mode strict : rejet core, jamais un rejet de champs manquants', () => {
+  const sujet = 'La transformation digitale des PME industrielles';
+  const raw = {
+    tension: 'Les PME veulent se numériser mais leurs équipes manquent de compétences.',
+    formulations: [
+      {
+        question: `${sujet} ?`,
+        justification: 'Les PME industrielles n’ont ni profil informatique dédié ni budget disponible.',
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+  assert.strictEqual(res.ok, true);
+  // En RÉGÉNÉRATION (mode strict), la copie du sujet redevient un rejet bloquant.
+  const verdict = verifierContrat({ sujet, contrat: res.contract, mode: 'regeneration' });
+  assert.strictEqual(verdict.coreValide, false);
+  assert.ok(verdict.rejetsCore.some((r) => r.code === 'contrat_copie_sujet'));
+  // Les trois core sont présents : le rejet porte sur la qualité, pas sur un manque.
+  assert.strictEqual(res.coreFieldsPresent, undefined); // ok === true
+  assert.ok(res.contract.tension && res.contract.problematique && res.contract.justificationProbleme);
 });

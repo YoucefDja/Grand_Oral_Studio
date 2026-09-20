@@ -78,6 +78,11 @@ function logGeneration({
     ligne.normalizedTopLevelKeys = diagnosticContrat.normalizedTopLevelKeys || [];
     ligne.aliasUsed = diagnosticContrat.aliasUsed || [];
     ligne.promotions = diagnosticContrat.promotions || [];
+    // Provenance des champs core : un nom de source, jamais un contenu.
+    ligne.tensionSource = diagnosticContrat.tensionSource || 'missing';
+    ligne.justificationSource = diagnosticContrat.justificationSource || 'missing';
+    ligne.formulationCount = diagnosticContrat.formulationCount || 0;
+    ligne.formulationIndexUsed = diagnosticContrat.formulationIndexUsed ?? null;
     ligne.corePresence = diagnosticContrat.corePresence || {};
     ligne.coreMissing = diagnosticContrat.coreMissing || [];
     ligne.parseStatus = diagnosticContrat.parseStatus;

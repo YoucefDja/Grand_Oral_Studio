@@ -258,14 +258,33 @@ SCHÉMA JSON EXACT — toutes ces clés sont attendues à ce niveau racine :
   "motsCles": [{ "mot": "…", "definition": "une ligne, langage clair" }],
   "contexte": [{ "fait": "…", "source": "organisme + année" }],
   "tension": "la friction réelle que l'entreprise doit arbitrer (phrase interne, jamais affichée)",
-  "problematique": "UNE question précise, terminée par « ? »",
-  "justificationProbleme": "pourquoi c'est un problème d'entreprise aujourd'hui",
+  "formulations": [
+    {
+      "question": "UNE question précise, terminée par « ? »",
+      "justification": "pourquoi cette question pose un problème concret et actuel pour une entreprise"
+    }
+  ],
+  "problematique": "la MÊME question que formulations[0].question, mot pour mot",
+  "justificationProbleme": "la MÊME justification que formulations[0].justification, mot pour mot",
   "limitesExistant": ["ce qui existe déjà et pourquoi ça ne suffit pas face à cette tension"],
   "preconisations": [{ "action": "…", "detail": "…", "cible": "PME | ETI | grand groupe" }],
   "casEntreprises": [{ "nom": "…", "chiffre": "…", "angle": "preuve de la tension", "source": "…", "issue": "succès | échec" }],
-  "ligneDirectrice": "le fil rouge de l'oral, en une phrase",
+  "ligne_directrice": "le fil rouge de l'oral, en une phrase",
+  "recommandation": "l'action principale que tu recommandes à l'entreprise",
+  "justification_recommandation": "pourquoi cette recommandation répond à la question",
   "ouverture": "une question prospective, sans réponse"
 }
+
+RÈGLE DE FORME — "formulations" EST OBLIGATOIRE :
+Le champ formulations est obligatoire et contient au moins une formulation.
+Chaque formulation doit contenir obligatoirement :
+- question : une problématique précise terminée par ?
+- justification : une phrase expliquant le problème réel d'entreprise soulevé par cette question.
+
+N'écris jamais une formulation avec une question seule.
+Si tu ne peux pas justifier la question à partir des sources fournies, retourne une chaîne vide mais conserve la clé justification.
+
+"ligne_directrice", "recommandation" et "justification_recommandation" sont des champs SECONDAIRES : produis-les quand les sources le permettent, mais ne t'appuie jamais sur eux pour porter la tension, la question ou la justification du problème.
 
 Réponds exclusivement avec UN objet JSON valide RFC 8259. N'ajoute aucun texte, aucun commentaire, aucune balise Markdown. Utilise uniquement des guillemets doubles " pour les clés et les chaînes. N'utilise jamais d'apostrophe simple en guise de guillemet.`.trim();
 

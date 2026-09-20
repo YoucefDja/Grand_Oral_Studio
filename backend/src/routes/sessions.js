@@ -194,6 +194,14 @@ function construireDiagnosticContrat(resultat, contexte = {}) {
       : [],
     aliasUsed: Array.isArray(diagnostic.aliasUsed) ? diagnostic.aliasUsed : [],
     promotions: Array.isArray(diagnostic.promotions) ? diagnostic.promotions : [],
+    // Provenance des champs core reconstruits : jamais de contenu, seulement
+    // d'où vient la valeur ('contract', 'analysis', 'formulation' ou 'missing').
+    tensionSource: diagnostic.tensionSource || 'missing',
+    justificationSource: diagnostic.justificationSource || 'missing',
+    formulationCount: Number.isFinite(diagnostic.formulationCount) ? diagnostic.formulationCount : 0,
+    formulationIndexUsed: Number.isInteger(diagnostic.formulationIndexUsed)
+      ? diagnostic.formulationIndexUsed
+      : null,
     corePresence,
     coreMissing,
     secondaryMissing: missingSecondaryFields,
@@ -473,7 +481,13 @@ router.post(
           // qui produisait le pseudo-JSON à guillemets simples.
           const raw = await generateDeepseek(system, user, { temperature: 0.2, jsonObject: true });
           contexteLog.taille = raw.length;
-          const resultat = parseAndValidateContract(raw);
+          // L'analyse validée de la session sert de SEULE source de repli pour la
+          // tension : le modèle renvoie encore régulièrement une structure héritée
+          // sans `tension`, alors que l'étape 1 en a déjà produit une. On ne
+          // reformule rien, on réutilise un texte existant — ou on rejette.
+          const resultat = parseAndValidateContract(raw, {
+            analyse: session.data && session.data.analyse,
+          });
           // Diagnostic exploitable côté serveur : quelles clés sont réellement
           // reçues, lesquelles manquent. Aucun contenu métier n'est journalisé.
           diagnosticContrat = construireDiagnosticContrat(resultat, {

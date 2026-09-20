@@ -555,6 +555,7 @@ module.exports = {
   jetonsPleins,
   motsClesDe,
   textePreconisations,
+  REJETS_CORE,
   AMORCES_VALIDES,
   AMORCES_MOLLES,
   CONTRAINTES,
