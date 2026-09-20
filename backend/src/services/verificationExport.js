@@ -237,7 +237,9 @@ function diagnostiquerFilRouge(session) {
   const ajouter = (code, message) => constats.push({ code, message });
 
   // ---- Contrat métier validé (Passe A) ----
-  if (!contrat.valide) {
+  // Source de vérité unique : le statut canonique (domain/contratPasseA.js).
+  // `contrat.valide` (ancien booléen) n'est plus lu comme contrat métier.
+  if (contrat.status !== 'validated') {
     ajouter(
       'contrat_non_valide',
       "Le contrat métier (Passe A) n'est pas validé : valide la tension et la problématique à l'écran de validation avant d'exporter le support."
@@ -459,6 +461,14 @@ function observer(session, filRouge) {
   // La justification est considérée présente si elle est explicitement
   // renseignée, OU si le problème est démontré (réel, actuel, chiffré, d'entreprise)
   // dans le contexte, les enjeux, l'existant ou la conclusion.
+  //
+  // Lecture du contrat AVANT toute fonction qui l'utilise : `justification` est
+  // consommée par le calcul ci-dessous. La déclarer plus bas (à côté des autres
+  // champs du contrat) provoquait une ReferenceError de zone morte temporelle
+  // (« Cannot access 'justification' before initialization »), remontée brute à
+  // l'utilisateur au moment de la vérification d'export.
+  const justification = String(contrat.justificationProbleme || '').trim();
+
   const texteAnalyse = aplatir(analyse);
   const texteContrat = aplatir(contrat);
   const textePlan = aplatir(plan);
@@ -498,7 +508,6 @@ function observer(session, filRouge) {
   // ---- Contrat métier (Passe A) ----
   const questionContrat = String(contrat.problematique || '').trim();
   const tensionContrat = String(contrat.tension || '').trim();
-  const justification = String(contrat.justificationProbleme || '').trim();
   const limitesExistant = liste(contrat.limitesExistant);
   const preconisations = liste(contrat.preconisations);
   const casContrat = liste(contrat.casEntreprises);

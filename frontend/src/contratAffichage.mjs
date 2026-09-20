@@ -2,12 +2,13 @@
  * Règles PURES d'affichage du contrat métier (Passe A) côté frontend.
  *
  * Module sans dépendance React/DOM, donc testable hors ligne. Un contrat est
- * affichable/validable dès que les DEUX champs du noyau sont présents (tension,
- * problématique). `justificationProbleme` est désormais FACULTATIF à l'étape
- * Passe A : son absence est signalée comme un élément à approfondir, jamais
- * comme une erreur bloquante. Le contrôle strict est déplacé à l'export.
- * Les sections secondaires vides restent affichées avec un statut explicite,
- * jamais « undefined ».
+ * affichable/validable dès que le SERVEUR le déclare (`status: 'generated'` ou
+ * `'validated'`) : la complétude (`completeness.passeAValid`) n'est qu'une
+ * information secondaire, jamais un filtre d'affichage. `justificationProbleme`
+ * est FACULTATIF à l'étape Passe A : son absence est signalée comme un élément à
+ * approfondir, jamais comme une erreur bloquante. Le contrôle strict est
+ * déplacé à l'export. Les sections secondaires vides restent affichées avec un
+ * statut explicite, jamais « undefined ».
  */
 
 /** Statuts d'une section vide, alignés sur les libellés i18n. */
@@ -16,6 +17,9 @@ export const STATUTS_SECTION = {
   NON_GENERE: 'nonGenere',
   AUCUN_CAS: 'aucunCas',
 };
+
+/** Statuts canoniques du contrat, miroir de `backend/src/domain/contratPasseA.js`. */
+export const STATUTS_CONTRAT = { GENERATED: 'generated', VALIDATED: 'validated' };
 
 /** Marqueurs d'une valeur non exploitable : jamais affichés à l'étudiant. */
 const VALEURS_INTERDITES = new Set(['undefined', 'null', '[object Object]']);
@@ -36,15 +40,16 @@ export function construireVueContrat(contrat) {
   const c = contrat && typeof contrat === 'object' ? contrat : {};
   const completeness = c.completeness && typeof c.completeness === 'object' ? c.completeness : {};
 
-  // Noyau : tension + problématique. La justification n'entre PLUS dans la
-  // validité du core (elle est facultative à l'étape Passe A).
-  const isCoreValid =
-    completeness.isCoreValid === true ||
-    (estTexteNonVide(c.problematique) && estTexteNonVide(c.tension));
+  // Un contrat est affichable dès que le serveur le déclare généré ou validé.
+  const etat = typeof c.status === 'string' ? c.status : '';
+  const affichable = etat === STATUTS_CONTRAT.GENERATED || etat === STATUTS_CONTRAT.VALIDATED;
+  const valide = etat === STATUTS_CONTRAT.VALIDATED;
 
-  const editable = Boolean(isCoreValid && estTexteNonVide(c.problematique) && estTexteNonVide(c.tension));
+  // Noyau métier : tension + problématique (seuls bloquants de la Passe A).
+  // La justification n'entre PAS dans la validité du core.
+  const noyauComplet = estTexteNonVide(c.problematique) && estTexteNonVide(c.tension);
 
-  const missingSecondaryFields = tableauSur(completeness.missingSecondaryFields).filter(
+  const missingFields = tableauSur(completeness.missingFields).filter(
     (champ) => typeof champ === 'string' && champ.length > 0
   );
 
@@ -55,12 +60,13 @@ export function construireVueContrat(contrat) {
   const justificationAFournir = justificationProbleme.trim() === '';
 
   return {
-    isCoreValid,
-    editable,
-    valide: c.valide === true,
+    affichable,
+    valide,
+    noyauComplet,
+    editable: affichable,
     justificationProbleme,
     justificationAFournir,
-    missingSecondaryFields,
+    missingFields,
     motsCles: tableauSur(c.motsCles),
     contexte: tableauSur(c.contexte),
     limites: tableauSur(c.limitesExistant),

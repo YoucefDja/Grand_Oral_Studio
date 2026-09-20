@@ -20,17 +20,32 @@ function sessionAvecContratValide() {
   return {
     currentStep: 2,
     ligneDirectrice: 'La transformation passe par les compétences internes.',
+    workflow: {
+      analysis: 'generated',
+      contract: 'validated',
+      plan: 'generated',
+      glossary: 'validated',
+      support: 'generated',
+      export: 'blocked',
+    },
     data: {
       analyse: { segments: ['un', 'deux'] },
       contrat: {
+        version: 1,
+        status: 'validated',
+        generatedAt: new Date('2026-01-01T00:00:00Z'),
+        validatedAt: new Date('2026-01-02T00:00:00Z'),
         tension: 'Tension validée par l’étudiant.',
         problematique: 'Comment une PME peut-elle se numériser sans recruter ?',
         justificationProbleme: 'Le coût du maintien dépasse le budget de recrutement.',
         limitesExistant: ['ERP limité à la comptabilité.'],
         preconisations: [{ action: 'Numériser par étapes' }],
+        casEntreprises: [],
+        motsCles: [],
+        contexte: [],
         ligneDirectrice: 'La transformation passe par les compétences internes.',
         ouverture: 'Former ou recruter ?',
-        valide: true,
+        completeness: { passeAValid: true, missingFields: [] },
       },
       plan: { sections: ['I', 'II'] },
       support: { slides: new Array(20).fill({}) },
@@ -61,7 +76,7 @@ test('pseudo-JSON LLM : échec contrôlé, la session et son contrat validé son
   // La session n'a été ni mutée ni sauvegardée.
   assert.strictEqual(JSON.stringify(session), empreinteAvant);
   assert.strictEqual(JSON.stringify(session.data.contrat), contratAvant);
-  assert.strictEqual(session.data.contrat.valide, true);
+  assert.strictEqual(session.data.contrat.status, 'validated');
 });
 
 test('erreur fournisseur : échec contrôlé, contrat validé conservé et toujours valide', () => {
@@ -75,7 +90,7 @@ test('erreur fournisseur : échec contrôlé, contrat validé conservé et toujo
   );
 
   assert.strictEqual(err.status, 503);
-  assert.strictEqual(session.data.contrat.valide, true);
+  assert.strictEqual(session.data.contrat.status, 'validated');
   assert.strictEqual(session.data.support.slides.length, 20); // étapes aval intactes
 });
 
@@ -90,18 +105,20 @@ test('appliquerContratPasseA : nouveau contrat écrit, contrat valide marqué à
     preconisations: [],
     ligneDirectrice: 'Nouveau fil rouge',
     ouverture: 'Nouvelle ouverture ?',
-    valide: true,
   };
 
   const res = appliquerContratPasseA(session, nouveau, estObjetNonVide);
 
   assert.strictEqual(res.regenere, true);
   assert.strictEqual(session.data.contrat.problematique, 'Nouvelle question ?');
-  // Le nouveau contrat doit être revalidé par l'étudiant : jamais hérité à true.
-  assert.strictEqual(session.data.contrat.valide, false);
+  // Le nouveau contrat doit être revalidé par l'étudiant : jamais hérité à
+  // `validated`. La seule source de vérité est `status`.
+  assert.strictEqual(session.data.contrat.status, 'generated');
+  assert.strictEqual(session.workflow.contract, 'generated');
   // Les étapes aval bâties sur l'ancien contrat sont invalidées (pas supprimées).
   assert.deepStrictEqual(session.data.plan, {});
   assert.deepStrictEqual(session.data.support, {});
+  assert.strictEqual(session.workflow.support, 'empty');
 });
 
 test('appliquerContratPasseA : première génération, aucune étape aval à invalider', () => {
@@ -131,5 +148,5 @@ test('la fonction d’écriture n’est jamais appelée avec un contrat non pars
   // visible, pas une écriture silencieuse qui détruirait le contrat en place.
   const session = sessionAvecContratValide();
   assert.throws(() => appliquerContratPasseA(session, undefined, estObjetNonVide));
-  assert.strictEqual(session.data.contrat.valide, true);
+  assert.strictEqual(session.data.contrat.status, 'validated');
 });

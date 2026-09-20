@@ -94,6 +94,9 @@ export async function messageErreur(res) {
     if (data && data.error && typeof data.error.message === 'string') {
       const err = new Error(data.error.message);
       if (typeof data.error.code === 'string') err.code = data.error.code;
+      // Prérequis manquants (ex. SUPPORT_NOT_READY) : transmis tel quel pour
+      // que l'UI affiche une checklist française et un bouton de retour.
+      if (Array.isArray(data.error.missing)) err.missing = data.error.missing;
       const requestId =
         typeof data.error.requestId === 'string' && data.error.requestId.trim()
           ? data.error.requestId.trim()
@@ -143,18 +146,12 @@ export async function downloadSupportPrompt(
     throw new Error('Impossible de joindre le serveur pour l’export du prompt.');
   }
   if (!res.ok) {
-    let message = `Erreur ${res.status}`;
-    try {
-      const data = await res.json();
-      if (data && data.message) message = data.message;
-    } catch {
-      /* non JSON */
-    }
+    const err = await messageErreur(res);
     if (res.status === 401) {
       clearAuth();
       window.dispatchEvent(new Event('grand_oral_studio:logout'));
     }
-    throw new Error(message);
+    throw err;
   }
   const blob = await res.blob();
   const disposition = res.headers.get('Content-Disposition') || '';
@@ -199,18 +196,12 @@ export async function downloadPptx(sessionId, fallbackName = 'presentation-grand
     throw new Error('Impossible de joindre le serveur pour l’export .pptx.');
   }
   if (!res.ok) {
-    let message = `Erreur ${res.status}`;
-    try {
-      const data = await res.json();
-      if (data && data.message) message = data.message;
-    } catch {
-      /* non JSON */
-    }
+    const err = await messageErreur(res);
     if (res.status === 401) {
       clearAuth();
       window.dispatchEvent(new Event('grand_oral_studio:logout'));
     }
-    throw new Error(message);
+    throw err;
   }
   const blob = await res.blob();
   const disposition = res.headers.get('Content-Disposition') || '';

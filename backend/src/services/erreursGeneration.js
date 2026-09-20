@@ -148,6 +148,17 @@ const MESSAGES_ERREUR = {
     status: 500,
     message: 'Le contrat a été généré mais n’a pas pu être enregistré. Réessayez.',
   },
+  // Prérequis de workflow non satisfaits : la réponse porte la liste `missing`
+  // pour que l'UI affiche une checklist lisible et un retour vers l'étape
+  // concernée, sans jamais exposer d'erreur technique.
+  SUPPORT_NOT_READY: {
+    status: 409,
+    message: 'Le support ne peut pas encore être généré.',
+  },
+  EXPORT_NOT_READY: {
+    status: 409,
+    message: 'L’export n’est pas encore possible.',
+  },
   INTERNAL_ERROR: {
     status: 500,
     message: 'Une erreur interne est survenue pendant la génération. Réessayez.',
@@ -181,6 +192,9 @@ function erreurGenerationControlee(err, contexte = {}) {
     // Le requestId suit l'erreur jusqu'au handler global, qui le renvoie au
     // frontend : c'est la clé de corrélation avec cette ligne de log.
     if (contexte.requestId) controlee.requestId = contexte.requestId;
+    // Liste des prérequis manquants (workflow) : donnée fonctionnelle, jamais
+    // technique, transmise à l'UI sous forme de checklist.
+    if (Array.isArray(err.missing)) controlee.missing = err.missing;
     return controlee;
   }
 

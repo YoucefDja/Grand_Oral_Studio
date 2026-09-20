@@ -136,50 +136,66 @@ test('referenceErreur → libellé discret, et rien du tout sans requestId', () 
   assert.strictEqual(referenceErreur({ requestId: 42 }), null);
 });
 
-// --- Correctif Passe A : contrat core valide avec sections secondaires vides --
+// --- Correctif Passe A : contrat canonique affichable ------------------------
 //
-// On teste le module PUR `contratAffichage.mjs` (aucun import React/DOM). Les cas
-// couverts sont ceux du cahier des charges : un contrat dont seuls les trois
-// champs fondamentaux sont présents doit rester affichable/validable, et aucune
-// section vide ne doit produire « undefined » à l'écran.
+// On teste le module PUR `contratAffichage.mjs` (aucun import React/DOM). Le
+// contrat suit désormais le format canonique : c'est `status` ('generated' ou
+// 'validated') qui décide de l'affichage, jamais une complétude recalculée
+// localement. Aucune section vide ne doit produire « undefined » à l'écran.
 
-test('contrat core valide : affichable et validable malgré les secondaires vides', () => {
+test('contrat canonique généré : affichable et éditable malgré les secondaires vides', () => {
   const contrat = {
+    version: 1,
+    status: 'generated',
     tension: 'Les PME veulent intégrer l’IA, mais craignent de perdre la confidentialité des données.',
     problematique:
       'Comment une PME peut-elle intégrer l’IA générative sans compromettre la confidentialité de ses données ?',
     justificationProbleme: 'Le sujet de la confidentialité revient dans toutes les sources du dossier.',
     motsCles: [],
+    contexte: [],
     limitesExistant: [],
     preconisations: [],
     casEntreprises: [],
     ligneDirectrice: '',
     ouverture: '',
     completeness: {
-      isCoreValid: true,
-      missingSecondaryFields: ['limitesExistant', 'casEntreprises', 'ouverture'],
-      message: 'La problématique est exploitable. Certains éléments seront complétés ensuite.',
+      passeAValid: true,
+      missingFields: ['limitesExistant', 'casEntreprises', 'ouverture'],
     },
   };
   const vue = construireVueContrat(contrat);
-  assert.strictEqual(vue.isCoreValid, true);
+  assert.strictEqual(vue.affichable, true);
   assert.strictEqual(vue.editable, true);
+  assert.strictEqual(vue.valide, false, 'un contrat généré n’est pas validé');
   assert.deepStrictEqual(vue.motsCles, []);
   assert.deepStrictEqual(vue.contexte, []);
   assert.deepStrictEqual(vue.limites, []);
   assert.deepStrictEqual(vue.preconisations, []);
   assert.deepStrictEqual(vue.cas, []);
-  assert.ok(vue.missingSecondaryFields.includes('casEntreprises'));
+  assert.ok(vue.missingFields.includes('casEntreprises'));
 });
 
-test('contrat core incomplet : non affichable (aucun contrat métier présenté)', () => {
+test('contrat canonique validé : affichable et marqué validé', () => {
+  const vue = construireVueContrat({
+    version: 1,
+    status: 'validated',
+    tension: 'Une tension.',
+    problematique: 'Comment faire ?',
+  });
+  assert.strictEqual(vue.affichable, true);
+  assert.strictEqual(vue.valide, true);
+});
+
+test('contrat non généré : non affichable (aucun contrat métier présenté)', () => {
   const vue = construireVueContrat({ tension: 'Une tension seule, sans question.' });
-  assert.strictEqual(vue.isCoreValid, false);
+  assert.strictEqual(vue.affichable, false);
   assert.strictEqual(vue.editable, false);
 });
 
 test('contrat secondaire incomplet : aucune fuite « undefined » dans les sections', () => {
   const vue = construireVueContrat({
+    version: 1,
+    status: 'generated',
     tension: 'Tension présente.',
     problematique: 'Comment faire ?',
     justificationProbleme: 'Justification présente.',
@@ -192,49 +208,55 @@ test('contrat secondaire incomplet : aucune fuite « undefined » dans les secti
 
 // --- Justification non bloquante (Passe A) ---------------------------------
 //
-// Règle : la justification n'est PLUS un champ du noyau. Un contrat est
-// affichable et validable dès que tension + problématique sont présentes ; quand
-// la justification est vide, l'interface montre un encadré d'approfondissement
+// Règle : la justification n'est PAS un champ bloquant de la Passe A. Un contrat
+// est affichable et validable dès que le serveur le déclare généré ; quand la
+// justification est vide, l'interface montre un encadré d'approfondissement
 // (jamais une erreur rouge, jamais « undefined »/« null »/texte technique).
 
 test('justification absente → contrat affichable et validable, encadré à afficher', () => {
   const contrat = {
+    version: 1,
+    status: 'generated',
     tension: 'Dans les PME, l’IA générative progresse plus vite que les règles internes.',
     problematique:
       'Comment une PME peut-elle intégrer l’IA générative sans compromettre la confidentialité de ses données ?',
     justificationProbleme: '',
-    completeness: { isCoreValid: true, missingSecondaryFields: ['justificationProbleme'] },
+    completeness: { passeAValid: true, missingFields: ['justificationProbleme'] },
   };
   const vue = construireVueContrat(contrat);
-  assert.strictEqual(vue.isCoreValid, true, 'le contrat doit rester valide sans justification');
+  assert.strictEqual(vue.affichable, true, 'le contrat doit rester affichable sans justification');
   assert.strictEqual(vue.editable, true, 'le contrat doit rester éditable sans justification');
+  assert.strictEqual(vue.noyauComplet, true, 'tension + problématique suffisent');
   assert.strictEqual(vue.justificationAFournir, true, 'l’encadré doit être demandé');
   assert.strictEqual(vue.justificationProbleme, '', 'jamais undefined/null');
   assert.ok(
-    vue.missingSecondaryFields.includes('justificationProbleme'),
-    'la justification doit figurer dans les champs secondaires manquants'
+    vue.missingFields.includes('justificationProbleme'),
+    'la justification doit figurer dans les champs manquants'
   );
 });
 
-test('justification absente sans bloc completeness : le noyau reste valide', () => {
+test('justification absente sans bloc completeness : le noyau reste complet', () => {
   const vue = construireVueContrat({
+    version: 1,
+    status: 'generated',
     tension: 'Une tension exploitable.',
     problematique: 'Comment faire évoluer les usages ?',
   });
-  assert.strictEqual(vue.isCoreValid, true);
-  assert.strictEqual(vue.editable, true);
+  assert.strictEqual(vue.affichable, true);
+  assert.strictEqual(vue.noyauComplet, true);
   assert.strictEqual(vue.justificationAFournir, true);
   assert.strictEqual(vue.justificationProbleme, '');
 });
 
 test('justification renseignée → aucun encadré d’approfondissement', () => {
   const vue = construireVueContrat({
+    version: 1,
+    status: 'generated',
     tension: 'Une tension exploitable.',
     problematique: 'Comment faire évoluer les usages ?',
     justificationProbleme: 'La confidentialité revient dans toutes les sources du dossier.',
   });
-  assert.strictEqual(vue.isCoreValid, true);
-  assert.strictEqual(vue.editable, true);
+  assert.strictEqual(vue.affichable, true);
   assert.strictEqual(vue.justificationAFournir, false);
   assert.ok(vue.justificationProbleme.trim().length > 0);
 });

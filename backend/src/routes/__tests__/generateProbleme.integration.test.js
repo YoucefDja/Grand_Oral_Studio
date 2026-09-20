@@ -29,6 +29,19 @@ class FauxDocument {
 
   markModified() {}
 
+  /**
+   * Équivalent du document Mongoose : `normaliserSession` construit la réponse
+   * via `session.toObject()`. On renvoie une copie sérialisable, comme le ferait
+   * le vrai pilote.
+   */
+  toObject() {
+    const copie = {};
+    Object.keys(this).forEach((cle) => {
+      if (typeof this[cle] !== 'function') copie[cle] = this[cle];
+    });
+    return JSON.parse(JSON.stringify(copie));
+  }
+
   async save() {
     this.sauvegardes += 1;
     sessionsEnBase.set(String(this._id), JSON.parse(JSON.stringify(this)));
@@ -263,14 +276,15 @@ test('scénario du log 8cd6fbdc : contrat core valide → HTTP 200, jamais 500',
 
   const contrat = body.data.contrat;
   assert.ok(contrat, 'le contrat doit être présent dans la réponse');
+  assert.equal(contrat.version, 1, 'le contrat persisté est canonique');
+  assert.equal(contrat.status, 'generated', 'le contrat est généré, jamais validé d’office');
   assert.notEqual(contrat.tension, '', 'la tension doit venir de l’Analyse');
   assert.match(contrat.problematique, /\?$/, 'la problématique doit être une question');
   assert.equal(contrat.justificationProbleme, '', 'la justification reste vide, sans blocage');
-  assert.equal(contrat.completeness.isCoreValid, true);
-  assert.ok(
-    contrat.completeness.missingSecondaryFields.includes('justificationProbleme'),
-    'la justification doit être signalée comme secondaire manquante'
-  );
+  assert.equal(contrat.completeness.passeAValid, true);
+  assert.deepEqual(contrat.completeness.missingFields, [], 'les champs bloquants sont tous présents');
+  assert.equal(body.workflow.contract, 'generated', 'le workflow reflète le contrat généré');
+  assert.equal(body.workflow.plan, 'empty', 'le plan n’est pas encore généré');
 
   // La session a bien été sauvegardée : le parcours peut continuer.
   const relue = await FauxSession.findById(ID_SESSION);
@@ -283,9 +297,9 @@ test('scénario du log 8cd6fbdc : contrat core valide → HTTP 200, jamais 500',
   // quelle, et l'étape « Problématique » lit `session.data.contrat` (jamais
   // `session.data.probleme`). On fige donc ici la clé ET la forme attendues.
   assert.ok(relue.data.contrat, 'le contrat doit être persisté sous data.contrat');
-  assert.deepEqual(relue.data.probleme, {}, 'aucun contenu ne doit être écrit sous data.probleme');
+  assert.equal(relue.data.probleme, undefined, 'aucun contenu ne doit être écrit sous data.probleme');
   assert.equal(typeof relue.data.contrat.problematique, 'string');
-  assert.equal(relue.data.contrat.completeness.isCoreValid, true);
+  assert.equal(relue.data.contrat.status, 'generated');
 });
 
 test('persistance : champs secondaires absents et justification vide sont stockés sans erreur', async () => {
@@ -310,7 +324,10 @@ test('persistance : champs secondaires absents et justification vide sont stock�
     assert.ok(Array.isArray(contrat[champ]), `${champ} doit être un tableau persisté`);
   });
   assert.equal(contrat.justificationProbleme, '');
-  assert.equal(contrat.completeness.isCoreValid, true);
+  assert.equal(contrat.version, 1);
+  assert.equal(contrat.status, 'generated');
+  assert.equal(contrat.completeness.passeAValid, true);
+  assert.deepEqual(contrat.completeness.missingFields, []);
 });
 
 test('échec de persistance : HTTP 500 CONTRACT_PERSISTENCE_FAILED, contrat intact', async () => {

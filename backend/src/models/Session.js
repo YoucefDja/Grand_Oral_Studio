@@ -7,7 +7,18 @@ const mongoose = require('mongoose');
  * currentStep : nombre d'étapes terminées (0 à 7).
  * ligneDirectrice : phrase « fil rouge » formulée à l'étape probleme, puis
  * réinjectée dans le prompt de toutes les étapes suivantes.
+ * workflow : état explicite du parcours. Toutes les autorisations dépendent de
+ * cet état, jamais d'une coche UI ni de la présence vague d'un objet.
  */
+const WORKFLOW_DEFAUT = () => ({
+  analysis: 'empty',
+  contract: 'empty',
+  plan: 'empty',
+  glossary: 'empty',
+  support: 'empty',
+  export: 'blocked',
+});
+
 const sessionSchema = new mongoose.Schema(
   {
     titre: { type: String, required: true, trim: true },
@@ -19,15 +30,17 @@ const sessionSchema = new mongoose.Schema(
     // Début du chrono de session (compte à rebours) : posé à la création, ou
     // a posteriori via POST /:id/start-chrono pour les sessions antérieures.
     startedAt: { type: Date, default: null },
+    workflow: {
+      type: Object,
+      default: WORKFLOW_DEFAUT,
+    },
     data: {
       type: Object,
       default: () => ({
         analyse: {},
-        // Passe A : contrat métier (sujet, mots-clés, tension, problématique,
-        // préconisations, cas d'entreprises…). Tant que `contrat.valide !== true`,
-        // la Passe B (support) et l'export PPTX restent bloqués.
+        // Passe A : contrat métier canonique (voir domain/contratPasseA.js).
+        // Seule source de vérité : `session.data.contrat`.
         contrat: {},
-        probleme: {},
         // Produit automatiquement en arrière-plan, jamais montré à l'étudiant.
         recherche: {},
         plan: {},
@@ -40,3 +53,4 @@ const sessionSchema = new mongoose.Schema(
 );
 
 module.exports = mongoose.model('Session', sessionSchema);
+module.exports.WORKFLOW_DEFAUT = WORKFLOW_DEFAUT;

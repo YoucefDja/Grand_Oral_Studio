@@ -136,6 +136,9 @@ app.use((err, _req, res, _next) => {
       error: {
         code: codeApplicatif,
         message: err.message || 'Erreur interne du serveur.',
+        // Prérequis de workflow manquants (ex. SUPPORT_NOT_READY) : donnée
+        // fonctionnelle consommée par l'UI pour afficher une checklist.
+        ...(Array.isArray(err.missing) ? { missing: err.missing } : {}),
         requestId,
       },
     });

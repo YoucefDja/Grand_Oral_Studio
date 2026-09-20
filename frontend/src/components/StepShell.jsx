@@ -1,6 +1,6 @@
 import React from 'react';
 import { useSettings } from '../settings.jsx';
-import { STEPS, hasStepData } from '../steps.js';
+import { STEPS, cleDonnees, etatEtape, hasStepData } from '../steps.js';
 
 function Spinner({ text }) {
   return (
@@ -32,8 +32,9 @@ export default function StepShell({
   const { t } = useSettings();
   const idx = STEPS.findIndex((s) => s.key === stepKey);
   const meta = STEPS[idx];
-  const data = session?.data?.[stepKey];
+  const data = session?.data?.[cleDonnees(stepKey)];
   const exists = hasStepData(session, stepKey);
+  const etat = etatEtape(session, stepKey);
   const generating = busy === stepKey;
 
   return (
@@ -42,7 +43,11 @@ export default function StepShell({
         <h2 style={{ margin: '0 0 4px' }}>
           {idx + 1}. {meta.label}
         </h2>
-        {exists ? <span className="badge badge-done">{t('steps.contentGenerated')}</span> : null}
+        {etat === 'validated' ? (
+          <span className="badge badge-done">{t('steps.contentValidated')}</span>
+        ) : exists ? (
+          <span className="badge badge-done">{t('steps.contentGenerated')}</span>
+        ) : null}
       </div>
       {intro}
 
@@ -83,7 +88,7 @@ export default function StepShell({
           {renderData ? renderData(data) : null}
 
           <div className="actions-row" style={{ display: 'flex', gap: 10, marginTop: 18, flexWrap: 'wrap' }}>
-            {allowRegenerate ? (
+            {allowRegenerate && etat !== 'validated' ? (
               <button type="button" className="btn-ghost" disabled={generating} onClick={() => onGenerate(stepKey)}>
                 {generating ? <Spinner text={t('steps.regenerating')} /> : `↻ ${t('steps.regenerate')}`}
               </button>

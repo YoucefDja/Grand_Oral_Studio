@@ -36,7 +36,7 @@ export default function WorkspacePage() {
         setActiveIndex((prev) => Math.min(prev, Math.max(data.currentStep, 0)));
       }
     } catch (err) {
-      setFatalError(err.message || t('workspace.notFound'));
+      setFatalError(messageCandidat(err) || t('workspace.notFound'));
     } finally {
       setLoading(false);
     }
@@ -91,7 +91,7 @@ export default function WorkspacePage() {
       await api.del(`/api/sessions/${id}`);
       navigate('/');
     } catch (err) {
-      setStepError(err.message);
+      setStepError(messageCandidat(err));
     }
   }
 
@@ -105,7 +105,7 @@ export default function WorkspacePage() {
       const updated = await api.post(`/api/sessions/${id}/start-chrono`);
       setSession(updated);
     } catch (err) {
-      setStepError(err.message);
+      setStepError(messageCandidat(err));
     } finally {
       setChronoBusy(false);
     }

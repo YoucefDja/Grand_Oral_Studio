@@ -1,9 +1,17 @@
 import React, { useCallback, useEffect, useMemo, useState } from 'react';
 import StepShell from '../StepShell.jsx';
 import { useSettings } from '../../settings.jsx';
-import { STEP_EXPLANATIONS, STEPS } from '../../steps.js';
+import { STEP_EXPLANATIONS, STEPS, etatEtape } from '../../steps.js';
 import { api } from '../../api.js';
 import { messageCandidat } from '../../messagesErreur.js';
+
+/** Statuts canoniques d'un cas d'entreprise (miroir du domaine backend). */
+const BADGE_PAR_STATUT = {
+  succes: { classe: 'badge-done', cle: 'contrat.issueSucces' },
+  echec: { classe: 'badge-progress', cle: 'contrat.issueEchec' },
+  mixte: { classe: 'badge-progress', cle: 'contrat.issueMixte' },
+  a_qualifier: { classe: 'badge-progress', cle: 'contrat.issueAQualifier' },
+};
 
 function Ligne({ label, children }) {
   if (!children) return null;
@@ -36,19 +44,19 @@ function ListeValeurs({ items, rendu, vide }) {
  * ÉDITER la tension, la problématique, la justification, la ligne directrice et
  * l'ouverture — jamais les mots-clés ni les cas (qui viennent du .md et des
  * sources). Tant que le backend refuse le contrat, la Passe B reste fermée.
+ *
+ * L'état affiché vient EXCLUSIVEMENT de `workflow.contract` (source de vérité
+ * serveur) : aucun recalcul local des règles de validation.
  */
 function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
   const { t } = useSettings();
   const contrat = session?.data?.contrat || {};
   const completeness = contrat.completeness || {};
+  const etat = etatEtape(session, 'probleme');
   // Le noyau affichable/validable est tension + problématique. La justification
   // est FACULTATIVE à l'étape Passe A : son absence n'empêche ni l'affichage ni
   // la validation, elle déclenche seulement un encadré « à approfondir ». Son
   // contrôle strict est déplacé à la vérification pré-export.
-  const isCoreValid =
-    completeness.isCoreValid === true ||
-    Boolean(contrat.problematique && contrat.tension);
-
   const [tension, setTension] = useState('');
   const [problematique, setProblematique] = useState('');
   const [justification, setJustification] = useState('');
@@ -69,7 +77,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         justificationProbleme: contrat.justificationProbleme || '',
         ligneDirectrice: contrat.ligneDirectrice || '',
         ouverture: contrat.ouverture || '',
-        valide: contrat.valide === true,
+        status: contrat.status || '',
       }),
     [contrat]
   );
@@ -84,7 +92,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
     setLocalError(null);
   }, [signature]);
 
-  const valideContrat = contrat.valide === true;
+  const valideContrat = etat === 'validated';
   const rejets = Array.isArray(verification?.rejets) ? verification.rejets : [];
   // En création, les rejets de fond non bloquants sont remontés à part : on les
   // affiche comme des avertissements, pas comme des blocages.
@@ -95,12 +103,8 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
     ...(Array.isArray(verification?.avertissements) ? verification.avertissements : []),
     ...rejetsSec.map((r) => r?.message).filter(Boolean),
   ];
-  const missingSecondaryFields = Array.isArray(
-    contrat.completeness?.missingSecondaryFields
-  )
-    ? contrat.completeness.missingSecondaryFields
-    : [];
-  const manqueSecondaire = (champ) => missingSecondaryFields.includes(champ);
+  const missingFields = Array.isArray(completeness.missingFields) ? completeness.missingFields : [];
+  const manque = (champ) => missingFields.includes(champ);
 
   // Éditer invalide la validation précédente : on repasse par le gate serveur.
   const modifie =
@@ -142,7 +146,6 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
     ouverture,
     onValide,
     onSessionRefresh,
-    t,
   ]);
 
   const handleRegenerer = useCallback(async () => {
@@ -161,14 +164,12 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
     } finally {
       setRegenerant(false);
     }
-  }, [disabled, regenerant, session?._id, onSessionRefresh, t]);
+  }, [disabled, regenerant, session?._id, onSessionRefresh]);
 
-  // Le contrat s'affiche dès que le core est complet. Les sections secondaires
-  // (mots-clés, contexte, cas d'entreprises…) peuvent rester vides : les cacher
-  // revenait à priver l'étudiant de la tension, de la ligne directrice et de
-  // l'ouverture reconstruites par la Passe A, alors qu'il doit pouvoir les
-  // relire puis valider.
-  if (!isCoreValid) {
+  // Un contrat existe dès que le serveur le déclare `generated` ou `validated`.
+  // On ne juge JAMAIS sur la complétude locale : un contrat généré comportant
+  // des champs secondaires vides doit rester affichable et validable.
+  if (etat !== 'generated' && etat !== 'validated') {
     return <p className="muted">{t('contrat.pasDeContrat')}</p>;
   }
 
@@ -193,7 +194,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         </span>
       </div>
 
-      {isCoreValid && missingSecondaryFields.length > 0 ? (
+      {missingFields.length > 0 ? (
         <p className="muted" style={{ margin: '0 0 8px' }}>{t('contrat.exploitable')}</p>
       ) : null}
 
@@ -231,7 +232,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         <div className="data-label">{t('contrat.motsCles')}</div>
         <ListeValeurs
           items={motsCles}
-          vide={manqueSecondaire('motsCles') ? t('contrat.aCompleterEtapeSuivante') : undefined}
+          vide={manque('motsCles') ? t('contrat.aCompleterEtapeSuivante') : undefined}
           rendu={(m) =>
             typeof m === 'string' ? m : <><strong>{m?.mot}</strong> — {m?.definition}</>
           }
@@ -306,7 +307,7 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         <ListeValeurs
           items={limites}
           vide={t('contrat.nonGenere')}
-          rendu={(l) => (typeof l === 'string' ? l : JSON.stringify(l))}
+          rendu={(l) => (typeof l === 'string' ? l : l?.limite || l?.fait || '')}
         />
       </Ligne>
 
@@ -333,12 +334,15 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
         ) : (
           <ul className="ul-value">
             {cas.map((c, i) => {
-              const echec = /echec|limite|contre-exemple/i.test(JSON.stringify(c));
+              // Statut canonique fourni par le backend : plus aucune déduction
+              // depuis le texte libre (qui affichait « succès » sur un échec
+              // dès que le mot « échec » n'était pas écrit noir sur blanc).
+              const badge = BADGE_PAR_STATUT[c?.statut] || BADGE_PAR_STATUT.a_qualifier;
               return (
                 <li key={i}>
-                  <strong>{c?.nom}</strong>
-                  <span className={`badge ${echec ? 'badge-progress' : 'badge-done'}`} style={{ marginLeft: 6 }}>
-                    {echec ? t('contrat.issueEchec') : t('contrat.issueSucces')}
+                  <strong>{c?.entreprise || c?.nom}</strong>
+                  <span className={`badge ${badge.classe}`} style={{ marginLeft: 6 }}>
+                    {t(badge.cle)}
                   </span>
                   {c?.chiffre ? ` — ${c.chiffre}` : ''}
                   {c?.angle ? ` — ${c.angle}` : ''}
@@ -381,7 +385,11 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
           disabled={disabled || saving || regenerant || (valideContrat && !modifie)}
           onClick={handleValider}
         >
-          {saving ? t('contrat.validant') : t('contrat.valider')}
+          {saving
+            ? t('contrat.validant')
+            : valideContrat && !modifie
+              ? t('contrat.modifier')
+              : t('contrat.valider')}
         </button>
         <button
           type="button"
@@ -402,10 +410,9 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
 }
 
 export default function StepProbleme({ session, busy, error, errorReference, onGenerate, goStep, onSessionRefresh }) {
-  const contrat = session?.data?.contrat;
-  // Le Plan s'ouvre dès que les TROIS éléments fondamentaux sont validés : les
-  // sections secondaires seront construites/vérifiées plus tard (Passe B, export).
-  const valide = Boolean(contrat?.valide === true);
+  // L'ouverture de la Passe B dépend de l'état serveur, jamais d'une complétude
+  // recalculée côté navigateur.
+  const valide = etatEtape(session, 'probleme') === 'validated';
 
   const handleValide = useCallback(
     async (payload) => {

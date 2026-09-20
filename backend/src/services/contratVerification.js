@@ -177,17 +177,6 @@ function textePreconisations(contrat) {
     .join(' \n ');
 }
 
-/** Texte agrégé des cas d'entreprise (pour vérifier sources et échec). */
-function texteCas(contrat) {
-  const bruts = Array.isArray(contrat?.casEntreprises) ? contrat.casEntreprises : [];
-  return bruts
-    .map((c) => {
-      if (!c || typeof c !== 'object') return String(c || '');
-      return [c.nom, c.chiffre, c.angle, c.source, c.issue, c.resultat].filter(Boolean).join(' ');
-    })
-    .join(' \n ');
-}
-
 function contientUne(textePlat, tournures) {
   return tournures.find((t) => textePlat.includes(aplatir(t))) || null;
 }
@@ -262,7 +251,6 @@ function verifierContrat({ sujet, theme = '', contrat, mode = 'creation' }) {
   const motsCles = motsClesDe(c);
   const texteContexte = typeof c.contexte === 'string' ? c.contexte : JSON.stringify(c.contexte || '');
   const texteSolutions = textePreconisations(c);
-  const texteCasTxt = texteCas(c);
   const cas = Array.isArray(c.casEntreprises) ? c.casEntreprises : [];
 
   const questionPlat = aplatir(question);
@@ -456,7 +444,10 @@ function verifierContrat({ sujet, theme = '', contrat, mode = 'creation' }) {
       if (stricts) rejeter('contrat_cas_sans_source', message);
       else avertissements.push(message);
     }
-    const aEchec = cas.some((x) => /echec|echec_ou_limite|limite|contre-exemple|insuffisan/i.test(JSON.stringify(x)));
+    // Statut canonique explicite (domain/contratPasseA.js). Plus aucune
+    // heuristique sur le JSON sérialisé : un cas sans statut explicite reste
+    // « a_qualifier » et ne compte jamais comme un succès par défaut.
+    const aEchec = cas.some((x) => x && (x.statut === 'echec' || x.statut === 'mixte'));
     if (!aEchec) {
       const message = "Aucun cas d'échec parmi les cas d'entreprise : le jury sanctionne le plaidoyer à sens unique.";
       if (stricts) rejeter('contrat_cas_sans_echec', message);
@@ -500,7 +491,7 @@ function verifierContrat({ sujet, theme = '', contrat, mode = 'creation' }) {
       cas: cas.length,
       amorce: amorce || null,
       contextePresent: texteContexte.trim().length > 0,
-      casAvecEchec: /echec|limite|contre-exemple/i.test(texteCasTxt),
+      casAvecEchec: cas.some((x) => x && (x.statut === 'echec' || x.statut === 'mixte')),
     },
   };
 }

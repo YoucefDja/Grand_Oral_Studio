@@ -1,8 +1,15 @@
 import React, { useCallback, useEffect, useState } from 'react';
 import StepShell from '../StepShell.jsx';
 import { useSettings } from '../../settings.jsx';
-import { STEP_EXPLANATIONS, ligneDirectriceOf, glossaireValide, stepIndex } from '../../steps.js';
+import {
+  STEP_EXPLANATIONS,
+  etatEtape,
+  ligneDirectriceOf,
+  prerequisSupport,
+  stepIndex,
+} from '../../steps.js';
 import { api, downloadPptx, downloadSupportPrompt, downloadVerificationReport } from '../../api.js';
+import { messageCandidat } from '../../messagesErreur.js';
 
 function SlideCard({ slide, index, t }) {
   const puces = Array.isArray(slide.puces) ? slide.puces : [];
@@ -62,7 +69,7 @@ function VerificationCard({ session, onSessionRefresh }) {
       setRapport(await api.get(`/api/sessions/${session._id}/conformite-rapport`));
       setProposition(null);
     } catch (err) {
-      setErreur(err.message);
+      setErreur(messageCandidat(err));
     } finally {
       setChargement(false);
     }
@@ -78,7 +85,7 @@ function VerificationCard({ session, onSessionRefresh }) {
     try {
       await downloadVerificationReport(session._id, 'rapport-verification-grand-oral.md');
     } catch (err) {
-      setErreur(err.message);
+      setErreur(messageCandidat(err));
     } finally {
       setTelechargement(false);
     }
@@ -97,7 +104,7 @@ function VerificationCard({ session, onSessionRefresh }) {
       });
       setProposition(res);
     } catch (err) {
-      setErreur(err.message);
+      setErreur(messageCandidat(err));
     } finally {
       setCorrectionEnCours(null);
     }
@@ -119,7 +126,7 @@ function VerificationCard({ session, onSessionRefresh }) {
       await charger();
       if (onSessionRefresh) await onSessionRefresh();
     } catch (err) {
-      setErreur(err.message);
+      setErreur(messageCandidat(err));
     } finally {
       setApplication(false);
     }
@@ -137,7 +144,7 @@ function VerificationCard({ session, onSessionRefresh }) {
         setErreur(t('steps.verifCorrigerRien'));
       }
     } catch (err) {
-      setErreur(err.message);
+      setErreur(messageCandidat(err));
     } finally {
       setCorrectionEnCours(null);
     }
@@ -359,7 +366,7 @@ function ScoreLogiqueCard({ session }) {
         const res = await api.get(`/api/sessions/${session._id}/conformite-rapport`);
         if (!annule) setRapport(res);
       } catch (err) {
-        if (!annule) setErreur(err.message);
+        if (!annule) setErreur(messageCandidat(err));
       } finally {
         if (!annule) setChargement(false);
       }
@@ -442,7 +449,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
-  const valide = glossaireValide(session);
+  const valide = etatEtape(session, 'glossaire') === 'validated';
 
   async function handleExportPptxPrompt() {
     setExportingPptx(true);
@@ -456,7 +463,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       );
       setMsg(t('steps.claudePptxPromptDownloaded').replace('{file}', fileName));
     } catch (err) {
-      setError(err.message);
+      setError(messageCandidat(err));
     } finally {
       setExportingPptx(false);
     }
@@ -474,7 +481,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       );
       setMsg(t('steps.gammaPromptDownloaded').replace('{file}', fileName));
     } catch (err) {
-      setError(err.message);
+      setError(messageCandidat(err));
     } finally {
       setExportingGamma(false);
     }
@@ -492,7 +499,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       );
       setMsg(t('steps.claudeDesignPromptDownloaded').replace('{file}', fileName));
     } catch (err) {
-      setError(err.message);
+      setError(messageCandidat(err));
     } finally {
       setExportingClaudeDesign(false);
     }
@@ -509,7 +516,7 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
       setMsg(t('steps.claudeImportSuccess'));
       await onSessionRefresh();
     } catch (err) {
-      setError(err.message);
+      setError(messageCandidat(err));
     } finally {
       setImporting(false);
     }
@@ -583,8 +590,15 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
   const [downloading, setDownloading] = useState(false);
   const [downloadMsg, setDownloadMsg] = useState(null);
   const [downloadOk, setDownloadOk] = useState(false);
+  // Toutes les valeurs dérivées sont déclarées AVANT les fonctions qui les
+  // utilisent : aucune variable ne doit être lue avant son initialisation
+  // (l'erreur « Cannot access 'justification' before initialization » venait de
+  // ce type d'accès, jamais d'un problème de données).
   const ld = ligneDirectriceOf(session);
-  const valide = glossaireValide(session);
+  const prerequis = prerequisSupport(session);
+  const manquants = prerequis.filter((p) => !p.ok);
+  const pretPourSupport = manquants.length === 0;
+  const etatSupport = etatEtape(session, 'support');
   const slides = Array.isArray(session?.data?.support?.slides)
     ? session.data.support.slides
     : [];
@@ -599,7 +613,8 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
       setDownloadMsg(`${t('steps.downloaded')} : ${fileName}`);
     } catch (err) {
       setDownloadOk(false);
-      setDownloadMsg(err.message);
+      // Jamais `err.message` brut : on passe par le traducteur d'erreurs.
+      setDownloadMsg(messageCandidat(err));
     } finally {
       setDownloading(false);
     }
@@ -607,18 +622,44 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
 
   return (
     <>
+      {!pretPourSupport ? (
+        <section className="card panel">
+          <h2 style={{ margin: '0 0 4px' }}>{t('steps.prereqTitle')}</h2>
+          <p className="muted" style={{ marginTop: 0 }}>{t('steps.prereqIntro')}</p>
+          <ul className="ul-value">
+            {prerequis.map((p) => (
+              <li key={p.cle}>
+                {p.ok ? '✅' : '⛔'} {p.label}
+                {!p.ok ? (
+                  <button
+                    type="button"
+                    className="btn-ghost"
+                    style={{ marginLeft: 8 }}
+                    onClick={() => goStep(stepIndex(p.stepKey))}
+                  >
+                    {p.retour}
+                  </button>
+                ) : null}
+              </li>
+            ))}
+          </ul>
+        </section>
+      ) : null}
+
       <StepShell
         stepKey="support"
         session={session}
         busy={busy}
         error={error}
         onGenerate={onGenerate}
+        generateDisabled={!pretPourSupport}
+        allowRegenerate={etatSupport !== 'generated'}
         intro={
           <p className="muted" style={{ marginTop: 0 }}>
             {STEP_EXPLANATIONS.support}
           </p>
         }
-        renderData={(data) => (
+        renderData={() => (
           <div>
             {ld ? (
               <div className="ld-banner">
@@ -627,7 +668,7 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
               </div>
             ) : null}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0' }}>
-              {valide ? <span className="badge badge-done">{t('steps.glossaireOk')}</span> : null}
+              {pretPourSupport ? <span className="badge badge-done">{t('steps.glossaireOk')}</span> : null}
               <span className="badge badge-progress">{slides.length} {t('steps.slidesUnit')}</span>
               <button type="button" className="btn-ghost" onClick={() => goStep(stepIndex('glossaire'))}>
                 {t('steps.reviewGlossaire')}

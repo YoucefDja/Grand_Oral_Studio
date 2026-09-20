@@ -26,8 +26,8 @@ function contratValide() {
       { action: 'Formation des chefs d’équipe plutôt que recrutement informatique', cible: 'ETI' },
     ],
     casEntreprises: [
-      { nom: 'Cas A (source .md)', chiffre: '48 %', angle: 'transformation digitale bloquée par le manque de compétences', source: 'Source .md §3' },
-      { nom: 'Cas B (source .md)', chiffre: '3 ans', angle: 'échec de transformation digitale', issue: 'echec', source: 'Source .md §5' },
+      { entreprise: 'Cas A (source .md)', statut: 'a_qualifier', chiffre: '48 %', angle: 'transformation digitale bloquée par le manque de compétences', source: 'Source .md §3' },
+      { entreprise: 'Cas B (source .md)', statut: 'echec', chiffre: '3 ans', angle: 'échec de transformation digitale', source: 'Source .md §5' },
     ],
     ligneDirectrice: 'La transformation digitale réussie passe par les compétences internes, pas par un recrutement informatique.',
     ouverture: 'Les PME industrielles sauront-elles former plutôt que recruter ?',
@@ -116,7 +116,7 @@ test('rejet : pas une question (pas de point d’interrogation)', () => {
 
 test('rejet : cas d’entreprise sans source', () => {
   const c = contratValide();
-  c.casEntreprises = [{ nom: 'Cas inventé', chiffre: '12 %', angle: 'transformation digitale' }];
+  c.casEntreprises = [{ entreprise: 'Cas inventé', statut: 'succes', chiffre: '12 %', angle: 'transformation digitale' }];
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
   assert.ok(codes(res).includes('contrat_cas_sans_source'));
 });
@@ -124,7 +124,7 @@ test('rejet : cas d’entreprise sans source', () => {
 test('rejet : aucun cas d’échec', () => {
   const c = contratValide();
   c.casEntreprises = [
-    { nom: 'Cas A', chiffre: '48 %', angle: 'transformation digitale', source: 'Source .md', issue: 'succes' },
+    { entreprise: 'Cas A', statut: 'succes', chiffre: '48 %', angle: 'transformation digitale', source: 'Source .md' },
   ];
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
   assert.ok(codes(res).includes('contrat_cas_sans_echec'));

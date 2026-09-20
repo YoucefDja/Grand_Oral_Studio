@@ -42,7 +42,18 @@ const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { APP_VERSION } = require('../config/version');
 const { parseAndValidateContract, validatePasseAContract } = require('../services/contratParsing');
-const { appliquerContratPasseA, construireContratSur } = require('../services/applicationContrat');
+const {
+  appliquerContratPasseA,
+  construireContratSur,
+  assurerWorkflow,
+  recalculerWorkflow,
+} = require('../services/applicationContrat');
+const {
+  migrateLegacyContract,
+  validatePasseA,
+  validateSupportReadiness,
+  rafraichirCompletude,
+} = require('../domain/contratPasseA');
 const {
   httpError,
   logGeneration,
@@ -210,10 +221,13 @@ function assertGlossaireValide(session, pourEtape) {
   const sources = Array.isArray(glossaire?.sources) ? glossaire.sources : [];
   const termes = Array.isArray(glossaire?.termes) ? glossaire.termes : [];
   if (sources.length === 0 || termes.length === 0) {
-    throw httpError(
+    const err = httpError(
       400,
       `L'étape « ${STEP_LABELS[pourEtape]} » exige un glossaire validé (étapes précédentes). Générez d'abord le glossaire.`
     );
+    err.code = 'GLOSSARY_NOT_READY';
+    err.missing = ['glossary_validation'];
+    throw err;
   }
 }
 
@@ -221,24 +235,91 @@ function assertGlossaireValide(session, pourEtape) {
  * GATE PROBLÉMATIQUE — porte obligatoire entre Passe A et Passe B.
  *
  * Tant que l'étudiant n'a pas explicitement validé le contrat métier
- * (`data.contrat.valide === true`), aucune slide ne peut être produite ni
+ * (`contrat.status === 'validated'`), aucune slide ne peut être produite ni
  * exportée : sinon on figerait 20 slides sur une problématique non relue.
  */
 function assertContratValide(session, pourEtape) {
   const contrat = session.data && session.data.contrat;
   const question = contrat && typeof contrat.problematique === 'string' ? contrat.problematique.trim() : '';
   if (!question) {
-    throw httpError(
+    const err = httpError(
       400,
       `L'étape « ${STEP_LABELS[pourEtape]} » exige un contrat métier généré (Passe A). Générez d'abord la problématique.`
     );
+    err.code = 'CONTRACT_NOT_READY';
+    err.missing = ['contract_generation'];
+    throw err;
   }
-  if (contrat.valide !== true) {
-    throw httpError(
+  if (contrat.status !== 'validated') {
+    const err = httpError(
       400,
       "Le contrat métier doit être validé (Passe A) avant la génération du support. Validez ou éditez la problématique dans l'écran de validation."
     );
+    err.code = 'CONTRACT_NOT_READY';
+    err.missing = ['contract_validation'];
+    throw err;
   }
+}
+
+/**
+ * GATE SUPPORT — prérequis explicites du workflow.
+ * Réponse structurée `SUPPORT_NOT_READY` : l'UI affiche une checklist lisible
+ * et un retour vers l'étape concernée, jamais une erreur technique.
+ */
+function assertSupportReadiness(session) {
+  const { ready, missing } = validateSupportReadiness(session);
+  if (ready) return;
+  const err = httpError(
+    MESSAGES_ERREUR.SUPPORT_NOT_READY.status,
+    MESSAGES_ERREUR.SUPPORT_NOT_READY.message,
+    'SUPPORT_NOT_READY'
+  );
+  err.missing = missing;
+  throw err;
+}
+
+/**
+ * Migration à la lecture : ramène une session historique vers le contrat
+ * canonique et l'état de workflow explicite.
+ *
+ * Ne persiste rien (appelée sur un chemin de lecture) : elle garantit
+ * uniquement une forme de réponse stable pour le frontend.
+ */
+function normaliserSession(session) {
+  const data = session.data && typeof session.data === 'object' ? session.data : {};
+  const legacy = data.contrat && typeof data.contrat === 'object' ? data.contrat : {};
+  const estCanonique = legacy.version === 1 && typeof legacy.status === 'string';
+  const aQuelqueChose = Object.keys(legacy).length > 0 || Object.keys(data.probleme || {}).length > 0;
+
+  if (aQuelqueChose && !estCanonique) {
+    session.data.contrat = migrateLegacyContract(session);
+    session.markModified('data');
+  } else if (aQuelqueChose && estCanonique) {
+    rafraichirCompletude(session.data.contrat);
+  }
+
+  // Ancienne clé métier : plus jamais lue ni écrite.
+  if (session.data && session.data.probleme !== undefined) {
+    delete session.data.probleme;
+    session.markModified('data');
+  }
+
+  recalculerWorkflow(session);
+
+  // Forme de réponse garantie : le frontend ne doit pas deviner où chercher.
+  const d = session.data || {};
+  return {
+    ...session.toObject(),
+    data: {
+      analyse: d.analyse || {},
+      contrat: d.contrat || {},
+      recherche: d.recherche || {},
+      plan: d.plan || {},
+      glossaire: d.glossaire || {},
+      support: d.support || {},
+    },
+    workflow: assurerWorkflow(session),
+  };
 }
 
 /**
@@ -354,7 +435,7 @@ router.get(
   asyncHandler(async (req, res) => {
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
-    res.json(session);
+    res.json(normaliserSession(session));
   })
 );
 
@@ -376,7 +457,7 @@ router.patch(
       session.currentStep = step;
     }
     await session.save();
-    res.json(session);
+    res.json(normaliserSession(session));
   })
 );
 
@@ -405,7 +486,7 @@ router.post(
       session.startedAt = new Date();
       await session.save();
     }
-    res.json(session);
+    res.json(normaliserSession(session));
   })
 );
 
@@ -444,12 +525,16 @@ router.post(
       const session = await findSessionOr404(req.params.id, req.userId);
       if (!session) throw httpError(404, 'Session introuvable.');
 
-      // Règle produit : contrat métier validé (Passe A) ET glossaire obligatoires
-      // avant la Passe B (support).
+      // Règle produit : contrat métier validé (Passe A), plan généré ET
+      // glossaire validé avant la Passe B (support). Prérequis explicites,
+      // jamais déduits d'une coche UI ni de la présence vague d'un objet.
       if (stepKey === 'support') {
-        assertContratValide(session, stepKey);
-        assertGlossaireValide(session, stepKey);
+        assertSupportReadiness(session);
       }
+
+      // Un contrat hérité est migré AVANT toute lecture métier : les étapes
+      // aval ne connaissent que le contrat canonique.
+      normaliserSession(session);
 
       // La recherche documentaire n'est plus une étape visible : elle est produite
       // automatiquement en arrière-plan juste avant le plan, pour que le plan (puis
@@ -616,9 +701,10 @@ router.post(
         parsed.rapport_compression = rapport;
       }
 
-      // Passe A : le contrat est stocké dans data.contrat et sert de source unique
-      // à toutes les étapes aval. Il n'est PAS validé d'office : c'est l'étudiant
-      // qui pose `valide: true` (ou qui édite puis valide) à l'écran de validation.
+      // Passe A : le contrat canonique est stocké dans data.contrat et sert de
+      // source unique à toutes les étapes aval. Il n'est PAS validé d'office :
+      // c'est l'étudiant qui pose `status: 'validated'` (ou qui édite puis
+      // valide) à l'écran de validation.
       let regenereProbleme = false;
       let contratPersiste = null;
       if (stepKey === 'probleme') {
@@ -626,41 +712,33 @@ router.post(
         // qu'ici, donc APRÈS un parsing et une validation réussis. Un échec en
         // amont laisse le contrat précédemment validé strictement intact.
         //
-        // On ne persiste QUE ce payload minimal garanti (chaînes et tableaux
-        // toujours définis) : ni objet LLM brut, ni `undefined`, ni propriété de
-        // diagnostic interne. Le contrat stocké respecte ainsi le modèle Session.
-        const safeContract = construireContratSur({
-          tension: parsed.tension,
-          problematique: parsed.problematique,
-          justificationProbleme: parsed.justificationProbleme,
-          ligneDirectrice: parsed.ligneDirectrice,
-          preconisations: parsed.preconisations,
-          limitesExistant: parsed.limitesExistant,
-          casEntreprises: parsed.casEntreprises,
-          motsCles: parsed.motsCles,
-          ouverture: parsed.ouverture,
-          completeness: {
-            isCoreValid: true,
-            missingSecondaryFields:
-              parsed.completeness && parsed.completeness.missingSecondaryFields,
-          },
-        });
+        // La normalisation canonique (mots-clés hérités de l'analyse, cas
+        // d'entreprises typés) est faite par `construireContratSur` : jamais
+        // d'objet LLM brut persisté.
+        const safeContract = construireContratSur(parsed, session.data?.analyse || {});
         // Champs de validation essentiels, recopiés de façon contrôlée.
-        safeContract.verification = parsed.verification || null;
-        safeContract.champsARegenerer = Array.isArray(parsed.champsARegenerer)
-          ? parsed.champsARegenerer
-          : [];
+        if (parsed.verification) safeContract.verification = parsed.verification;
+        if (Array.isArray(parsed.champsARegenerer) && parsed.champsARegenerer.length) {
+          safeContract.champsARegenerer = parsed.champsARegenerer;
+        }
 
         ({ regenere: regenereProbleme } = appliquerContratPasseA(
           session,
           safeContract,
           isNonEmptyObject
         ));
-        contratPersiste = safeContract;
+        contratPersiste = session.data.contrat;
       } else {
         session.data[stepKey] = parsed;
       }
       session.markModified('data');
+
+      // L'état de workflow est recalculé après CHAQUE génération : c'est lui,
+      // et lui seul, qui autorise les étapes suivantes côté UI comme côté API.
+      recalculerWorkflow(session);
+      if (stepKey === 'probleme' && contratPersiste && contratPersiste.status !== 'validated') {
+        session.workflow.contract = 'generated';
+      }
 
       // Avance la progression si la génération est un pas en avant. Si le contrat
       // a été régénéré alors que le parcours était déjà avancé, on rabat
@@ -705,9 +783,13 @@ router.post(
       // La Passe A invalide : on renvoie le diagnostic au front pour l'écran de
       // validation (l'étudiant voit les critères rouges et peut régénérer).
       if (stepKey === 'probleme' && parsed.valide !== true) {
-        return res.json({ session, verification: parsed.verification || null, contract: contratPersiste });
+        return res.json({
+          ...normaliserSession(session),
+          verification: parsed.verification || null,
+          contract: contratPersiste,
+        });
       }
-      return res.json(session);
+      return res.json(normaliserSession(session));
     } catch (err) {
       // Point de sortie UNIQUE des erreurs de génération : tout devient contrôlé.
       // Aucune mutation de la session n'a été persistée avant l'échec, donc un
@@ -797,25 +879,32 @@ router.post(
     };
 
     if (!verification.valide) {
-      contrat.valide = false;
+      contrat.status = 'generated';
+      contrat.validatedAt = null;
       contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
+      rafraichirCompletude(contrat);
       session.markModified('data');
+      recalculerWorkflow(session);
       await session.save();
       return res.status(422).json({
-        session,
+        ...normaliserSession(session),
         verification: contrat.verification,
         message: 'Contrat refusé : la problématique ne passe pas encore les règles de fond.',
       });
     }
 
-    // Contrat validé : la Passe B peut démarrer.
-    contrat.valide = true;
+    // Contrat validé : la Passe B peut démarrer. `status` est la seule source
+    // de vérité pour toutes les autorisations aval.
+    contrat.status = 'validated';
+    contrat.validatedAt = new Date();
     delete contrat.champsARegenerer;
     if (contrat.ligneDirectrice) session.ligneDirectrice = contrat.ligneDirectrice;
+    rafraichirCompletude(contrat);
 
     session.markModified('data');
+    recalculerWorkflow(session);
     await session.save();
-    res.json(session);
+    res.json(normaliserSession(session));
   })
 );
 
@@ -890,7 +979,8 @@ router.post(
         contrat,
         mode: 'regeneration',
       });
-      contrat.valide = false; // l'étudiant doit (re)valider explicitement
+      contrat.status = 'generated'; // l'étudiant doit (re)valider explicitement
+      contrat.validatedAt = null;
       contrat.champsARegenerer = ciblerRegeneration(verification.rejets);
       contrat.verification = {
         valide: verification.valide,
@@ -901,11 +991,13 @@ router.post(
         avertissements: verification.avertissements,
         observations: verification.observations,
       };
+      rafraichirCompletude(contrat);
 
       session.markModified('data');
+      recalculerWorkflow(session);
       await session.save();
       logGeneration({ ...contexteLog, dureeMs: Date.now() - debut, statut: 200 });
-      return res.json({ session, verification: contrat.verification });
+      return res.json({ ...normaliserSession(session), verification: contrat.verification });
     } catch (err) {
       // Un échec de régénération ne doit pas détruire le contrat existant : la
       // fusion n'a lieu qu'APRÈS un parsing réussi, et rien n'est persisté ici.
@@ -1295,8 +1387,9 @@ router.post(
     session.data.support = parsed;
     session.markModified('data');
     session.currentStep = Math.max(session.currentStep || 0, STEP_KEYS.length);
+    recalculerWorkflow(session);
     await session.save();
-    res.json(session);
+    res.json(normaliserSession(session));
   })
 );
 
