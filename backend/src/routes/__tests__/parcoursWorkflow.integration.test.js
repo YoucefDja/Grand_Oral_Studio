@@ -281,6 +281,49 @@ const REPONSES_DEEPSEEK = {
   }),
 };
 
+/**
+ * Variante « tension décorrélée » : la tension emploie un vocabulaire que la
+ * question ne reprend PAS (recouvrement lexical quasi nul). C'était le motif du
+ * rejet `contrat_tension_decorrelee` (HTTP 422). Depuis la simplification de la
+ * Passe A, ce n'est plus qu'un AVERTISSEMENT : la question reste valide et le
+ * Plan doit s'ouvrir.
+ */
+const CONTRAT_TENSION_DECORRELEE = JSON.stringify({
+  version: 1,
+  tension: 'Recherche de gains rapides contre maîtrise des coûts.',
+  problematique:
+    'Comment une PME peut-elle intégrer l’IA générative dans ses processus métiers sans exposer ses données confidentielles ni fragiliser la qualité de ses décisions ?',
+  justification_probleme: '',
+  ligne_directrice: 'Orienter la réponse vers un cadre d’usage maîtrisé de l’IA.',
+  mots_cles: [],
+  limites_existant: [],
+  preconisations: [],
+  cas_entreprises: [],
+  ouverture: '',
+});
+
+/**
+ * Variante « question oui / non » : elle doit rester un REJET BLOQUANT
+ * (HTTP 422, code `PROBLEMATIC_QUALITY_REJECTED`). Sert de contre-preuve : la
+ * simplification n'a pas rendu la Passe A complaisante.
+ */
+const CONTRAT_QUESTION_OUI_NON = JSON.stringify({
+  version: 1,
+  tension: 'Recherche de gains rapides contre maîtrise de la confidentialité.',
+  problematique: 'L’IA générative est-elle utile en PME ?',
+  ligne_directrice: 'À préciser.',
+  mots_cles: [],
+  preconisations: [],
+  cas_entreprises: [],
+});
+
+/**
+ * Sortie de la Passe A réellement servie par la doublure. Les tests qui ont
+ * besoin d'une variante précise (tension décorrélée, question oui/non) la
+ * sélectionnent AVANT d'appeler une route, puis la réinitialisent.
+ */
+let sortiePasseA = () => REPONSES_DEEPSEEK.probleme;
+
 const cheminDeepseek = path.join(__dirname, '..', '..', 'services', 'deepseek.js');
 require.cache[cheminDeepseek] = {
   id: cheminDeepseek,
@@ -298,11 +341,11 @@ require.cache[cheminDeepseek] = {
         .normalize('NFD')
         .replace(/[\u0300-\u036f]/g, '')
         .toLowerCase();
-      if (/problematique|passe\s*a/.test(cle)) return REPONSES_DEEPSEEK.probleme;
+      if (/problematique|passe\s*a/.test(cle)) return sortiePasseA();
       if (/glossaire/.test(cle)) return REPONSES_DEEPSEEK.glossaire;
       if (/support/.test(cle)) return REPONSES_DEEPSEEK.support;
       if (/plan/.test(cle)) return REPONSES_DEEPSEEK.plan;
-      return REPONSES_DEEPSEEK.probleme;
+      return sortiePasseA();
     },
   },
 };
@@ -717,4 +760,79 @@ test('cas 5 : générer puis relire le support ne lève aucune ReferenceError de
   assert.equal(relecture.body.data.probleme, undefined);
   // La justification reste absente : elle est portée par le contrat, sans erreur.
   assert.equal(relecture.body.data.contrat.justificationProbleme, '');
+});
+
+// ---------------------------------------------------------------------------
+// Cas 6 — tension décorrélée : AVERTISSEMENT, jamais un blocage de la Passe A.
+// ---------------------------------------------------------------------------
+
+test('cas 6 : tension décorrélée → HTTP 200, avertissement, contrat validable, Plan accessible', async () => {
+  await sessionPrete();
+  // La tension et la question ne partagent presque aucun mot : c'est
+  // exactement le motif qui produisait `contrat_tension_decorrelee` en 422.
+  sortiePasseA = () => CONTRAT_TENSION_DECORRELEE;
+  try {
+    // 1. La génération doit RÉUSSIR (plus de PROBLEMATIC_QUALITY_REJECTED).
+    const generation = await executerPost('/:id/generate/:step', { id: ID_SESSION, step: 'probleme' });
+    assert.equal(
+      generation.status,
+      200,
+      `tension décorrélée ne doit plus bloquer : ${JSON.stringify(generation.body)}`
+    );
+    verifierReponsePropre(generation, 'génération contrat (tension décorrélée)');
+
+    const { contrat } = generation.body.data;
+    assert.match(contrat.problematique, /\?$/);
+    assert.ok(contrat.tension.trim().length > 0);
+    assert.equal(contrat.status, 'generated');
+
+    // 2. Le motif est bien remonté en AVERTISSEMENT, pas en rejet bloquant.
+    const tout = [
+      ...JSON.stringify(contrat.verification || {}),
+      ...(contrat.verification?.avertissements || []),
+    ].join(' ');
+    assert.equal(
+      (contrat.verification?.rejetsCore || []).some((r) => r.code === 'contrat_tension_decorrelee'),
+      false,
+      'contrat_tension_decorrelee ne doit plus figurer dans les rejets CORE'
+    );
+    assert.ok(
+      /tension/i.test(tout) || (contrat.verification?.avertissements || []).length > 0,
+      'la tension décorrélée doit rester signalée sous forme d’avertissement'
+    );
+
+    // 3. Le contrat reste VALIDABLE par l'étudiant : HTTP 200.
+    const validation = await executerPost('/:id/valider-contrat', { id: ID_SESSION }, {});
+    assert.equal(validation.status, 200, `validation : ${JSON.stringify(validation.body)}`);
+    assert.equal(validation.body.workflow.contract, 'validated');
+
+    // 4. Le PLAN devient accessible : la Passe A a bien débloqué l'aval.
+    const plan = await executerPost('/:id/generate/:step', { id: ID_SESSION, step: 'plan' });
+    assert.equal(plan.status, 200, `plan : ${JSON.stringify(plan.body)}`);
+    assert.equal(plan.body.workflow.plan, 'generated');
+  } finally {
+    sortiePasseA = () => REPONSES_DEEPSEEK.probleme;
+  }
+});
+
+// ---------------------------------------------------------------------------
+// Cas 7 — contre-preuve : la simplification n'a pas rendu la Passe A complaisante.
+// ---------------------------------------------------------------------------
+
+test('cas 7 : une question oui / non reste un rejet BLOQUANT (HTTP 422)', async () => {
+  await sessionPrete();
+  sortiePasseA = () => CONTRAT_QUESTION_OUI_NON;
+  try {
+    const generation = await executerPost('/:id/generate/:step', { id: ID_SESSION, step: 'probleme' });
+    assert.equal(generation.status, 422, `attendu 422, reçu ${JSON.stringify(generation.body)}`);
+    assert.equal(generation.body.error.code, 'PROBLEMATIC_QUALITY_REJECTED');
+    // Le motif précis du rejet est journalisé côté serveur (`detailTechnique`) :
+    // c'est `contrat_question_oui_non`, et non un code de qualité déplacé.
+    verifierReponsePropre(generation, 'rejet question oui/non');
+    // Rien n'est écrit : le contrat précédent reste intact.
+    const relecture = await executerGet('/:id', { id: ID_SESSION });
+    assert.equal(relecture.body.workflow.contract, 'empty');
+  } finally {
+    sortiePasseA = () => REPONSES_DEEPSEEK.probleme;
+  }
 });

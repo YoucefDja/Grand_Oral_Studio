@@ -1,9 +1,15 @@
 const test = require('node:test');
 const assert = require('node:assert');
 
-const { verifierContrat, ciblerRegeneration, recouvrement } = require('../contratVerification');
+const {
+  verifierContrat,
+  ciblerRegeneration,
+  recouvrement,
+  REJETS_CORE,
+  REJETS_DEPLACES_EN_AVERTISSEMENT,
+} = require('../contratVerification');
 
-/** Contrat de référence, conforme : sert de base aux tests de rejet. */
+/** Contrat de référence, conforme : sert de base aux tests. */
 function contratValide() {
   return {
     sujet: 'La transformation digitale des PME industrielles',
@@ -38,6 +44,10 @@ function codes(resultat) {
   return resultat.rejets.map((r) => r.code);
 }
 
+function avertissements(resultat) {
+  return resultat.avertissements.join(' \u2022 ');
+}
+
 test('un contrat conforme passe la vérification', () => {
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: contratValide(), mode: 'regeneration' });
   assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
@@ -50,24 +60,152 @@ test('mode création : un contrat conforme passe aussi', () => {
   assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
 });
 
-test('rejet : question qui recopie le sujet', () => {
+// --- LES 6 REJETS BLOQUANTS DE LA PASSE A ----------------------------------
+
+test('rejet bloquant : question absente', () => {
   const c = contratValide();
-  c.problematique = 'Comment réussir la transformation digitale des PME industrielles ?';
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_copie_sujet'));
+  c.problematique = '   ';
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'creation' });
+  assert.strictEqual(res.coreValide, false);
+  assert.ok(codes(res).includes('contrat_question_absente'));
 });
 
-test('rejet : question oui / non', () => {
+test('rejet bloquant : tension absente', () => {
+  const c = contratValide();
+  delete c.tension;
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, false);
+  assert.ok(codes(res).includes('contrat_tension_absente'));
+});
+
+test('rejet bloquant : pas une question (pas de point d’interrogation)', () => {
+  const c = contratValide();
+  c.problematique = 'Dans quelle mesure une PME industrielle peut engager sa transformation digitale';
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, false);
+  assert.ok(codes(res).includes('contrat_pas_une_question'));
+});
+
+test('rejet bloquant : question oui / non', () => {
   const c = contratValide();
   c.problematique = 'Faut-il vraiment digitaliser la transformation des PME industrielles ?';
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, false);
   assert.ok(codes(res).includes('contrat_question_oui_non'));
 });
 
-test('rejet : amorce molle sans contrainte', () => {
+test('rejet bloquant : question qui recopie le sujet', () => {
   const c = contratValide();
-  // Question qui reprend un mot-clé du sujet mais sans contrainte nommée.
-  // Tension alignée sur la question pour que seul le défaut d'amorce soit en cause.
+  c.problematique = 'Comment réussir la transformation digitale des PME industrielles ?';
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, false);
+  assert.ok(codes(res).includes('contrat_copie_sujet'));
+});
+
+test('rejet bloquant : question trop courte (moins de 5 mots utiles)', () => {
+  const c = contratValide();
+  c.problematique = 'Comment digitaliser la PME ?';
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'creation' });
+  assert.strictEqual(res.coreValide, false);
+  assert.ok(codes(res).includes('contrat_question_courte'));
+});
+
+// --- CE QUI N'EST PLUS BLOQUANT : LES 4 CAS DU CAHIER DES CHARGES ---------
+
+test('warning : tension décorrélée — contrat validable, HTTP 200', () => {
+  // Reproduit le cas de recette : la tension (phrase interne issue de
+  // l'analyse) et la question (reformulée, plus concrète) ne partagent presque
+  // aucun mot. Le lien reste évident pour un humain → avertissement, jamais 422.
+  const c = contratValide();
+  c.tension =
+    'Recherche de gains rapides contre maîtrise de la confidentialité et de la fiabilité.';
+  c.problematique =
+    'Comment une PME peut-elle intégrer l’IA générative dans ses processus métiers sans exposer ses données sensibles ni fragiliser la qualité de ses décisions ?';
+  c.motsCles = [{ mot: 'IA générative', definition: 'Modèles génératifs appliqués aux processus métiers.' }];
+  c.preconisations = [{ action: 'Cadrer l’usage de l’IA générative par une charte de gouvernance', cible: 'PME' }];
+  const res = verifierContrat({
+    sujet: 'L’intégration de l’IA générative dans les PME',
+    contrat: c,
+    mode: 'regeneration',
+  });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.deepStrictEqual(res.rejetsCore, []);
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(
+    res.avertissements.some((a) => /même vocabulaire|reformulé/i.test(a)),
+    avertissements(res),
+  );
+});
+
+test('warning : aucun mot-clé du sujet dans la question — contrat validable', () => {
+  const c = contratValide();
+  c.problematique = 'Dans quelle mesure une entreprise peut-elle se passer de recrutement externe ?';
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(res.avertissements.length > 0);
+});
+
+test('warning : mots-clés absents du contrat — contrat validable', () => {
+  const c = { ...contratValide(), motsCles: [] };
+  const res = verifierContrat({
+    sujet: 'La transformation digitale des PME industrielles',
+    contrat: c,
+    mode: 'regeneration',
+  });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!codes(res).includes('contrat_mots_cles_absents'));
+});
+
+test('warning : justification absente — contrat validable', () => {
+  const c = contratValide();
+  delete c.justificationProbleme;
+  const res = verifierContrat({
+    sujet: 'La transformation digitale des PME industrielles',
+    contrat: c,
+    mode: 'regeneration',
+  });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!codes(res).includes('contrat_justification_absente'));
+  assert.ok(res.avertissements.some((a) => /justification/i.test(a)), avertissements(res));
+});
+
+test('warning : cas d’échec absent — contrat validable', () => {
+  const c = contratValide();
+  c.casEntreprises = [
+    { entreprise: 'Cas A', statut: 'succes', chiffre: '48 %', angle: 'transformation digitale', source: 'Source .md' },
+  ];
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!codes(res).includes('contrat_cas_sans_echec'));
+  assert.ok(res.avertissements.some((a) => /échec/i.test(a)), avertissements(res));
+});
+
+test('warning : cas d’entreprise sans source — contrat validable', () => {
+  const c = contratValide();
+  c.casEntreprises = [{ entreprise: 'Cas inventé', statut: 'succes', chiffre: '12 %', angle: 'transformation digitale' }];
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!codes(res).includes('contrat_cas_sans_source'));
+});
+
+test('warning : préconisations décorrélées — contrat validable', () => {
+  const c = contratValide();
+  c.preconisations = [
+    { action: 'Acheter des licences logicielles auprès d’un éditeur international', cible: 'grand groupe' },
+  ];
+  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!codes(res).includes('contrat_solutions_decorrelees'));
+});
+
+test('warning : amorce molle sans contrainte — contrat validable', () => {
+  const c = contratValide();
   c.problematique = 'Comment optimiser la transformation digitale des équipes ?';
   c.tension =
     'Les équipes attendent une transformation digitale, mais la direction veut optimiser sans dégager de moyens.';
@@ -75,10 +213,12 @@ test('rejet : amorce molle sans contrainte', () => {
     { action: 'Transformation digitale portée par les équipes, sans recrutement', cible: 'PME' },
   ];
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_amorce_molle'), JSON.stringify(res.rejets));
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!codes(res).includes('contrat_amorce_molle'));
 });
 
-test('amorce molle avec contrainte nommée : acceptée', () => {
+test('amorce molle avec contrainte nommée : acceptée, sans avertissement dédié', () => {
   const c = contratValide();
   c.problematique =
     'Comment optimiser la transformation digitale d’une PME industrielle dont le budget informatique et les compétences internes sont limités ?';
@@ -88,61 +228,72 @@ test('amorce molle avec contrainte nommée : acceptée', () => {
     { action: 'Transformation digitale des PME industrielles à budget contraint', cible: 'PME' },
   ];
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(!codes(res).includes('contrat_amorce_molle'), JSON.stringify(res.rejets));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(!avertissements(res).includes('sans nommer de contrainte'), avertissements(res));
 });
 
-test('rejet : aucun mot-clé du sujet dans la question', () => {
+test('warning : cas / préconisations / ligne directrice absents — contrat validable', () => {
   const c = contratValide();
-  c.problematique = 'Dans quelle mesure une entreprise peut-elle se passer de recrutement externe ?';
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_hors_sujet'));
+  delete c.casEntreprises;
+  delete c.preconisations;
+  delete c.ligneDirectrice;
+  const res = verifierContrat({
+    sujet: 'La transformation digitale des PME industrielles',
+    contrat: c,
+    mode: 'creation',
+  });
+  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
+  assert.strictEqual(res.rejetsCore.length, 0);
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(res.avertissements.length > 0);
 });
 
-test('rejet : préconisations décorrélées de la tension et de la question', () => {
+test('warning : ouverture absente — contrat validable', () => {
   const c = contratValide();
-  c.preconisations = [
-    { action: 'Acheter des licences logicielles auprès d’un éditeur international', cible: 'grand groupe' },
-  ];
+  delete c.ouverture;
   const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_solutions_decorrelees'));
+  assert.strictEqual(res.valide, true, JSON.stringify(res.rejets));
+  assert.ok(res.avertissements.some((a) => /ouverture/i.test(a)), avertissements(res));
 });
 
-test('rejet : pas une question (pas de point d’interrogation)', () => {
-  const c = contratValide();
-  c.problematique = 'Dans quelle mesure une PME industrielle peut engager sa transformation digitale';
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_pas_une_question'));
+// --- GARANTIES DE LA SIMPLIFICATION ----------------------------------------
+
+test('REJETS_CORE ne contient que les 6 conditions minimales', () => {
+  assert.deepStrictEqual(
+    [...REJETS_CORE].sort(),
+    [
+      'contrat_copie_sujet',
+      'contrat_pas_une_question',
+      'contrat_question_absente',
+      'contrat_question_courte',
+      'contrat_question_oui_non',
+      'contrat_tension_absente',
+    ].sort(),
+  );
 });
 
-test('rejet : cas d’entreprise sans source', () => {
+test('aucun rejet déplacé en avertissement ne bloque, quel que soit le mode', () => {
   const c = contratValide();
-  c.casEntreprises = [{ entreprise: 'Cas inventé', statut: 'succes', chiffre: '12 %', angle: 'transformation digitale' }];
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_cas_sans_source'));
+  delete c.casEntreprises;
+  delete c.preconisations;
+  delete c.justificationProbleme;
+  c.tension = 'Recherche de gains rapides contre maîtrise de la confidentialité.';
+  c.ouverture = 'Et demain ?';
+  for (const mode of ['creation', 'regeneration']) {
+    const res = verifierContrat({
+      sujet: 'La transformation digitale des PME industrielles',
+      contrat: c,
+      mode,
+    });
+    assert.strictEqual(res.rejets.length, 0, `${mode} : ${JSON.stringify(res.rejets)}`);
+    assert.strictEqual(res.valide, true);
+    for (const r of res.rejets) {
+      assert.ok(!REJETS_DEPLACES_EN_AVERTISSEMENT.has(r.code), `${mode} : ${r.code} bloque encore`);
+    }
+  }
 });
 
-test('rejet : aucun cas d’échec', () => {
-  const c = contratValide();
-  c.casEntreprises = [
-    { entreprise: 'Cas A', statut: 'succes', chiffre: '48 %', angle: 'transformation digitale', source: 'Source .md' },
-  ];
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_cas_sans_echec'));
-});
-
-test('rejet : tension absente', () => {
-  const c = contratValide();
-  delete c.tension;
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_tension_absente'));
-});
-
-test('rejet : tension non recoupée par la question', () => {
-  const c = contratValide();
-  c.tension = 'Les dirigeants hésitent entre embaucher et sous-traiter la paie des salariés saisonniers.';
-  const res = verifierContrat({ sujet: 'La transformation digitale des PME industrielles', contrat: c, mode: 'regeneration' });
-  assert.ok(codes(res).includes('contrat_tension_decorrelee'));
-});
+// --- RÉGÉNÉRATION CIBLÉE ---------------------------------------------------
 
 test('ciblerRegeneration ne renvoie que tension / problématique / justification', () => {
   const res = verifierContrat({
@@ -158,82 +309,4 @@ test('ciblerRegeneration ne renvoie que tension / problématique / justification
 
 test('recouvrement vaut 1 quand tout le vocabulaire est repris', () => {
   assert.strictEqual(recouvrement('transformation digitale', 'la transformation digitale des PME'), 1);
-});
-
-// --- Correctif Passe A : séparation rejets CORE / rejets secondaires --------
-
-test('mode création : mots-clés absents ne bloquent pas le core', () => {
-  const c = { ...contratValide(), motsCles: [] };
-  const res = verifierContrat({
-    sujet: 'La transformation digitale des PME industrielles',
-    contrat: c,
-    mode: 'creation',
-  });
-  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
-  assert.strictEqual(res.rejetsCore.length, 0);
-  assert.ok(!res.rejetsCore.some((r) => r.code === 'contrat_mots_cles_absents'));
-});
-
-test('mode création : cas / préconisations / ligne directrice absents ne bloquent pas le core', () => {
-  const c = contratValide();
-  delete c.casEntreprises;
-  delete c.preconisations;
-  delete c.ligneDirectrice;
-  const res = verifierContrat({
-    sujet: 'La transformation digitale des PME industrielles',
-    contrat: c,
-    mode: 'creation',
-  });
-  assert.strictEqual(res.coreValide, true, JSON.stringify(res.rejetsCore));
-  assert.strictEqual(res.rejetsCore.length, 0);
-  assert.ok(res.avertissements.length > 0);
-});
-
-test('mode création : problématique invalide reste bloquée (core)', () => {
-  const c = { ...contratValide(), problematique: 'Faut-il digitaliser les PME industrielles ?' };
-  const res = verifierContrat({
-    sujet: 'La transformation digitale des PME industrielles',
-    contrat: c,
-    mode: 'creation',
-  });
-  assert.strictEqual(res.coreValide, false);
-  const codesCore = res.rejetsCore.map((r) => r.code);
-  assert.ok(
-    codesCore.includes('contrat_question_oui_non') || codesCore.includes('contrat_amorce_invalide'),
-    JSON.stringify(codesCore),
-  );
-});
-
-test('mode régénération : les règles secondaires redeviennent bloquantes', () => {
-  const c = contratValide();
-  delete c.casEntreprises;
-  const res = verifierContrat({
-    sujet: 'La transformation digitale des PME industrielles',
-    contrat: c,
-    mode: 'regeneration',
-  });
-  assert.strictEqual(res.valide, false);
-  assert.ok(res.rejets.some((r) => r.code === 'contrat_cas_absents'));
-});
-
-test('mode régénération : question molle bloquée (strict), tolérée en création', () => {
-  const c = contratValide();
-  c.problematique = 'Comment optimiser la transformation digitale des équipes ?';
-  c.tension =
-    'Les équipes attendent une transformation digitale, mais la direction veut optimiser sans dégager de moyens.';
-  c.preconisations = [
-    { action: 'Transformation digitale portée par les équipes, sans recrutement', cible: 'PME' },
-  ];
-  const creation = verifierContrat({
-    sujet: 'La transformation digitale des PME industrielles',
-    contrat: c,
-    mode: 'creation',
-  });
-  const regeneration = verifierContrat({
-    sujet: 'La transformation digitale des PME industrielles',
-    contrat: c,
-    mode: 'regeneration',
-  });
-  assert.strictEqual(creation.coreValide, true, JSON.stringify(creation.rejetsCore));
-  assert.strictEqual(regeneration.coreValide, false);
 });

@@ -607,9 +607,11 @@ test('extraireTensionAnalyse : prend le premier texte réel, ignore le reste', (
 });
 
 // --- Cas 6 : core récupéré mais question de mauvaise qualité ----------------
-// Le parseur a fait son travail (core complet) : le rejet éventuel de qualité
-// appartient à contratVerification, qui renvoie PROBLEMATIC_QUALITY_REJECTED.
-test('cas 6 — core récupéré mais question invalide : le core passe, la qualité tranche', () => {
+// Depuis la simplification de la Passe A, la qualité ne bloque plus : les
+// heuristiques sémantiques deviennent des avertissements. Ce test vérifie que le
+// parseur fait bien son travail (core complet) et que le juge du FOND n'invente
+// jamais un rejet de type « champ manquant ».
+test('cas 6 — core récupéré mais question invalide : le core passe, la qualité avertit', () => {
   // AUCUNE tension dans la réponse : elle vient de l'analyse, comme en production.
   const raw = {
     formulations: [
@@ -626,8 +628,7 @@ test('cas 6 — core récupéré mais question invalide : le core passe, la qual
   assert.strictEqual(res.diagnostic.justificationSource, 'formulation');
   assert.strictEqual(res.diagnostic.tensionSource, 'analysis');
 
-  // C'est le juge du FOND qui refuse, avec son code dédié — jamais
-  // CORE_CONTRACT_FIELDS_MISSING (le core est présent).
+  // Seule une question FERMÉE reste bloquante (l'une des 6 conditions minimales).
   const verdict = verifierContrat({
     sujet: 'L’IA générative dans les processus métiers des PME',
     contrat: res.contract,
@@ -638,9 +639,8 @@ test('cas 6 — core récupéré mais question invalide : le core passe, la qual
     verdict.rejetsCore.some((r) => REJETS_CORE.has(r.code)),
     `un rejet core est attendu, obtenu : ${JSON.stringify(verdict.rejetsCore.map((r) => r.code))}`
   );
-  // La question ne s'ouvre sur aucune amorce recevable : c'est un rejet de
-  // qualité, distinct d'un champ core manquant.
-  assert.ok(verdict.rejetsCore.some((r) => r.code === 'contrat_amorce_invalide'));
+  assert.ok(verdict.rejetsCore.some((r) => r.code === 'contrat_question_oui_non'));
+  // Jamais un rejet de champ manquant : le core est présent.
   assert.strictEqual(verdict.rejetsCore.some((r) => r.code === 'contrat_question_absente'), false);
   assert.strictEqual(verdict.rejetsCore.some((r) => r.code === 'contrat_tension_absente'), false);
   assert.strictEqual(verdict.rejetsCore.some((r) => r.code === 'contrat_justification_absente'), false);

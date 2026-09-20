@@ -122,16 +122,41 @@ function ecranSupport(session) {
   };
 }
 
-/** Reproduit la décision d'écran de StepProbleme. */
+/**
+ * Reproduit la décision d'écran de StepProbleme (Passe A simplifiée).
+ *
+ * L'écran affiche TROIS zones (tension / problématique / ligne directrice) puis
+ * trois boutons. Les contrôles détaillés sont des AVERTISSEMENTS discrets : ils
+ * ne produisent JAMAIS de bloc rouge ni de bouton Valider désactivé. Seuls les
+ * rejets CORE (question ou tension absente, pas une question, oui/non, copie du
+ * sujet, trop courte) peuvent bloquer.
+ */
 function ecranProbleme(session) {
   const etat = etatEtape(session, 'probleme');
   const contrat = session?.data?.contrat || {};
+  const verification = contrat.verification || {};
+  const rejetsCore = Array.isArray(verification.rejetsCore) ? verification.rejetsCore : [];
+  const avertissements = [
+    ...(Array.isArray(verification.avertissements) ? verification.avertissements : []),
+    ...(Array.isArray(verification.rejetsSecondaires)
+      ? verification.rejetsSecondaires.map((r) => r?.message).filter(Boolean)
+      : []),
+  ];
+  const blocRouge = rejetsCore.length > 0;
   return {
     etat,
     contratAffiche: etat === 'generated' || etat === 'validated',
     boutonGenerer: etat === 'empty',
     boutonValider: etat === 'generated',
     boutonModifier: etat === 'validated',
+    // Les trois zones de la Passe A simplifiée.
+    zoneTension: contrat.tension || '',
+    zoneProblematique: contrat.problematique || '',
+    zoneLigneDirectrice: contrat.ligneDirectrice || '',
+    // Zone discrète d'avertissements, jamais rouge.
+    avertissements,
+    blocRouge,
+    rejetsCore,
     justification: contrat.justificationProbleme || '',
     encartJustification: (contrat.justificationProbleme || '').trim() === '',
     cas: Array.isArray(contrat.casEntreprises) ? contrat.casEntreprises : [],
@@ -526,4 +551,140 @@ test('le plan de l’étape Problématique est bien `contrat`, jamais `probleme`
   assert.strictEqual(cleDonnees('plan'), 'plan');
   assert.strictEqual(cleDonnees('glossaire'), 'glossaire');
   assert.strictEqual(cleDonnees('support'), 'support');
+});
+
+// ---------------------------------------------------------------------------
+// Passe A simplifiée — les trois zones, les avertissements, jamais de rouge.
+// ---------------------------------------------------------------------------
+
+test('Passe A — trois zones affichées : tension, problématique, ligne directrice', () => {
+  const session = sessionA({
+    data: { contrat: contratCanonique() },
+    workflow: { analysis: 'generated', contract: 'generated' },
+  });
+  const ecran = ecranProbleme(session);
+
+  assert.strictEqual(ecran.zoneTension.length > 0, true);
+  assert.match(ecran.zoneProblematique, /\?$/);
+  assert.strictEqual(ecran.zoneLigneDirectrice.length > 0, true);
+  // Les trois boutons attendus par l'écran.
+  assert.strictEqual(ecran.boutonValider, true);
+  assert.strictEqual(ecran.contratAffiche, true);
+});
+
+test('Passe A — tension décorrélée : avertissement discret, AUCUN bloc rouge, contrat validable', () => {
+  const session = sessionA({
+    data: {
+      contrat: contratCanonique({
+        tension: 'Recherche de gains rapides contre maîtrise des coûts.',
+        verification: {
+          valide: true,
+          coreValide: true,
+          rejets: [],
+          rejetsCore: [],
+          rejetsSecondaires: [],
+          avertissements: [
+            'La question n’emploie pas le vocabulaire de la tension : reformulation possible, non bloquante.',
+          ],
+        },
+      }),
+    },
+    workflow: { analysis: 'generated', contract: 'generated' },
+  });
+  const ecran = ecranProbleme(session);
+
+  assert.strictEqual(ecran.blocRouge, false, 'aucun rejet CORE : pas de message rouge');
+  assert.deepStrictEqual(ecran.rejetsCore, []);
+  assert.strictEqual(ecran.avertissements.length, 1, 'le motif reste signalé, discrètement');
+  assert.match(ecran.avertissements[0], /tension/i);
+  assert.strictEqual(ecran.boutonValider, true, 'le contrat reste validable : la Passe A n’est pas bloquée');
+  assert.strictEqual(ecran.contratAffiche, true);
+});
+
+test('Passe A — rejets secondaires du serveur : affichés en avertissements, jamais en rouge', () => {
+  const session = sessionA({
+    data: {
+      contrat: contratCanonique({
+        verification: {
+          valide: true,
+          coreValide: true,
+          rejets: [],
+          rejetsCore: [],
+          rejetsSecondaires: [
+            { code: 'contrat_justification_absente', message: 'La justification du problème reste à écrire.' },
+            { code: 'contrat_cas_sans_echec', message: 'Aucun cas d’échec documenté.' },
+          ],
+          avertissements: [],
+        },
+      }),
+    },
+    workflow: { analysis: 'generated', contract: 'generated' },
+  });
+  const ecran = ecranProbleme(session);
+
+  assert.strictEqual(ecran.blocRouge, false, 'des rejets secondaires ne produisent jamais de rouge');
+  assert.strictEqual(ecran.avertissements.length, 2);
+  assert.strictEqual(ecran.boutonValider, true);
+});
+
+test('Passe A — rejet CORE (question oui/non) : bloc rouge, contrat non validable', () => {
+  const session = sessionA({
+    data: {
+      contrat: contratCanonique({
+        problematique: 'L’IA générative est-elle utile en PME ?',
+        verification: {
+          valide: false,
+          coreValide: false,
+          rejets: [{ code: 'contrat_question_oui_non', message: 'Question oui / non.' }],
+          rejetsCore: [{ code: 'contrat_question_oui_non', message: 'Question oui / non.' }],
+          rejetsSecondaires: [],
+          avertissements: [],
+        },
+      }),
+    },
+    workflow: { analysis: 'generated', contract: 'generated' },
+  });
+  const ecran = ecranProbleme(session);
+
+  assert.strictEqual(ecran.blocRouge, true, 'un rejet CORE produit le bloc rouge');
+  assert.strictEqual(ecran.rejetsCore[0].code, 'contrat_question_oui_non');
+  assert.strictEqual(ecran.avertissements.length, 0);
+});
+
+test('Passe A — validation utilisateur : le Plan devient accessible', () => {
+  const session = sessionA({
+    data: { contrat: contratCanonique({ status: 'validated', validatedAt: '2026-01-05T11:00:00.000Z' }) },
+    workflow: { analysis: 'generated', contract: 'validated' },
+  });
+  const ecran = ecranProbleme(session);
+
+  assert.strictEqual(ecran.boutonModifier, true, 'le contrat validé reste éditable');
+  assert.strictEqual(ecran.boutonValider, false);
+  assert.strictEqual(workflowOf(session).contract, 'validated');
+  // Le Plan est générable : sa seule précondition est la validation du contrat.
+  assert.notStrictEqual(etatEtape(session, 'plan'), 'blocked');
+});
+
+test('Passe A — les contrôles stricts restent hors de l’écran : ils vivent à l’export', () => {
+  // Une problématique valide SANS justification, sans cas, sans préconisation,
+  // sans ouverture produirait auparavant un rejet. Elle doit désormais produire
+  // un contrat affichable et validable, les contrôles détaillés étant déportés.
+  const session = sessionA({
+    data: {
+      contrat: contratCanonique({
+        justificationProbleme: '',
+        casEntreprises: [],
+        preconisations: [],
+        ouverture: '',
+        motsCles: [],
+        verification: { valide: true, coreValide: true, rejetsCore: [], rejetsSecondaires: [], avertissements: [] },
+      }),
+    },
+    workflow: { analysis: 'generated', contract: 'generated' },
+  });
+  const ecran = ecranProbleme(session);
+
+  assert.strictEqual(ecran.blocRouge, false);
+  assert.strictEqual(ecran.boutonValider, true, 'la Passe A n’est jamais bloquée par des contrôles détaillés');
+  assert.strictEqual(session.data.contrat.completeness.passeAValid, true);
 });

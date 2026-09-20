@@ -234,30 +234,34 @@ export const FR = {
   // ---- Passe A : contrat métier (StepProbleme) ----
   'contrat.title': 'Validation de la problématique (contrat métier)',
   'contrat.intro':
-    'La Passe A produit un contrat métier : mots-clés, tension réelle, une seule question, justification, préconisations et cas d’entreprises. Rien ne passe à la Passe B (les 20 slides) tant que vous n’avez pas validé la tension ET la problématique.',
+    'La Passe A produit une problématique utilisable : une tension de départ, UNE question, une ligne directrice. Relisez, modifiez si besoin, puis validez : les contrôles détaillés (sources, cas réels, grille CESI) se font avant l’export final.',
   'contrat.valideBadge': 'Contrat validé',
   'contrat.nonValideBadge': 'À valider',
   'contrat.sujet': 'Sujet',
   'contrat.motsCles': 'Mots-clés du sujet',
   'contrat.contexte': 'Contexte (faits & chiffres sourcés)',
-  'contrat.tension': 'Tension — ce qui coince réellement',
+  'contrat.tension': 'Tension repérée',
   'contrat.tensionHint':
-    'Phrase interne, jamais affichée telle quelle sur les slides. Éditable : c’est votre lecture du problème.',
-  'contrat.problematique': 'Problématique — une seule question',
+    'Phrase interne issue de l’analyse, jamais affichée telle quelle sur les slides. Éditable : c’est votre lecture du problème.',
+  'contrat.problematique': 'Problématique proposée',
   'contrat.problematiqueHint':
     'Une question précise (comment / en quoi / dans quelle mesure), liée au sujet, qui appelle une réponse par vos préconisations.',
   'contrat.justification': 'Pourquoi c’est un problème d’entreprise aujourd’hui',
   'contrat.limitesExistant': 'Ce qui existe déjà — et pourquoi ça ne suffit pas',
   'contrat.preconisations': 'Préconisations — la réponse à la question',
   'contrat.casEntreprises': 'Cas d’entreprises (dont un échec)',
-  'contrat.ligneDirectrice': 'Ligne directrice (fil rouge, éditable)',
+  'contrat.ligneDirectrice': 'Ligne directrice',
+  'contrat.ligneDirectriceHint':
+    'Une phrase indiquant l’orientation de réponse probable. Éditable.',
   'contrat.ouverture': 'Ouverture (question sans réponse)',
-  'contrat.valider': '✓ Valider la problématique et passer au plan',
+  'contrat.valider': '✓ Valider la problématique',
   'contrat.validant': 'Validation…',
-  'contrat.regenerer': '↻ Régénérer la tension et la problématique',
+  'contrat.regenerer': '↻ Regénérer',
   'contrat.regenerant': 'Régénération ciblée…',
   'contrat.rejetsTitle': 'Rejets bloquants — la problématique ne passe pas',
-  'contrat.avertissementsTitle': 'Avertissements (non bloquants)',
+  'contrat.avertissementsTitle': 'À approfondir avant l’export',
+  'contrat.avertissementsIntro':
+    'Ces points ne bloquent pas votre progression : ils seront à consolider au Plan, au Glossaire, à la Recherche et au Support.',
   'contrat.regenerationHint':
     'La régénération ne retouche QUE la tension, la problématique et la justification : les mots-clés, le contexte et les cas d’entreprises validés sont conservés mot pour mot.',
   'contrat.valideOk': 'Contrat validé : vous pouvez générer les 20 slides (étape Support).',
@@ -267,13 +271,16 @@ export const FR = {
   'contrat.issueSucces': 'succès',
   'contrat.issueMixte': 'mixte',
   'contrat.issueAQualifier': 'à qualifier',
-  'contrat.modifier': 'Modifier le contrat',
+  'contrat.modifier': 'Modifier',
   'contrat.sourceLabel': 'Source',
   'contrat.pasDeContrat': 'Aucun contrat pour le moment. Lancez la génération de la problématique (Passe A).',
   'contrat.exploitable': 'Contrat exploitable — éléments complémentaires à construire ensuite',
   'contrat.aCompleterEtapeSuivante': 'À compléter à l’étape suivante.',
   'contrat.nonGenere': 'Non généré — vous pourrez compléter ce point ensuite.',
   'contrat.aucunCas': 'Aucun cas d’entreprise pour le moment — non généré, à construire ensuite.',
+  'contrat.detailsTitle': 'Éléments complémentaires (facultatifs à cette étape)',
+  'contrat.detailsHint':
+    'Produits quand les sources le permettent. Ils seront consolidés au Plan, au Glossaire, à la Recherche et au Support.',
   // Justification facultative en Passe A : encadré d'invitation, jamais une erreur.
   'contrat.justificationAFournir': 'Justification à approfondir',
   'contrat.justificationAFournirDetail':
@@ -627,30 +634,34 @@ export const EN = {
   // ---- Pass A: business contract (StepProbleme) ----
   'contrat.title': 'Problem statement validation (business contract)',
   'contrat.intro':
-    'Pass A produces a business contract: keywords, the real friction, a single question, the justification, recommendations and company cases. Nothing moves to Pass B (the 20 slides) until you validate the friction AND the problem statement.',
+    'Pass A produces a usable problem statement: a starting friction, ONE question, a through-line. Read it, edit it if needed, then validate: the detailed checks (sources, real cases, CESI grid) happen before the final export.',
   'contrat.valideBadge': 'Contract validated',
   'contrat.nonValideBadge': 'To validate',
   'contrat.sujet': 'Topic',
   'contrat.motsCles': 'Topic keywords',
   'contrat.contexte': 'Context (sourced facts & figures)',
-  'contrat.tension': 'Friction — what actually hurts',
+  'contrat.tension': 'Friction identified',
   'contrat.tensionHint':
-    'Internal sentence, never shown as is on the slides. Editable: this is your reading of the problem.',
-  'contrat.problematique': 'Problem statement — a single question',
+    'Internal sentence from the analysis, never shown as is on the slides. Editable: this is your reading of the problem.',
+  'contrat.problematique': 'Proposed problem statement',
   'contrat.problematiqueHint':
     'A precise question (how / to what extent), tied to the topic, answered by your recommendations.',
   'contrat.justification': 'Why this is a business problem today',
   'contrat.limitesExistant': 'What already exists — and why it is not enough',
   'contrat.preconisations': 'Recommendations — the answer to the question',
   'contrat.casEntreprises': 'Company cases (one failure included)',
-  'contrat.ligneDirectrice': 'Through-line (editable)',
+  'contrat.ligneDirectrice': 'Through-line',
+  'contrat.ligneDirectriceHint':
+    'One sentence stating the likely direction of the answer. Editable.',
   'contrat.ouverture': 'Opening (question left unanswered)',
-  'contrat.valider': '✓ Validate the problem statement and move to the plan',
+  'contrat.valider': '✓ Validate the problem statement',
   'contrat.validant': 'Validating…',
-  'contrat.regenerer': '↻ Regenerate the friction and the problem statement',
+  'contrat.regenerer': '↻ Regenerate',
   'contrat.regenerant': 'Targeted regeneration…',
   'contrat.rejetsTitle': 'Blocking rejections — the problem statement does not pass',
-  'contrat.avertissementsTitle': 'Warnings (non-blocking)',
+  'contrat.avertissementsTitle': 'To expand before export',
+  'contrat.avertissementsIntro':
+    'These points do not block your progress: they will be consolidated at the Plan, Glossary, Research and Support steps.',
   'contrat.regenerationHint':
     'Regeneration only rewrites the friction, the problem statement and the justification: validated keywords, context and company cases are kept word for word.',
   'contrat.valideOk': 'Contract validated: you can now generate the 20 slides (Support step).',
@@ -660,13 +671,16 @@ export const EN = {
   'contrat.issueSucces': 'success',
   'contrat.issueMixte': 'mixed',
   'contrat.issueAQualifier': 'to be qualified',
-  'contrat.modifier': 'Edit contract',
+  'contrat.modifier': 'Edit',
   'contrat.sourceLabel': 'Source',
   'contrat.pasDeContrat': 'No contract yet. Run the problem statement generation (Pass A).',
   'contrat.exploitable': 'Usable contract — extra items to build at the next step',
   'contrat.aCompleterEtapeSuivante': 'To complete at the next step.',
   'contrat.nonGenere': 'Not generated — you will be able to complete this later.',
   'contrat.aucunCas': 'No company case yet — not generated, to build later.',
+  'contrat.detailsTitle': 'Extra items (optional at this step)',
+  'contrat.detailsHint':
+    'Produced when the sources allow it. They will be consolidated at the Plan, Glossary, Research and Support steps.',
   // Justification optional in Pass A: an invitation panel, never an error.
   'contrat.justificationAFournir': 'Justification to expand',
   'contrat.justificationAFournirDetail':

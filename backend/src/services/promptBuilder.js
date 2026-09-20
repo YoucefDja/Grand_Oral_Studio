@@ -223,68 +223,47 @@ Si ça sonne IA, le texte est à réécrire.
 
 /**
  * Passe A — contrat métier. Le modèle ne produit AUCUNE slide ici : il produit
- * le contrat de fond (mots-clés, contexte chiffré, tension, UNE problématique,
- * préconisations, cas d'entreprises dont un échec) que l'étudiant validera
- * avant que la Passe B ne le découpe en 20 slides.
+ * une problématique UTILISABLE (tension + une question + ligne directrice) que
+ * l'étudiant lira, éditera et validera avant de débloquer le Plan.
+ *
+ * La Passe A n'est PAS l'évaluation finale : les éléments secondaires
+ * (justification, mots-clés, préconisations, cas d'entreprise, ouverture) sont
+ * FACULTATIFS ici et seront consolidés au Plan, au Glossaire, à la Recherche et
+ * au Support — où le contrôle pré-export, lui, reste strict.
  */
 const PASSE_A_CONTRAT = `
 ### PASSE A — CONTRAT MÉTIER (AVANT TOUTE SLIDE)
 Tu produis le CONTRAT de fond de la présentation. Tu ne produis aucune slide, aucune mise en forme : tu fixes le raisonnement qui sera ensuite découpé en slides à la Passe B.
 
-MÉCANISME DE RESSERREMENT (ne le recopie pas comme contenu) : un sujet large devient une question resserrée du type « dans quelle mesure une approche hybride peut-elle répondre aux besoins spécifiques des entreprises ? ». Le sujet donne le décor ; la question donne le problème à instruire.
+MÉCANISME DE RESSERREMENT (ne le recopie pas comme contenu) : un sujet large devient une question resserrée. Le sujet donne le décor ; la question donne le problème à instruire.
 
-EXIGENCES :
-1. ANALYSER — les mots-clés du sujet et leurs relations : c'est d'eux que sort la tension, pas d'une idée générale sur le thème.
-2. CONTEXTUALISER — 3 à 5 faits d'actualité, chacun avec un chiffre et sa source explicite (organisme + année). Aucun chiffre sans source : un chiffre non sourcé est un chiffre inventé.
-3. TENSION — la friction réelle : ce que l'entreprise doit arbitrer, ce qu'elle gagne ou perd sur CETTE question. C'est une phrase de travail interne : elle n'est jamais affichée telle quelle.
-4. PROBLÉMATIQUE — UNE seule question (comment / en quoi / dans quelle mesure / quelles conditions / par quels leviers / quelle place), qui nomme la contrainte (coût, compétence, dette, conformité, dépendance, délai, taille d'entreprise…) et au moins un mot-clé du sujet.
-5. JUSTIFICATION — pourquoi c'est un problème d'entreprise AUJOURD'HUI, appuyé sur le contexte chiffré.
-6. LIMITES DE L'EXISTANT — ce qui existe déjà et POURQUOI ça ne suffit pas face à CETTE tension. Pas de théorie orpheline, pas de norme citée sans conséquence concrète.
-7. PRÉCONISATIONS — les actions qui RÉPONDENT à la question, en posture consultant : contextualisées par taille d'entreprise (PME / ETI / grand groupe) et par moment (avant / pendant / après). Des décisions actionnables, jamais des normes listées (ITIL, NIST, ISO) sans prise de position. Elles réutilisent le vocabulaire de la tension et de la question : si on retire la question, elles doivent perdre leur raison d'être.
-8. CAS D'ENTREPRISES — 2 à 4 entreprises réelles et connues, dont AU MOINS UN ÉCHEC. Chaque cas porte un chiffre, un angle qui prouve LA tension de ce sujet et sa source. Un cas qui n'illustre pas la tension est écarté.
-9. CONCLUSION — tu prépares la phrase qui RÉPONDRA à la question, le rappel de la ligne directrice, et une ouverture : une question, explicitement sans réponse.
+SORTIE MINIMALE OBLIGATOIRE — trois champs, sans eux le contrat est refusé :
+1. TENSION — la friction réelle que l'entreprise doit arbitrer sur CE sujet : ce qu'elle gagne ou perd, ce qu'elle doit sacrifier. Une phrase de travail interne, jamais affichée telle quelle.
+2. PROBLÉMATIQUE — UNE seule question.
+   - La problématique doit transformer le sujet en problème d'entreprise concret.
+   - Elle commence naturellement par Comment, Dans quelle mesure ou En quoi.
+   - Elle contient une contrainte, un arbitrage, un risque ou une limite réelle.
+   - Elle ne doit pas recopier le sujet et ne doit pas être une question oui/non.
+   - Elle se termine par « ? » et compte au moins 5 mots utiles.
+3. LIGNE DIRECTRICE — une phrase indiquant l'orientation de réponse probable.
 
-N'invente aucun fond métier : tout vient du sujet et du .md de préparation. Zéro source inventée.
+CHAMPS FACULTATIFS — produis-les SEULEMENT si les sources les justifient ; sinon renvoie [] ou "". Un champ vide est accepté, un champ inventé est refusé :
+justificationProbleme, motsCles, limitesExistant, preconisations, casEntreprises, ouverture.
 
-### ORDRE DE PRODUCTION ET CHAMPS À VIDE (RÈGLE DE SORTIE)
-- Produis D'ABORD et IMPÉRATIVEMENT ces trois champs : "tension", "problematique", "justificationProbleme". Sans eux le contrat est refusé et le parcours est bloqué.
-- Produis ENSUITE les autres champs. Si les sources fournies ne permettent pas de les justifier, renvoie une liste vide [] ou une chaîne vide "" : un champ vide est accepté, un champ inventé est refusé.
-- Les champs tension, problematique et justificationProbleme sont obligatoires. Pour toute information secondaire non présente dans les sources fournies, renvoie une liste vide [] ou une chaîne vide "". N'invente jamais une donnée, un chiffre, une entreprise ou une source pour remplir le schéma.
-- Ne remplis JAMAIS un champ par défaut avec du contenu plausible : pas de cas d'entreprise « exemple », pas de chiffre « environ », pas de source « étude récente ». Vide vaut mieux que faux.
+Ne bloque pas sur les informations secondaires : elles seront consolidées au Plan, au Glossaire, à la Recherche et au Support. N'invente aucun fond métier : tout vient du sujet et du .md de préparation. Zéro source inventée.
 
 SCHÉMA JSON EXACT — toutes ces clés sont attendues à ce niveau racine :
 {
-  "sujet": "le sujet tel quel",
-  "motsCles": [{ "mot": "…", "definition": "une ligne, langage clair" }],
-  "contexte": [{ "fait": "…", "source": "organisme + année" }],
   "tension": "la friction réelle que l'entreprise doit arbitrer (phrase interne, jamais affichée)",
-  "formulations": [
-    {
-      "question": "UNE question précise, terminée par « ? »",
-      "justification": "pourquoi cette question pose un problème concret et actuel pour une entreprise"
-    }
-  ],
-  "problematique": "la MÊME question que formulations[0].question, mot pour mot",
-  "justificationProbleme": "la MÊME justification que formulations[0].justification, mot pour mot",
-  "limitesExistant": ["ce qui existe déjà et pourquoi ça ne suffit pas face à cette tension"],
+  "problematique": "UNE question concrète qui se termine par ?",
+  "ligneDirectrice": "le fil rouge de l'oral, en une phrase",
+  "justificationProbleme": "",
+  "motsCles": [{ "mot": "…", "definition": "une ligne, langage clair" }],
+  "limitesExistant": [],
   "preconisations": [{ "action": "…", "detail": "…", "cible": "PME | ETI | grand groupe" }],
-  "casEntreprises": [{ "nom": "…", "chiffre": "…", "angle": "preuve de la tension", "source": "…", "issue": "succès | échec" }],
-  "ligne_directrice": "le fil rouge de l'oral, en une phrase",
-  "recommandation": "l'action principale que tu recommandes à l'entreprise",
-  "justification_recommandation": "pourquoi cette recommandation répond à la question",
-  "ouverture": "une question prospective, sans réponse"
+  "casEntreprises": [{ "nom": "…", "chiffre": "…", "angle": "…", "source": "…", "issue": "succès | échec" }],
+  "ouverture": ""
 }
-
-RÈGLE DE FORME — "formulations" EST OBLIGATOIRE :
-Le champ formulations est obligatoire et contient au moins une formulation.
-Chaque formulation doit contenir obligatoirement :
-- question : une problématique précise terminée par ?
-- justification : une phrase expliquant le problème réel d'entreprise soulevé par cette question.
-
-N'écris jamais une formulation avec une question seule.
-Si tu ne peux pas justifier la question à partir des sources fournies, retourne une chaîne vide mais conserve la clé justification.
-
-"ligne_directrice", "recommandation" et "justification_recommandation" sont des champs SECONDAIRES : produis-les quand les sources le permettent, mais ne t'appuie jamais sur eux pour porter la tension, la question ou la justification du problème.
 
 Réponds exclusivement avec UN objet JSON valide RFC 8259. N'ajoute aucun texte, aucun commentaire, aucune balise Markdown. Utilise uniquement des guillemets doubles " pour les clés et les chaînes. N'utilise jamais d'apostrophe simple en guise de guillemet.`.trim();
 
