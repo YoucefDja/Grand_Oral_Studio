@@ -29,9 +29,24 @@ export const STEP_EXPLANATIONS = {
     'Transforme le plan en slides concises + notes orateur, puis permet l’export .pptx.',
 };
 
+/**
+ * Clé de `session.data` qui porte réellement le contenu d'une étape.
+ *
+ * L'étape « Problématique » est la seule exception : le backend persiste son
+ * contrat sous `data.contrat` (vocabulaire métier), pas sous `data.probleme`.
+ * Sans cette correspondance, la coquille d'étape croyait n'avoir aucun contenu et
+ * ne proposait que le bouton de génération — alors que le contrat était bien en
+ * base (le Plan, déverrouillé et alimenté, le prouvait).
+ */
+const CLE_DONNEES_PAR_ETAPE = { probleme: 'contrat' };
+
+export function cleDonnees(stepKey) {
+  return CLE_DONNEES_PAR_ETAPE[stepKey] || stepKey;
+}
+
 export function hasStepData(session, stepKey) {
   if (!session || !session.data) return false;
-  const value = session.data[stepKey];
+  const value = session.data[cleDonnees(stepKey)];
   if (!value || typeof value !== 'object' || Array.isArray(value)) return false;
   return Object.keys(value).some((k) => {
     const v = value[k];

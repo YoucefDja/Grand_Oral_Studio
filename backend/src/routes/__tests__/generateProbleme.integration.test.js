@@ -278,6 +278,14 @@ test('scénario du log 8cd6fbdc : contrat core valide → HTTP 200, jamais 500',
   assert.equal(relue.data.contrat.problematique, contrat.problematique);
   assert.equal(relue.data.contrat.tension, contrat.tension);
   assert.equal(relue.data.contrat.valide, undefined, 'le contrat n’est pas validé d’office');
+
+  // Contrat de lecture avec le frontend : la route GET renvoie la session telle
+  // quelle, et l'étape « Problématique » lit `session.data.contrat` (jamais
+  // `session.data.probleme`). On fige donc ici la clé ET la forme attendues.
+  assert.ok(relue.data.contrat, 'le contrat doit être persisté sous data.contrat');
+  assert.deepEqual(relue.data.probleme, {}, 'aucun contenu ne doit être écrit sous data.probleme');
+  assert.equal(typeof relue.data.contrat.problematique, 'string');
+  assert.equal(relue.data.contrat.completeness.isCoreValid, true);
 });
 
 test('persistance : champs secondaires absents et justification vide sont stockés sans erreur', async () => {
