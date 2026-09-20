@@ -103,8 +103,10 @@ function logGeneration({
  *
  * Passe A : deux échecs internes distincts, pour ne plus renvoyer un générique
  * ambigu impossible à diagnostiquer en recette.
- *  - `CORE_CONTRACT_FIELDS_MISSING` : le modèle n'a pas produit les trois
- *    éléments porteurs du sujet (tension, problématique, justification) ;
+ *  - `CORE_CONTRACT_FIELDS_MISSING` : le modèle n'a pas produit les DEUX
+ *    éléments qui portent la logique du sujet (tension, problématique). La
+ *    justification est FACULTATIVE à cette étape et n'est jamais la cause de ce
+ *    rejet ;
  *  - `PROBLEMATIC_QUALITY_REJECTED` : la problématique existe mais les règles
  *    métier de `contratVerification` la refusent (copie du sujet, oui/non…).
  */

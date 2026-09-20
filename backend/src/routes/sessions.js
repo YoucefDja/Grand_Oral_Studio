@@ -41,7 +41,7 @@ const {
 const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { APP_VERSION } = require('../config/version');
-const { parseAndValidateContract } = require('../services/contratParsing');
+const { parseAndValidateContract, validatePasseAContract } = require('../services/contratParsing');
 const { appliquerContratPasseA } = require('../services/applicationContrat');
 const {
   httpError,
@@ -110,31 +110,17 @@ function validateStepOutput(stepKey, parsed) {
     );
   }
   if (stepKey === 'probleme') {
-    // Passe A : contrat métier (plus de formulations candidates). Seuls les TROIS
-    // champs qui portent la logique du sujet sont exigés ici : la question, la
-    // tension et la justification. Tout le reste (mots-clés, cas d'entreprises,
-    // ligne directrice, ouverture…) est un élément secondaire que la Passe B et
-    // l'export construiront ou exigeront plus tard : l'exiger en « tout ou rien »
-    // bloquait tout le parcours dès qu'une clé secondaire manquait.
-    const bloquants = [];
-    if (typeof parsed.problematique !== 'string' || !parsed.problematique.trim()) {
-      bloquants.push('problematique');
-    }
-    if (typeof parsed.tension !== 'string' || !parsed.tension.trim()) {
-      bloquants.push('tension');
-    }
-    if (typeof parsed.justificationProbleme !== 'string' || !parsed.justificationProbleme.trim()) {
-      bloquants.push('justificationProbleme');
-    }
-    if (bloquants.length > 0) {
-      const err = httpError(
-        422,
-        `Le contrat généré ne contient pas les éléments indispensables : ${bloquants.join(', ')}.`,
-        'CORE_CONTRACT_FIELDS_MISSING'
-      );
-      err.champsManquants = bloquants;
-      throw err;
-    }
+    // Passe A : contrat métier (plus de formulations candidates). Le noyau
+    // bloquant est défini UNE SEULE FOIS dans `validatePasseAContract`
+    // (contratParsing.js) : `tension` + `problematique`.
+    // `justificationProbleme` est FACULTATIF à cette étape — il ne doit JAMAIS
+    // être exigé ici (c'est cet ancien contrôle qui produisait un
+    // 422 CORE_CONTRACT_FIELDS_MISSING alors que le parseur avait accepté le
+    // contrat normalisé). Son contrôle strict est déplacé à la vérification
+    // pré-export (verificationExport.js).
+    //
+    // Ce garde-fou ne fait donc plus de contrôle de CHAMPS : il reste le
+    // filet de sécurité pour un contrat non-objet (déjà couvert plus haut).
   }
   if (stepKey === 'glossaire') {
     const sources = Array.isArray(parsed.sources) ? parsed.sources : [];
@@ -171,22 +157,17 @@ function validateStepOutput(stepKey, parsed) {
  */
 function construireDiagnosticContrat(resultat, contexte = {}) {
   const diagnostic = (resultat && resultat.diagnostic) || {};
+  // Le verdict du noyau vient de `validatePasseAContract` : JAMAIS recalculé ici.
   // `justificationProbleme` n'est PLUS bloquant à l'étape Passe A : malgré son
   // nom historique « core », il est désormais secondaire (une problématique
   // concrète reliée à une tension suffit à lancer le Plan). Son contrôle strict
   // est déplacé à la vérification pré-export.
-  const brut = (resultat && resultat.coreFieldsPresent) || {};
-  const corePresence = brut.core || {
-    tension: false,
-    problematique: false,
-  };
-  const optionalPresence = brut.optional || {
-    justificationProbleme: false,
-  };
-  const coreMissing = ['tension', 'problematique'].filter((c) => !corePresence[c]);
+  const verdict =
+    (resultat && resultat.validationPasseA) ||
+    validatePasseAContract((resultat && resultat.contract) || {});
   const missingSecondaryFields = Array.isArray(resultat && resultat.missingSecondaryFields)
     ? resultat.missingSecondaryFields
-    : [];
+    : verdict.missingSecondaryFields;
 
   return {
     stage: 'probleme',
@@ -207,20 +188,17 @@ function construireDiagnosticContrat(resultat, contexte = {}) {
     formulationIndexUsed: Number.isInteger(diagnostic.formulationIndexUsed)
       ? diagnostic.formulationIndexUsed
       : null,
-    corePresence,
-    optionalPresence,
-    coreMissing,
+    corePresence: verdict.corePresence,
+    optionalPresence: verdict.optionalPresence,
+    coreMissing: verdict.coreMissing,
+    // Nom conservé pour ne pas casser l'exploitation des logs existants.
     secondaryMissing: missingSecondaryFields,
+    missingSecondaryFields,
     parseStatus: resultat && resultat.ok === false && resultat.type === 'INVALID_LLM_JSON' ? 'failed' : 'ok',
     // Un core valide dont la justification reste à construire n'est PAS un
     // échec : le libellé le dit explicitement pour que le log Railway ne laisse
     // aucune ambiguïté sur la cause d'un éventuel rejet.
-    schemaStatus:
-      resultat && resultat.ok
-        ? optionalPresence.justificationProbleme
-          ? 'core_valid'
-          : 'core_valid_justification_pending'
-        : 'core_invalid',
+    schemaStatus: verdict.schemaStatus,
     verificationStatus: 'pending',
     rejectionCode: null,
     dureeMs: contexte.dureeMs,
@@ -511,12 +489,21 @@ router.post(
             appVersion: APP_VERSION,
           });
           if (!resultat.ok) {
+            // Le type d'échec est décidé par le PARSEUR, jamais reconstruit ici :
+            // un JSON illisible → INVALID_LLM_JSON, un noyau incomplet →
+            // CORE_CONTRACT_FIELDS_MISSING. La justification ne peut plus être
+            // la cause de ce rejet (elle n'est pas dans le noyau).
             const code = resultat.type === 'INVALID_LLM_JSON' ? 'INVALID_LLM_JSON' : 'CORE_CONTRACT_FIELDS_MISSING';
             const err = httpError(422, 'Contenu inexploitable.', code, resultat.internalReason);
             err.internalReason = resultat.internalReason;
             // Diagnostic de schéma : quels champs bloquent, et lesquels manquent.
+            // On expose le verdict unique (jamais une liste recalculée).
             err.coreFieldsPresent = resultat.coreFieldsPresent;
-            err.champsManquants = resultat.manquants;
+            err.champsManquants =
+              resultat.validationPasseA && Array.isArray(resultat.validationPasseA.coreMissing)
+                ? resultat.validationPasseA.coreMissing
+                : resultat.manquants;
+            err.validationPasseA = resultat.validationPasseA;
             // Inspection des clés reçues, en DÉVELOPPEMENT uniquement : jamais en
             // production, et jamais le contenu des valeurs.
             if (process.env.NODE_ENV !== 'production') {
@@ -565,8 +552,11 @@ router.post(
           parsed.champsARegenerer = ciblerRegeneration(verification.rejetsCore);
         }
         const completeness = parsed.completeness || {};
-        const justificationPresente =
-          typeof parsed.justificationProbleme === 'string' && parsed.justificationProbleme.trim() !== '';
+        // VERDICT UNIQUE : le noyau bloquant est jugé par la même fonction pure
+        // que celle utilisée par le parseur, appliquée au contrat NORMALISÉ
+        // FINAL (alias + promotions déjà appliqués). Le diagnostic ci-dessous
+        // en dérive intégralement : plus aucune liste de champs parallèle.
+        const validationPasseA = resultat.validationPasseA || validatePasseAContract(parsed);
         diagnosticProbleme = {
           requestId: req.requestId,
           sessionId: req.params.id,
@@ -574,19 +564,16 @@ router.post(
           parsed: true,
           // Noyau bloquant : tension + problématique. La justification n'y figure
           // plus (voir CHAMPS_CORE dans contratParsing.js).
-          corePresence: {
-            tension: typeof parsed.tension === 'string' && parsed.tension.trim() !== '',
-            problematique: typeof parsed.problematique === 'string' && parsed.problematique.trim() !== '',
-          },
+          corePresence: validationPasseA.corePresence,
+          coreMissing: validationPasseA.coreMissing,
           // Champs visibles mais facultatifs à cette étape.
-          optionalPresence: {
-            justificationProbleme: justificationPresente,
-          },
+          optionalPresence: validationPasseA.optionalPresence,
           missingSecondaryFields: Array.isArray(completeness.missingSecondaryFields)
             ? completeness.missingSecondaryFields
-            : [],
-          schemaStatus: justificationPresente ? 'core_valid' : 'core_valid_justification_pending',
+            : validationPasseA.missingSecondaryFields,
+          schemaStatus: validationPasseA.schemaStatus,
           validationOutcome: verification.coreValide ? 'accepted' : 'rejected_core',
+          rejectionCode: null,
         };
 
         // La problématique existe mais les règles métier la refusent : c'est un

@@ -3,6 +3,7 @@ const assert = require('node:assert');
 
 const {
   parseAndValidateContract,
+  validatePasseAContract,
   retirerFences,
   extrairePremierObjet,
   ERREUR_JSON,
@@ -798,4 +799,157 @@ test('exigence 5 — la justification absente ne fait plus partie des rejets COR
     verdict.avertissements.some((a) => /justification/i.test(a)),
     `un avertissement sur la justification est attendu, obtenu : ${JSON.stringify(verdict.avertissements)}`
   );
+});
+
+// ---------------------------------------------------------------------------
+// SOURCE DE VÉRITÉ UNIQUE — `validatePasseAContract`.
+//
+// Le log Railway requestId a12e994b montrait une contradiction interne :
+// `schemaStatus = core_valid_justification_pending` (contrat normalisé valide)
+// coexistait avec un `422 CORE_CONTRACT_FIELDS_MISSING` dont le champ manquant
+// était `justificationProbleme`. Cause : la route refaisait sa propre liste de
+// champs obligatoires APRÈS le parseur. Le noyau bloquant est désormais jugé par
+// cette seule fonction, appliquée au contrat normalisé final.
+// ---------------------------------------------------------------------------
+
+test('validatePasseAContract — tension + problématique, justification absente : core valide', () => {
+  const verdict = validatePasseAContract({
+    tension: 'Les PME encadrent mal les usages de l’IA générative.',
+    problematique: 'Comment une PME peut-elle encadrer les usages de l’IA générative ?',
+    justificationProbleme: '',
+    completeness: { missingSecondaryFields: ['justificationProbleme'] },
+  });
+
+  assert.strictEqual(verdict.isCoreValid, true);
+  assert.deepStrictEqual(verdict.requiredFields, ['tension', 'problematique']);
+  assert.deepStrictEqual(verdict.corePresence, { tension: true, problematique: true });
+  assert.deepStrictEqual(verdict.coreMissing, []);
+  assert.deepStrictEqual(verdict.optionalPresence, { justificationProbleme: false });
+  assert.deepStrictEqual(verdict.missingSecondaryFields, ['justificationProbleme']);
+  assert.strictEqual(verdict.schemaStatus, 'core_valid_justification_pending');
+  assert.strictEqual(verdict.errorCode, null);
+});
+
+test('validatePasseAContract — justification renseignée : core valide, aucune justification en attente', () => {
+  const verdict = validatePasseAContract({
+    tension: 'Une tension.',
+    problematique: 'Comment faire évoluer les usages ?',
+    justificationProbleme: 'Sans cadre, le risque de décision non fiable augmente.',
+  });
+  assert.strictEqual(verdict.isCoreValid, true);
+  assert.strictEqual(verdict.optionalPresence.justificationProbleme, true);
+  assert.strictEqual(verdict.schemaStatus, 'core_valid');
+  assert.deepStrictEqual(verdict.missingSecondaryFields, []);
+});
+
+test('validatePasseAContract — tension absente → core invalide, CORE_CONTRACT_FIELDS_MISSING', () => {
+  const verdict = validatePasseAContract({
+    problematique: 'Comment faire évoluer les usages ?',
+    justificationProbleme: 'Une justification pourtant présente.',
+  });
+  assert.strictEqual(verdict.isCoreValid, false);
+  assert.deepStrictEqual(verdict.coreMissing, ['tension']);
+  assert.strictEqual(verdict.schemaStatus, 'core_invalid');
+  assert.strictEqual(verdict.errorCode, 'CORE_CONTRACT_FIELDS_MISSING');
+});
+
+test('validatePasseAContract — problématique absente → core invalide, CORE_CONTRACT_FIELDS_MISSING', () => {
+  const verdict = validatePasseAContract({
+    tension: 'Une tension présente.',
+    justificationProbleme: 'Une justification pourtant présente.',
+  });
+  assert.strictEqual(verdict.isCoreValid, false);
+  assert.deepStrictEqual(verdict.coreMissing, ['problematique']);
+  assert.strictEqual(verdict.schemaStatus, 'core_invalid');
+  assert.strictEqual(verdict.errorCode, 'CORE_CONTRACT_FIELDS_MISSING');
+});
+
+test('validatePasseAContract — problématique sans « ? » → core invalide, même avec justification', () => {
+  const verdict = validatePasseAContract({
+    tension: 'Une tension présente.',
+    problematique: 'Comment faire évoluer les usages',
+    justificationProbleme: 'Une justification présente.',
+  });
+  assert.strictEqual(verdict.isCoreValid, false);
+  assert.deepStrictEqual(verdict.coreMissing, ['problematique']);
+  assert.strictEqual(verdict.errorCode, 'CORE_CONTRACT_FIELDS_MISSING');
+});
+
+test('la justification n’est JAMAIS un motif bloquant du noyau, quelle que soit sa forme', () => {
+  [undefined, null, '', '   ', [], {}].forEach((valeur) => {
+    const verdict = validatePasseAContract({
+      tension: 'Une tension présente.',
+      problematique: 'Comment faire évoluer les usages ?',
+      justificationProbleme: valeur,
+    });
+    assert.strictEqual(verdict.isCoreValid, true, `justification=${JSON.stringify(valeur)} ne doit pas bloquer`);
+    assert.strictEqual(verdict.errorCode, null);
+    assert.deepStrictEqual(verdict.coreMissing, []);
+    assert.strictEqual(verdict.schemaStatus, 'core_valid_justification_pending');
+  });
+});
+
+// ---------------------------------------------------------------------------
+// NON-RÉGRESSION — scénario EXACT du log Railway a12e994b :
+//   ligne_directrice + formulations[*].question + recommandation
+//   + justification_recommandation, tension reprise de l'analyse,
+//   justificationProbleme absente.
+// La route doit répondre 200 et le diagnostic doit être cohérent de bout en
+// bout (aucune contradiction schemaStatus / validationOutcome).
+// ---------------------------------------------------------------------------
+
+test('non-régression (log a12e994b) — contrat normalisé accepté, diagnostic cohérent, jamais 422', () => {
+  const raw = contratFormatProduction();
+  // La justification de la formulation est RETIRÉE : c'est le cas de production.
+  delete raw.formulations[0].justification;
+
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+
+  // 1) Le parseur accepte : la route ne peut donc pas transformer cela en 422.
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.type, undefined);
+  assert.strictEqual(res.diagnostic.tensionSource, 'analysis');
+  assert.strictEqual(res.diagnostic.justificationSource, 'missing');
+
+  // 2) Verdict unique : noyau valide, rien dans coreMissing, justification en attente.
+  const verdict = res.validationPasseA;
+  assert.strictEqual(verdict.isCoreValid, true);
+  assert.deepStrictEqual(verdict.requiredFields, ['tension', 'problematique']);
+  assert.deepStrictEqual(verdict.corePresence, { tension: true, problematique: true });
+  assert.deepStrictEqual(verdict.coreMissing, []);
+  assert.deepStrictEqual(verdict.optionalPresence, { justificationProbleme: false });
+  assert.ok(verdict.missingSecondaryFields.includes('justificationProbleme'));
+  assert.strictEqual(verdict.schemaStatus, 'core_valid_justification_pending');
+  assert.strictEqual(verdict.errorCode, null);
+
+  // 3) Contrat renvoyé au frontend : affichable et validable tel quel.
+  assert.notStrictEqual(res.contract.tension, '');
+  assert.match(res.contract.problematique, /\?$/);
+  assert.strictEqual(res.contract.justificationProbleme, '');
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.contract.completeness.missingSecondaryFields.includes('justificationProbleme'));
+  // La ligne directrice est bien reconstruite depuis son alias snake_case.
+  assert.strictEqual(res.contract.ligneDirectrice, raw.ligne_directrice);
+
+  // 4) Aucune contradiction possible : un core valide ne porte jamais de code d'erreur.
+  assert.strictEqual(
+    verdict.isCoreValid && verdict.errorCode !== null,
+    false,
+    'un core valide ne doit jamais coexister avec un code d’erreur bloquant'
+  );
+});
+
+test('non-régression — le verdict du parseur est identique à celui recalculé par la route', () => {
+  const raw = contratFormatProduction();
+  delete raw.formulations[0].justification;
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+
+  // La route utilise `resultat.validationPasseA` ; si elle devait le recalculer
+  // sur le contrat final, elle doit obtenir EXACTEMENT le même verdict.
+  const recalcule = validatePasseAContract(res.contract);
+  assert.deepStrictEqual(recalcule.corePresence, res.validationPasseA.corePresence);
+  assert.deepStrictEqual(recalcule.coreMissing, res.validationPasseA.coreMissing);
+  assert.deepStrictEqual(recalcule.optionalPresence, res.validationPasseA.optionalPresence);
+  assert.strictEqual(recalcule.schemaStatus, res.validationPasseA.schemaStatus);
+  assert.strictEqual(recalcule.isCoreValid, res.validationPasseA.isCoreValid);
 });

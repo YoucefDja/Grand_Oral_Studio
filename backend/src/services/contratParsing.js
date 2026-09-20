@@ -580,6 +580,71 @@ const MESSAGE_COMPLETUDE =
   'La problématique est exploitable. Certains éléments seront complétés ensuite.';
 
 /**
+ * Champs BLOQUANTS à l'étape Passe A. SOURCE DE VÉRITÉ UNIQUE : la route ne doit
+ * jamais reconstruire sa propre liste ailleurs (c'est précisément ce qui
+ * produisait un 422 CORE_CONTRACT_FIELDS_MISSING alors que le contrat normalisé
+ * était valide et que la justification est facultative).
+ */
+const REQUIRED_PASSE_A_FIELDS = CHAMPS_CORE;
+
+/**
+ * VALIDATION UNIQUE DE LA PASSE A — source de vérité du noyau bloquant.
+ *
+ * Elle s'applique EXCLUSIVEMENT au contrat NORMALISÉ FINAL (après alias,
+ * promotion `formulations.question` et repli de tension depuis l'analyse) et
+ * jamais à l'objet brut pré-normalisé. Une seule règle : `tension` et
+ * `problematique` doivent exister, la problématique doit être une question.
+ * `justificationProbleme` est FACULTATIF et n'est jamais un motif de rejet —
+ * seul le noyau bloquant décide du sort de la requête.
+ *
+ * @param {object} contract contrat normalisé final
+ * @returns {{ isCoreValid: boolean, requiredFields: string[],
+ *             corePresence: { tension: boolean, problematique: boolean },
+ *             coreMissing: string[],
+ *             optionalPresence: { justificationProbleme: boolean },
+ *             missingSecondaryFields: string[],
+ *             schemaStatus: 'core_valid'|'core_valid_justification_pending'|'core_invalid',
+ *             errorCode: null|'CORE_CONTRACT_FIELDS_MISSING' }}
+ */
+function validatePasseAContract(contract) {
+  const c = contract && typeof contract === 'object' && !Array.isArray(contract) ? contract : {};
+  const presence = champsCorePresents(c);
+  const coreMissing = REQUIRED_PASSE_A_FIELDS.filter((champ) => !presence.core[champ]);
+  // La question doit rester une question : une problématique non terminée par
+  // « ? » est traitée comme un noyau invalide (jamais comme un simple
+  // avertissement), exactement au même titre qu'un champ absent.
+  if (
+    presence.core.problematique &&
+    !String(c.problematique || '').trim().endsWith('?') &&
+    !coreMissing.includes('problematique')
+  ) {
+    coreMissing.push('problematique');
+  }
+  const isCoreValid = coreMissing.length === 0;
+  const secondaires = c.completeness && Array.isArray(c.completeness.missingSecondaryFields)
+    ? c.completeness.missingSecondaryFields
+    : [];
+  const missingSecondaryFields = secondaires.filter(
+    (champ) => typeof champ === 'string' && champ.length > 0
+  );
+
+  return {
+    isCoreValid,
+    requiredFields: [...REQUIRED_PASSE_A_FIELDS],
+    corePresence: presence.core,
+    coreMissing,
+    optionalPresence: presence.optional,
+    missingSecondaryFields,
+    schemaStatus: !isCoreValid
+      ? 'core_invalid'
+      : presence.optional.justificationProbleme
+        ? 'core_valid'
+        : 'core_valid_justification_pending',
+    errorCode: isCoreValid ? null : 'CORE_CONTRACT_FIELDS_MISSING',
+  };
+}
+
+/**
  * Point d'entrée unique : normalise la réponse brute du modèle puis valide le
  * schéma du contrat. Ne lance JAMAIS d'exception et ne touche pas au réseau.
  *
@@ -672,6 +737,13 @@ function parseAndValidateContract(rawModelContent, options = {}) {
 
   const coreFieldsPresent = champsCorePresents(objet);
   const { ok, manquants, missingSecondaryFields } = validerSchemaContrat(objet);
+  // Le verdict du noyau est calculé par la MÊME fonction que celle utilisée par
+  // la route : impossible que le parseur accepte un contrat que la route
+  // rejetterait (ou l'inverse).
+  const validationPasseA = validatePasseAContract({
+    ...objet,
+    completeness: { missingSecondaryFields },
+  });
 
   const diagnosticComplet = {
     ...diagnostic,
@@ -692,6 +764,7 @@ function parseAndValidateContract(rawModelContent, options = {}) {
       internalReason: `champs bloquants manquants ou invalides : ${manquants.join(', ')}`,
       manquants,
       coreFieldsPresent,
+      validationPasseA,
       diagnostic: diagnosticComplet,
     };
   }
@@ -703,11 +776,19 @@ function parseAndValidateContract(rawModelContent, options = {}) {
     message: MESSAGE_COMPLETUDE,
   };
 
-  return { ok: true, contract: objet, missingSecondaryFields, diagnostic: diagnosticComplet };
+  return {
+    ok: true,
+    contract: objet,
+    missingSecondaryFields,
+    validationPasseA,
+    diagnostic: diagnosticComplet,
+  };
 }
 
 module.exports = {
   parseAndValidateContract,
+  validatePasseAContract,
+  REQUIRED_PASSE_A_FIELDS,
   validerSchemaContrat,
   normaliserChampsSecondaires,
   champsCorePresents,
