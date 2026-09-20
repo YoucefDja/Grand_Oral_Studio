@@ -42,7 +42,7 @@ const { requireAuth } = require('../middleware/auth');
 const { asyncHandler } = require('../utils/asyncHandler');
 const { APP_VERSION } = require('../config/version');
 const { parseAndValidateContract, validatePasseAContract } = require('../services/contratParsing');
-const { appliquerContratPasseA } = require('../services/applicationContrat');
+const { appliquerContratPasseA, construireContratSur } = require('../services/applicationContrat');
 const {
   httpError,
   logGeneration,
@@ -466,6 +466,10 @@ router.post(
       contexteLog.provider = provider;
 
       let parsed;
+      // Verdict de schéma rendu par le parseur en Passe A. Il est calculé une
+      // seule fois puis RÉUTILISÉ (jamais recalculé) par le diagnostic : sans
+      // cette déclaration, la lecture en aval levait un ReferenceError → 500.
+      let resultat = null;
       if (provider === 'deepseek') {
         if (stepKey === 'probleme') {
           // PASSE A — mode JSON strict : le fournisseur ne peut plus encadrer sa
@@ -477,7 +481,7 @@ router.post(
           // tension : le modèle renvoie encore régulièrement une structure héritée
           // sans `tension`, alors que l'étape 1 en a déjà produit une. On ne
           // reformule rien, on réutilise un texte existant — ou on rejette.
-          const resultat = parseAndValidateContract(raw, {
+          resultat = parseAndValidateContract(raw, {
             analyse: session.data && session.data.analyse,
           });
           // Diagnostic exploitable côté serveur : quelles clés sont réellement
@@ -616,15 +620,43 @@ router.post(
       // à toutes les étapes aval. Il n'est PAS validé d'office : c'est l'étudiant
       // qui pose `valide: true` (ou qui édite puis valide) à l'écran de validation.
       let regenereProbleme = false;
+      let contratPersiste = null;
       if (stepKey === 'probleme') {
         // L'écriture du contrat est isolée dans un module testable : elle n'a lieu
         // qu'ici, donc APRÈS un parsing et une validation réussis. Un échec en
         // amont laisse le contrat précédemment validé strictement intact.
+        //
+        // On ne persiste QUE ce payload minimal garanti (chaînes et tableaux
+        // toujours définis) : ni objet LLM brut, ni `undefined`, ni propriété de
+        // diagnostic interne. Le contrat stocké respecte ainsi le modèle Session.
+        const safeContract = construireContratSur({
+          tension: parsed.tension,
+          problematique: parsed.problematique,
+          justificationProbleme: parsed.justificationProbleme,
+          ligneDirectrice: parsed.ligneDirectrice,
+          preconisations: parsed.preconisations,
+          limitesExistant: parsed.limitesExistant,
+          casEntreprises: parsed.casEntreprises,
+          motsCles: parsed.motsCles,
+          ouverture: parsed.ouverture,
+          completeness: {
+            isCoreValid: true,
+            missingSecondaryFields:
+              parsed.completeness && parsed.completeness.missingSecondaryFields,
+          },
+        });
+        // Champs de validation essentiels, recopiés de façon contrôlée.
+        safeContract.verification = parsed.verification || null;
+        safeContract.champsARegenerer = Array.isArray(parsed.champsARegenerer)
+          ? parsed.champsARegenerer
+          : [];
+
         ({ regenere: regenereProbleme } = appliquerContratPasseA(
           session,
-          parsed,
+          safeContract,
           isNonEmptyObject
         ));
+        contratPersiste = safeContract;
       } else {
         session.data[stepKey] = parsed;
       }
@@ -640,7 +672,30 @@ router.post(
         session.currentStep = Math.min(session.currentStep, nextIndex);
       }
 
-      await session.save();
+      try {
+        await session.save();
+      } catch (errPersistance) {
+        // Le contrat a été GÉNÉRÉ et validé : l'échec ne vient que de
+        // l'enregistrement. On le distingue pour ne pas répondre un
+        // INTERNAL_ERROR opaque (l'étudiant peut réessayer sans régénérer).
+        logGeneration({
+          ...contexteLog,
+          dureeMs: Date.now() - debut,
+          statut: 500,
+          code: 'CONTRACT_PERSISTENCE_FAILED',
+          stage: stepKey,
+          detail: errPersistance && errPersistance.stack ? errPersistance.stack : String(errPersistance),
+        });
+        const err = httpError(
+          500,
+          'Le contrat a été généré mais n’a pas pu être enregistré. Réessayez.',
+          'CONTRACT_PERSISTENCE_FAILED'
+        );
+        err.detailTechnique =
+          errPersistance && errPersistance.message ? errPersistance.message : String(errPersistance);
+        err.contratGenere = true;
+        throw err;
+      }
       logGeneration({
         ...contexteLog,
         dureeMs: Date.now() - debut,
@@ -650,7 +705,7 @@ router.post(
       // La Passe A invalide : on renvoie le diagnostic au front pour l'écran de
       // validation (l'étudiant voit les critères rouges et peut régénérer).
       if (stepKey === 'probleme' && parsed.valide !== true) {
-        return res.json({ session, verification: parsed.verification || null });
+        return res.json({ session, verification: parsed.verification || null, contract: contratPersiste });
       }
       return res.json(session);
     } catch (err) {

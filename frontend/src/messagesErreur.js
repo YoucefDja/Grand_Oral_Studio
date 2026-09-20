@@ -24,6 +24,8 @@ export const MESSAGES_PAR_CODE = {
   AI_PROVIDER_UNAVAILABLE:
     'Le service de génération est temporairement indisponible. Réessayez dans quelques instants.',
   AI_TIMEOUT: 'La génération a pris trop de temps. Réessayez.',
+  CONTRACT_PERSISTENCE_FAILED:
+    'Le contrat a été généré mais n’a pas pu être enregistré. Réessayez.',
 };
 
 export const MESSAGE_GENERIQUE =

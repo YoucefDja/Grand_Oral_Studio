@@ -141,6 +141,13 @@ const MESSAGES_ERREUR = {
     status: 500,
     message: 'La génération a été interrompue. Réessayez.',
   },
+  // Le contrat est métier-valide : seul son ENREGISTREMENT a échoué. On le dit
+  // explicitement pour ne pas renvoyer un INTERNAL_ERROR opaque (l'étudiant peut
+  // réessayer sans régénérer).
+  CONTRACT_PERSISTENCE_FAILED: {
+    status: 500,
+    message: 'Le contrat a été généré mais n’a pas pu être enregistré. Réessayez.',
+  },
   INTERNAL_ERROR: {
     status: 500,
     message: 'Une erreur interne est survenue pendant la génération. Réessayez.',
