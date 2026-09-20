@@ -1,11 +1,13 @@
 /**
  * Règles PURES d'affichage du contrat métier (Passe A) côté frontend.
  *
- * Module sans dépendance React/DOM, donc testable hors ligne. Il applique la
- * règle du correctif Passe A : un contrat est affichable/validable dès que les
- * TROIS champs fondamentaux sont présents (tension, problématique,
- * justificationProbleme). Les sections secondaires vides restent affichées avec
- * un statut explicite, jamais « undefined ».
+ * Module sans dépendance React/DOM, donc testable hors ligne. Un contrat est
+ * affichable/validable dès que les DEUX champs du noyau sont présents (tension,
+ * problématique). `justificationProbleme` est désormais FACULTATIF à l'étape
+ * Passe A : son absence est signalée comme un élément à approfondir, jamais
+ * comme une erreur bloquante. Le contrôle strict est déplacé à l'export.
+ * Les sections secondaires vides restent affichées avec un statut explicite,
+ * jamais « undefined ».
  */
 
 /** Statuts d'une section vide, alignés sur les libellés i18n. */
@@ -34,11 +36,11 @@ export function construireVueContrat(contrat) {
   const c = contrat && typeof contrat === 'object' ? contrat : {};
   const completeness = c.completeness && typeof c.completeness === 'object' ? c.completeness : {};
 
+  // Noyau : tension + problématique. La justification n'entre PLUS dans la
+  // validité du core (elle est facultative à l'étape Passe A).
   const isCoreValid =
     completeness.isCoreValid === true ||
-    (estTexteNonVide(c.problematique) &&
-      estTexteNonVide(c.tension) &&
-      estTexteNonVide(c.justificationProbleme));
+    (estTexteNonVide(c.problematique) && estTexteNonVide(c.tension));
 
   const editable = Boolean(isCoreValid && estTexteNonVide(c.problematique) && estTexteNonVide(c.tension));
 
@@ -46,10 +48,18 @@ export function construireVueContrat(contrat) {
     (champ) => typeof champ === 'string' && champ.length > 0
   );
 
+  // Justification à approfondir : vide mais NON bloquante. On ne renvoie jamais
+  // `undefined` ni `null` — juste un booléen d'affichage pilotant l'encadré.
+  const justificationProbleme =
+    typeof c.justificationProbleme === 'string' ? c.justificationProbleme : '';
+  const justificationAFournir = justificationProbleme.trim() === '';
+
   return {
     isCoreValid,
     editable,
     valide: c.valide === true,
+    justificationProbleme,
+    justificationAFournir,
     missingSecondaryFields,
     motsCles: tableauSur(c.motsCles),
     contexte: tableauSur(c.contexte),

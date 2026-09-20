@@ -41,14 +41,13 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
   const { t } = useSettings();
   const contrat = session?.data?.contrat || {};
   const completeness = contrat.completeness || {};
-  // Les trois éléments fondamentaux (tension, problématique, justification) sont
-  // la SEULE condition d'affichage et de validation : une section secondaire
-  // vide ne doit plus cacher le contrat à l'étudiant.
+  // Le noyau affichable/validable est tension + problématique. La justification
+  // est FACULTATIVE à l'étape Passe A : son absence n'empêche ni l'affichage ni
+  // la validation, elle déclenche seulement un encadré « à approfondir ». Son
+  // contrôle strict est déplacé à la vérification pré-export.
   const isCoreValid =
     completeness.isCoreValid === true ||
-    Boolean(
-      contrat.problematique && contrat.tension && contrat.justificationProbleme
-    );
+    Boolean(contrat.problematique && contrat.tension);
 
   const [tension, setTension] = useState('');
   const [problematique, setProblematique] = useState('');
@@ -291,6 +290,16 @@ function ValidationContrat({ session, disabled, onSessionRefresh, onValide }) {
           disabled={disabled || saving}
           onChange={(e) => setJustification(e.target.value)}
         />
+        {/* Justification vide : encadré d'invitation, JAMAIS une erreur ni un
+            contenu technique. La problématique reste exploitable et validable. */}
+        {justification.trim() === '' ? (
+          <div className="encart-approfondir">
+            <strong>{t('contrat.justificationAFournir')}</strong>
+            <p className="muted" style={{ margin: '4px 0 0' }}>
+              {t('contrat.justificationAFournirDetail')}
+            </p>
+          </div>
+        ) : null}
       </div>
 
       <Ligne label={t('contrat.limitesExistant')}>

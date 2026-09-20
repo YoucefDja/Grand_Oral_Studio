@@ -171,14 +171,19 @@ function validateStepOutput(stepKey, parsed) {
  */
 function construireDiagnosticContrat(resultat, contexte = {}) {
   const diagnostic = (resultat && resultat.diagnostic) || {};
-  const corePresence =
-    (resultat && resultat.coreFieldsPresent) || {
-      tension: false,
-      problematique: false,
-      justificationProbleme: false,
-    };
-  // Seuls les trois champs core qui portent la logique du sujet bloquent.
-  const coreMissing = ['tension', 'problematique', 'justificationProbleme'].filter((c) => !corePresence[c]);
+  // `justificationProbleme` n'est PLUS bloquant à l'étape Passe A : malgré son
+  // nom historique « core », il est désormais secondaire (une problématique
+  // concrète reliée à une tension suffit à lancer le Plan). Son contrôle strict
+  // est déplacé à la vérification pré-export.
+  const brut = (resultat && resultat.coreFieldsPresent) || {};
+  const corePresence = brut.core || {
+    tension: false,
+    problematique: false,
+  };
+  const optionalPresence = brut.optional || {
+    justificationProbleme: false,
+  };
+  const coreMissing = ['tension', 'problematique'].filter((c) => !corePresence[c]);
   const missingSecondaryFields = Array.isArray(resultat && resultat.missingSecondaryFields)
     ? resultat.missingSecondaryFields
     : [];
@@ -203,10 +208,19 @@ function construireDiagnosticContrat(resultat, contexte = {}) {
       ? diagnostic.formulationIndexUsed
       : null,
     corePresence,
+    optionalPresence,
     coreMissing,
     secondaryMissing: missingSecondaryFields,
     parseStatus: resultat && resultat.ok === false && resultat.type === 'INVALID_LLM_JSON' ? 'failed' : 'ok',
-    schemaStatus: resultat && resultat.ok ? 'core_valid' : 'core_invalid',
+    // Un core valide dont la justification reste à construire n'est PAS un
+    // échec : le libellé le dit explicitement pour que le log Railway ne laisse
+    // aucune ambiguïté sur la cause d'un éventuel rejet.
+    schemaStatus:
+      resultat && resultat.ok
+        ? optionalPresence.justificationProbleme
+          ? 'core_valid'
+          : 'core_valid_justification_pending'
+        : 'core_invalid',
     verificationStatus: 'pending',
     rejectionCode: null,
     dureeMs: contexte.dureeMs,
@@ -551,20 +565,27 @@ router.post(
           parsed.champsARegenerer = ciblerRegeneration(verification.rejetsCore);
         }
         const completeness = parsed.completeness || {};
+        const justificationPresente =
+          typeof parsed.justificationProbleme === 'string' && parsed.justificationProbleme.trim() !== '';
         diagnosticProbleme = {
           requestId: req.requestId,
           sessionId: req.params.id,
           stage: 'probleme',
           parsed: true,
-          coreFieldsPresent: {
+          // Noyau bloquant : tension + problématique. La justification n'y figure
+          // plus (voir CHAMPS_CORE dans contratParsing.js).
+          corePresence: {
             tension: typeof parsed.tension === 'string' && parsed.tension.trim() !== '',
             problematique: typeof parsed.problematique === 'string' && parsed.problematique.trim() !== '',
-            justificationProbleme:
-              typeof parsed.justificationProbleme === 'string' && parsed.justificationProbleme.trim() !== '',
+          },
+          // Champs visibles mais facultatifs à cette étape.
+          optionalPresence: {
+            justificationProbleme: justificationPresente,
           },
           missingSecondaryFields: Array.isArray(completeness.missingSecondaryFields)
             ? completeness.missingSecondaryFields
             : [],
+          schemaStatus: justificationPresente ? 'core_valid' : 'core_valid_justification_pending',
           validationOutcome: verification.coreValide ? 'accepted' : 'rejected_core',
         };
 

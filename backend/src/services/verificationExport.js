@@ -362,6 +362,36 @@ function diagnostiquerFilRouge(session) {
     );
   }
 
+  // ---- Justification du problème (CONTRÔLE DÉPLACÉ À L'EXPORT) ----
+  // La justification est facultative à l'étape Passe A : elle peut être
+  // construite ensuite, avec le contexte, les enjeux et l'existant. C'est ICI,
+  // avant l'export du Markdown / PPTX, que l'on vérifie que l'ensemble final
+  // démontre bien que le problème est réel et actuel — soit par une
+  // justification explicitement renseignée, soit par sa démonstration dans le
+  // contexte, les enjeux, l'existant ou la conclusion.
+  if (problematique) {
+    const justificationRenseignee = String(contrat.justificationProbleme || '').trim() !== '';
+    const support = data.support || {};
+    const recherche = data.recherche || {};
+    const texteFilRouge = [
+      aplatir(contrat),
+      aplatir(plan),
+      aplatir(support),
+      aplatir(recherche),
+    ].join(' \n ');
+    const MOTIF_JUSTIFICATION_METIER =
+      /(parce que|c'est pourquoi|en raison de|du fait de|puisque|car )|(aujourd'hui|actuellem|ces dernieres annees|en 20\d\d|depuis \d{4})|(cout|perte|manque a gagner|amende|penalite|risque|impact|urgence|menace|penurie|tension|pression)/;
+    const justificationDemontee =
+      MOTIF_JUSTIFICATION_METIER.test(texteFilRouge) &&
+      /(contexte|enjeu|existant|conclusion|probleme|problematique)/.test(texteFilRouge);
+    if (!justificationRenseignee && !justificationDemontee) {
+      ajouter(
+        'justification_absente_export',
+        "L'ensemble final ne démontre nulle part en quoi le problème est réel et actuel pour l'entreprise : renseigne la justification du problème, ou démontre-le dans le contexte, les enjeux, l'existant ou la conclusion."
+      );
+    }
+  }
+
   return {
     sujet,
     theme,
@@ -422,7 +452,13 @@ function observer(session, filRouge) {
   const recherche = data.recherche || {};
   const support = data.support || {};
 
-  // ---- Textes agrégés par étape (servent aux recherches par motif) ----
+  // ---- Justification métier à l'EXPORT ----
+  // Depuis la Passe A, `justificationProbleme` est FACULTATIF à l'étape
+  // Problématique : il peut être complété plus tard. Le contrôle strict est donc
+  // déplacé ICI, au moment de l'export, où l'ensemble du travail existe.
+  // La justification est considérée présente si elle est explicitement
+  // renseignée, OU si le problème est démontré (réel, actuel, chiffré, d'entreprise)
+  // dans le contexte, les enjeux, l'existant ou la conclusion.
   const texteAnalyse = aplatir(analyse);
   const texteContrat = aplatir(contrat);
   const textePlan = aplatir(plan);
@@ -430,6 +466,25 @@ function observer(session, filRouge) {
   const texteRecherche = aplatir(recherche);
   const texteSupport = aplatir(support);
   const texteAmont = [texteAnalyse, texteContrat, textePlan, texteGlossaire, texteRecherche].join(' \n ');
+
+  // Sources où une justification métier peut légitimement vivre.
+  const texteJustificationExport = [
+    texteContrat,
+    textePlan,
+    texteSupport,
+    texteRecherche,
+    texteAnalyse,
+  ].join(' \n ');
+  const justificationProblemeRenseignee = justification !== '';
+  // Un marqueur de problème RÉEL et ACTUEL : causalité, actualité, chronicité,
+  // coût, urgence ou impact d'entreprise — pas une simple occurrence du mot
+  // « problème ».
+  const MOTIF_JUSTIFICATION_METIER =
+    /(parce que|c'est pourquoi|en raison de|du fait de|puisque|car )|(aujourd'hui|actuellem|ces dernieres annees|en 20\d\d|depuis \d{4})|(cout|perte|manque a gagner|amende|penalite|risque|impact|urgence|menace|penurie|tension|pression)/;
+  const justificationDansLeFil =
+    MOTIF_JUSTIFICATION_METIER.test(texteJustificationExport) &&
+    /(contexte|enjeu|existant|conclusion|probleme|problematique)/.test(texteJustificationExport);
+  const justificationExport = justificationProblemeRenseignee || justificationDansLeFil;
 
   const aTexte = (regex) => regex.test(texteAmont);
 
@@ -571,6 +626,10 @@ function observer(session, filRouge) {
     questionContrat,
     tensionContrat,
     justification,
+    // Justification jugée à l'EXPORT (explicite OU démontrée dans le fil rouge) :
+    // c'est elle qui porte le contrôle strict, plus la Passe A.
+    justificationExport,
+    justificationProblemeRenseignee,
     limitesExistant,
     preconisations,
     casContrat,
@@ -719,8 +778,8 @@ function evaluerCritere(id, obs) {
       } else {
         force('Le plan porte une partie solutions / préconisations.');
       }
-      if (!obs.justification) {
-        faible('1.5-justification', "Le contrat n'explique pas en quoi le problème est réel et actuel pour l'entreprise : la prise de position n'est pas justifiée.");
+      if (!obs.justificationExport) {
+        faible('1.5-justification', "L'ensemble final ne démontre nulle part en quoi le problème est réel et actuel pour l'entreprise : ni justification renseignée, ni démonstration dans le contexte, les enjeux, l'existant ou la conclusion.");
       } else {
         force('La problématique est justifiée (problème réel, actuel, d’entreprise).');
       }
@@ -926,6 +985,9 @@ const CODES_BLOQUANTS = new Set([
   'ligne_directrice_hors_sujet',
   'ligne_directrice_decrochee',
   'methodologie_plan_absent',
+  // Justification métier : facultative en Passe A, EXIGÉE à l'export. On
+  // n'envoie pas un support qui ne démontre nulle part que le problème est réel.
+  'justification_absente_export',
   // Structure et fond minimum du Markdown
   '1.1-contexte',
   '1.2-enjeux',
@@ -987,13 +1049,15 @@ function construireScoreLogique(session, obs, filRouge) {
   );
 
   // 2. Problème réel : tension + justification présentes et cohérentes.
+  // La justification est appréciée à l'EXPORT : explicite dans le contrat, ou
+  // démontrée dans le contexte / les enjeux / l'existant / la conclusion. Elle
+  // n'est plus exigée à l'étape Passe A.
   const problemeReel =
     !!obs.tensionContrat &&
-    !!obs.justification &&
+    !!obs.justificationExport &&
     !codesRejets.has('problematique_sans_tension') &&
     !codesRejets.has('problematique_tension_decorrelee') &&
-    !codesRejets.has('contrat_tension_absente') &&
-    !codesRejets.has('contrat_justification_absente');
+    !codesRejets.has('contrat_tension_absente');
   item('logique_probleme_reel', 'Problème réel (tension + justification d’entreprise)', problemeReel);
 
   // 3. L'existant diagnostique CETTE tension (limites explicitées).

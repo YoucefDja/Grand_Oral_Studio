@@ -380,6 +380,15 @@ button .spin {
   font-weight: 700;
   margin-bottom: 6px;
 }
+/* Encart d'invitation (jamais une alerte) : justification encore vide en Passe A. */
+.encart-approfondir {
+  margin-top: 8px;
+  padding: 10px 14px;
+  background: var(--cesi-lighter);
+  border-left: 4px solid var(--line);
+  border-radius: 6px;
+  font-size: 13px;
+}
 .text-value {
   margin: 0;
   white-space: pre-line;

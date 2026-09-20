@@ -162,15 +162,18 @@ test('3 champs fondamentaux seuls : contrat accepté, secondaires normalisés à
   assert.ok(res.contract.completeness.missingSecondaryFields.length > 0);
 });
 
-test('justificationProbleme absente : INVALID_CONTRACT_SCHEMA, champ bloquant journalisé', () => {
+test('justificationProbleme absente : contrat ACCEPTÉ, champ secondaire signalé (jamais bloquant)', () => {
   const contrat = contratBrut();
   delete contrat.justificationProbleme;
   const res = parseAndValidateContract(JSON.stringify(contrat));
-  assert.strictEqual(res.ok, false);
-  assert.strictEqual(res.type, ERREUR_SCHEMA);
-  assert.ok(res.manquants.includes('justificationProbleme'));
-  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, false);
-  assert.strictEqual(res.coreFieldsPresent.tension, true);
+  // Régression historique corrigée : la justification est facultative à l'étape
+  // Passe A. Son absence ne doit JAMAIS produire de rejet 422.
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.type, undefined);
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.contract.completeness.missingSecondaryFields.includes('justificationProbleme'));
+  // Jamais `undefined` ni `null` : une chaîne vide, affichable.
+  assert.strictEqual(res.contract.justificationProbleme, '');
 });
 
 test('casEntreprises et ouverture absents : accepté, missingSecondaryFields renseigné', () => {
@@ -296,10 +299,11 @@ test('ancien format formulations sans question exploitable : échec de schéma, 
   // promu, et une justification SANS question ne peut pas débloquer le core.
   assert.ok(res.manquants.includes('tension'));
   assert.ok(res.manquants.includes('problematique'));
-  assert.ok(res.manquants.includes('justificationProbleme'));
-  assert.strictEqual(res.coreFieldsPresent.tension, false);
-  assert.strictEqual(res.coreFieldsPresent.problematique, false);
-  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, false);
+  // La justification est secondaire : elle est signalée, jamais bloquante.
+  assert.strictEqual(res.manquants.includes('justificationProbleme'), false);
+  assert.strictEqual(res.coreFieldsPresent.core.tension, false);
+  assert.strictEqual(res.coreFieldsPresent.core.problematique, false);
+  assert.strictEqual(res.coreFieldsPresent.optional.justificationProbleme, false);
   // Aucune formulation n'a été retenue : la provenance le dit explicitement.
   assert.strictEqual(res.diagnostic.justificationSource, 'missing');
   assert.strictEqual(res.diagnostic.formulationCount, 1);
@@ -323,20 +327,20 @@ test('les trois champs core en snake_case : normalisés en camelCase', () => {
   assert.strictEqual(res.contract.completeness.isCoreValid, true);
 });
 
-test('les trois champs core totalement absents : échec de schéma, coreMissing complet', () => {
+test('les deux champs du noyau totalement absents : échec de schéma, coreMissing complet', () => {
   const res = parseAndValidateContract(
     JSON.stringify({ ligneDirectrice: 'un fil rouge', ouverture: 'une ouverture' })
   );
   assert.strictEqual(res.ok, false);
   assert.strictEqual(res.type, ERREUR_SCHEMA);
   assert.deepStrictEqual(res.coreFieldsPresent, {
-    tension: false,
-    problematique: false,
-    justificationProbleme: false,
+    core: { tension: false, problematique: false },
+    optional: { justificationProbleme: false },
   });
   assert.ok(res.manquants.includes('tension'));
   assert.ok(res.manquants.includes('problematique'));
-  assert.ok(res.manquants.includes('justificationProbleme'));
+  // La justification n'est JAMAIS un motif de rejet à cette étape.
+  assert.strictEqual(res.manquants.includes('justificationProbleme'), false);
 });
 
 test('un champ secondaire manquant ne provoque JAMAIS un échec de schéma', () => {
@@ -498,7 +502,9 @@ test('cas 2 — la première formulation n’a qu’une question : la complète 
 });
 
 // --- Cas 3 : question sans justification dans TOUTES les formulations -------
-test('cas 3 — questions sans justification : core invalide sur justificationProbleme', () => {
+// Exigence « justification non bloquante » : c'est le cas EXACT du log Railway.
+// La question et la tension suffisent, la justification reste à approfondir.
+test('cas 3 — questions sans justification : contrat ACCEPTÉ, justification à approfondir', () => {
   const raw = {
     tension: 'Les PME veulent industrialiser l’IA mais manquent de cadre interne.',
     formulations: [
@@ -507,14 +513,16 @@ test('cas 3 — questions sans justification : core invalide sur justificationPr
     ],
   };
   const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
-  assert.strictEqual(res.ok, false);
-  assert.strictEqual(res.type, ERREUR_SCHEMA);
-  // La question est promue, mais l'absence de justification reste bloquante.
-  assert.ok(res.manquants.includes('justificationProbleme'));
-  assert.strictEqual(res.coreFieldsPresent.problematique, true);
-  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, false);
+  assert.strictEqual(res.ok, true);
+  // Aucun rejet de type CORE_CONTRACT_FIELDS_MISSING : la question est produite.
+  assert.strictEqual(res.type, undefined);
+  assert.strictEqual(res.manquants, undefined);
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.contract.completeness.missingSecondaryFields.includes('justificationProbleme'));
+  // La question est promue, la justification reste vide (jamais `undefined`).
+  assert.strictEqual(res.contract.problematique, raw.formulations[0].question);
+  assert.strictEqual(res.contract.justificationProbleme, '');
   // La tension était dans le contrat : l'analyse n'a PAS à être sollicitée.
-  assert.strictEqual(res.coreFieldsPresent.tension, true);
   assert.strictEqual(res.diagnostic.tensionSource, 'contract');
   assert.strictEqual(res.diagnostic.justificationSource, 'missing');
   assert.strictEqual(res.diagnostic.formulationIndexUsed, null);
@@ -561,7 +569,7 @@ test('cas 5 — tension absente partout : rejet de schéma, tensionSource missin
   assert.strictEqual(res.ok, false);
   assert.strictEqual(res.type, ERREUR_SCHEMA);
   assert.ok(res.manquants.includes('tension'));
-  assert.strictEqual(res.coreFieldsPresent.tension, false);
+  assert.strictEqual(res.coreFieldsPresent.core.tension, false);
   assert.strictEqual(res.diagnostic.tensionSource, 'missing');
   // Aucune tension n'a été inventée : le champ reste vide.
   assert.strictEqual(res.contract, undefined);
@@ -574,7 +582,7 @@ test('cas 5bis — analyse absente : même rejet explicite, tensionSource missin
   assert.deepStrictEqual(res.manquants, ['tension']);
   assert.strictEqual(res.diagnostic.tensionSource, 'missing');
   // La justification, elle, a bien été récupérée de la formulation.
-  assert.strictEqual(res.coreFieldsPresent.justificationProbleme, true);
+  assert.strictEqual(res.coreFieldsPresent.optional.justificationProbleme, true);
   assert.strictEqual(res.diagnostic.justificationSource, 'formulation');
 });
 
@@ -657,4 +665,137 @@ test('cas 6bis — copie du sujet en mode strict : rejet core, jamais un rejet d
   // Les trois core sont présents : le rejet porte sur la qualité, pas sur un manque.
   assert.strictEqual(res.coreFieldsPresent, undefined); // ok === true
   assert.ok(res.contract.tension && res.contract.problematique && res.contract.justificationProbleme);
+});
+
+// ---------------------------------------------------------------------------
+// Exigence « justification non bloquante » — noyau de Passe A = tension +
+// problématique. La justification devient FACULTATIVE à cette étape ; son
+// contrôle strict est déplacé à la vérification pré-export.
+// ---------------------------------------------------------------------------
+
+test('exigence 1 — tension + problématique sans justification : ACCEPTÉ, core valide, secondaire signalé', () => {
+  const raw = {
+    formulations: [
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative tout en protégeant ses données sensibles ?',
+      },
+    ],
+    ligne_directrice: 'Cadrer les usages avant de généraliser les outils.',
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+
+  // HTTP 200 côté route : le parseur doit accepter, jamais rejeter.
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.type, undefined);
+  assert.strictEqual(res.manquants, undefined);
+  // Contrat affichable : les deux champs du noyau sont là.
+  assert.ok(res.contract.tension);
+  assert.strictEqual(res.contract.problematique, raw.formulations[0].question);
+  // Complétude : core valide, justification listée comme champ secondaire.
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.ok(res.contract.completeness.missingSecondaryFields.includes('justificationProbleme'));
+  // Jamais `undefined` / `null` : une chaîne vide affichable par le frontend.
+  assert.strictEqual(res.contract.justificationProbleme, '');
+  // Provenances attendues, identiques au log Railway.
+  assert.strictEqual(res.diagnostic.tensionSource, 'analysis');
+  assert.strictEqual(res.diagnostic.justificationSource, 'missing');
+});
+
+test('exigence 2 — tension + problématique + justification : ACCEPTÉ, aucune justification manquante', () => {
+  const raw = {
+    formulations: [
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative tout en protégeant ses données sensibles ?',
+        justification:
+          'Sans cadre, la PME arbitre entre vitesse d’adoption et fiabilité de ses décisions, sans garde-fou documenté.',
+      },
+    ],
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+
+  assert.strictEqual(res.ok, true);
+  assert.strictEqual(res.contract.completeness.isCoreValid, true);
+  assert.strictEqual(
+    res.contract.completeness.missingSecondaryFields.includes('justificationProbleme'),
+    false
+  );
+  assert.strictEqual(res.contract.justificationProbleme, raw.formulations[0].justification);
+});
+
+test('exigence 3 — problématique présente mais tension absente partout : REJET de schéma', () => {
+  const raw = {
+    formulations: [
+      {
+        question:
+          'Dans quelle mesure une PME peut-elle intégrer l’IA générative tout en protégeant ses données sensibles ?',
+        justification: 'Sans cadre, la PME subit un risque de décision non fiable.',
+      },
+    ],
+  };
+  // Analyse présente mais SANS tension exploitable : aucun repli possible.
+  const res = parseAndValidateContract(JSON.stringify(raw), {
+    analyse: { sujets: ['usages de l’IA générative'] },
+  });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  assert.ok(res.manquants.includes('tension'));
+  assert.strictEqual(res.coreFieldsPresent.core.problematique, true);
+  // Sans le noyau complet, le contrat ne part pas : la route lève un 422.
+  assert.strictEqual(res.contract, undefined);
+});
+
+test('exigence 4 — tension présente mais problématique absente : REJET de schéma', () => {
+  const raw = {
+    tension: 'Les PME veulent industrialiser l’IA mais manquent de cadre interne.',
+    justificatif: 'Champ inconnu qui ne doit pas être promu.',
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw), { analyse: analyseAvecTension() });
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  assert.ok(res.manquants.includes('problematique'));
+  assert.strictEqual(res.coreFieldsPresent.core.tension, true);
+  assert.strictEqual(res.coreFieldsPresent.core.problematique, false);
+});
+
+test('exigence 4bis — problématique sans « ? » : REJET de schéma, jamais masqué par la justification', () => {
+  const raw = {
+    tension: 'Les PME veulent industrialiser l’IA mais manquent de cadre interne.',
+    problematique: 'Comment une PME peut-elle encadrer les usages de l’IA générative',
+    justificationProbleme: 'Sans cadre, le risque de décision non fiable augmente.',
+  };
+  const res = parseAndValidateContract(JSON.stringify(raw));
+  assert.strictEqual(res.ok, false);
+  assert.strictEqual(res.type, ERREUR_SCHEMA);
+  assert.ok(res.manquants.some((m) => m.startsWith('problematique')));
+});
+
+test('exigence 5 — la justification absente ne fait plus partie des rejets CORE', () => {
+  assert.strictEqual(REJETS_CORE.has('contrat_justification_absente'), false);
+  assert.strictEqual(REJETS_CORE.has('contrat_tension_absente'), true);
+  assert.strictEqual(REJETS_CORE.has('contrat_question_absente'), true);
+
+  // Le juge du FOND ne rejette plus la justification : il l'avertit.
+  const verdict = verifierContrat({
+    sujet: 'L’IA générative dans les processus métiers des PME',
+    contrat: {
+      tension:
+        'Dans les PME, l’IA générative progresse plus vite que les règles internes, ce qui expose les usages à des décisions non fiables.',
+      problematique:
+        'Dans quelle mesure une PME peut-elle encadrer les usages de l’IA générative sans bloquer l’innovation ?',
+      justificationProbleme: '',
+      motsCles: [{ mot: 'IA générative', definition: 'Modèles générateurs de contenu.' }],
+    },
+    mode: 'creation',
+  });
+  assert.strictEqual(verdict.coreValide, true);
+  assert.strictEqual(
+    verdict.rejetsCore.some((r) => r.code === 'contrat_justification_absente'),
+    false
+  );
+  assert.ok(
+    verdict.avertissements.some((a) => /justification/i.test(a)),
+    `un avertissement sur la justification est attendu, obtenu : ${JSON.stringify(verdict.avertissements)}`
+  );
 });

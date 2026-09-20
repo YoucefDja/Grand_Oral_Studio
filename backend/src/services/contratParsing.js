@@ -397,16 +397,26 @@ function appliquerAlias(objet) {
 }
 
 /**
- * Champs BLOQUANTS : les trois éléments qui portent la logique du sujet. Sans
+ * Champs BLOQUANTS : les deux éléments qui portent la logique du sujet. Sans
  * eux, aucune Passe B n'est possible — on rejette.
+ *
+ * `justificationProbleme` a été RETIRÉ de ce noyau : une problématique concrète
+ * reliée à une tension suffit à lancer le Plan. L'importance du problème sera
+ * consolidée plus tard avec le contexte, les enjeux, l'existant et les sources,
+ * puis contrôlée avant l'export final (voir verificationExport.js).
  */
-const CHAMPS_CORE = ['tension', 'problematique', 'justificationProbleme'];
+const CHAMPS_CORE = ['tension', 'problematique'];
 
 /**
  * Champs NON BLOQUANTS à la première génération. Un LLM omet régulièrement l'un
  * d'eux : les exiger en « tout ou rien » bloquait tout le parcours. Ils sont
  * normalisés puis signalés dans `completeness.missingSecondaryFields`, et les
  * étapes aval (Passe B, export) se chargent de les construire ou de les exiger.
+ *
+ * `justificationProbleme` figure ici : malgré son nom historique « core », il
+ * devient SECONDAIRE à l'étape Passe A (Problématique). Ce choix est volontaire
+ * et documenté — le contrôle strict de la justification est déplacé à la
+ * vérification pré-export.
  */
 const CHAMPS_SECONDAIRES = [
   'motsCles',
@@ -416,6 +426,7 @@ const CHAMPS_SECONDAIRES = [
   'casEntreprises',
   'ligneDirectrice',
   'ouverture',
+  'justificationProbleme',
 ];
 
 /** Ramène une valeur à un tableau, en déballant les tableaux imbriqués d'un niveau. */
@@ -502,6 +513,14 @@ function normaliserChampsSecondaires(contrat) {
 
   if (vide(contrat.sujet)) contrat.sujet = '';
 
+  // `justificationProbleme` : secondaire à l'étape Passe A. On la normalise en
+  // chaîne vide (jamais `undefined` côté frontend) et on la signale comme
+  // manquante — sans jamais bloquer la génération de la question.
+  if (vide(contrat.justificationProbleme)) manquants.push('justificationProbleme');
+  contrat.justificationProbleme = Array.isArray(contrat.justificationProbleme)
+    ? ''
+    : normaliserEnChaine(contrat.justificationProbleme).trim();
+
   return manquants;
 }
 
@@ -509,10 +528,12 @@ function normaliserChampsSecondaires(contrat) {
  * Validation de SCHÉMA du contrat (indépendante de contratVerification, qui
  * juge le FOND).
  *
- * Seuls les TROIS champs core sont bloquants : `tension`, `problematique`
- * (question terminée par « ? ») et `justificationProbleme`. Tout le reste est
- * normalisé et signalé, jamais bloquant — un LLM oublie trop souvent un champ
- * secondaire pour qu'un « tout ou rien » soit acceptable.
+ * Seuls les DEUX champs du noyau sont bloquants : `tension` et `problematique`
+ * (question terminée par « ? »). `justificationProbleme` est désormais
+ * facultatif à l'étape Passe A : son absence est signalée dans
+ * `missingSecondaryFields` mais ne provoque PLUS de rejet 422. Tout le reste
+ * est normalisé et signalé, jamais bloquant — un LLM oublie trop souvent un
+ * champ secondaire pour qu'un « tout ou rien » soit acceptable.
  *
  * @returns {{ ok: boolean, manquants: string[], missingSecondaryFields: string[] }}
  */
@@ -526,21 +547,31 @@ function validerSchemaContrat(contrat) {
   else if (!contrat.problematique.trim().endsWith('?')) {
     manquants.push('problematique (doit se terminer par « ? »)');
   }
-  if (!chaineNonVide(contrat.justificationProbleme)) manquants.push('justificationProbleme');
 
   const missingSecondaryFields = normaliserChampsSecondaires(contrat);
   return { ok: manquants.length === 0, manquants, missingSecondaryFields };
 }
 
 /**
- * État des trois champs core — sert à la fois au log serveur et au frontend.
- * @returns {{ tension: boolean, problematique: boolean, justificationProbleme: boolean }}
+ * État des champs du contrat — sert à la fois au log serveur et au frontend.
+ *
+ * `core` ne contient plus que les champs réellement bloquants ; `optional`
+ * porte ceux qui sont visibles mais facultatifs à cette étape (dont
+ * `justificationProbleme`, historiquement « core », devenu secondaire en
+ * Passe A).
+ *
+ * @returns {{ core: { tension: boolean, problematique: boolean },
+ *             optional: { justificationProbleme: boolean } }}
  */
 function champsCorePresents(contrat) {
   return {
-    tension: chaineNonVide(contrat.tension),
-    problematique: chaineNonVide(contrat.problematique),
-    justificationProbleme: chaineNonVide(contrat.justificationProbleme),
+    core: {
+      tension: chaineNonVide(contrat.tension),
+      problematique: chaineNonVide(contrat.problematique),
+    },
+    optional: {
+      justificationProbleme: chaineNonVide(contrat.justificationProbleme),
+    },
   };
 }
 
@@ -577,7 +608,10 @@ function parseAndValidateContract(rawModelContent, options = {}) {
       type: ERREUR_JSON,
       internalReason: 'réponse du modèle vide',
       manquants: ['(objet)'],
-      coreFieldsPresent: { tension: false, problematique: false, justificationProbleme: false },
+      coreFieldsPresent: {
+        core: { tension: false, problematique: false },
+        optional: { justificationProbleme: false },
+      },
       diagnostic,
     };
   }
@@ -609,7 +643,10 @@ function parseAndValidateContract(rawModelContent, options = {}) {
       type: ERREUR_JSON,
       internalReason: cause,
       manquants: ['(objet)'],
-      coreFieldsPresent: { tension: false, problematique: false, justificationProbleme: false },
+      coreFieldsPresent: {
+        core: { tension: false, problematique: false },
+        optional: { justificationProbleme: false },
+      },
       diagnostic: { ...diagnostic, rawTopLevelKeys: [], normalizedTopLevelKeys: [], aliasUsed: [], promotions: [] },
     };
   }

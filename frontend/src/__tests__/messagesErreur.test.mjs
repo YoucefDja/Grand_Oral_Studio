@@ -189,3 +189,67 @@ test('contrat secondaire incomplet : aucune fuite « undefined » dans les secti
   assert.ok(!/undefined|null|\[object Object\]/.test(textes), `fuite détectée : ${textes}`);
   assert.ok(!/undefined|\[object Object\]/.test(JSON.stringify(vue)));
 });
+
+// --- Justification non bloquante (Passe A) ---------------------------------
+//
+// Règle : la justification n'est PLUS un champ du noyau. Un contrat est
+// affichable et validable dès que tension + problématique sont présentes ; quand
+// la justification est vide, l'interface montre un encadré d'approfondissement
+// (jamais une erreur rouge, jamais « undefined »/« null »/texte technique).
+
+test('justification absente → contrat affichable et validable, encadré à afficher', () => {
+  const contrat = {
+    tension: 'Dans les PME, l’IA générative progresse plus vite que les règles internes.',
+    problematique:
+      'Comment une PME peut-elle intégrer l’IA générative sans compromettre la confidentialité de ses données ?',
+    justificationProbleme: '',
+    completeness: { isCoreValid: true, missingSecondaryFields: ['justificationProbleme'] },
+  };
+  const vue = construireVueContrat(contrat);
+  assert.strictEqual(vue.isCoreValid, true, 'le contrat doit rester valide sans justification');
+  assert.strictEqual(vue.editable, true, 'le contrat doit rester éditable sans justification');
+  assert.strictEqual(vue.justificationAFournir, true, 'l’encadré doit être demandé');
+  assert.strictEqual(vue.justificationProbleme, '', 'jamais undefined/null');
+  assert.ok(
+    vue.missingSecondaryFields.includes('justificationProbleme'),
+    'la justification doit figurer dans les champs secondaires manquants'
+  );
+});
+
+test('justification absente sans bloc completeness : le noyau reste valide', () => {
+  const vue = construireVueContrat({
+    tension: 'Une tension exploitable.',
+    problematique: 'Comment faire évoluer les usages ?',
+  });
+  assert.strictEqual(vue.isCoreValid, true);
+  assert.strictEqual(vue.editable, true);
+  assert.strictEqual(vue.justificationAFournir, true);
+  assert.strictEqual(vue.justificationProbleme, '');
+});
+
+test('justification renseignée → aucun encadré d’approfondissement', () => {
+  const vue = construireVueContrat({
+    tension: 'Une tension exploitable.',
+    problematique: 'Comment faire évoluer les usages ?',
+    justificationProbleme: 'La confidentialité revient dans toutes les sources du dossier.',
+  });
+  assert.strictEqual(vue.isCoreValid, true);
+  assert.strictEqual(vue.editable, true);
+  assert.strictEqual(vue.justificationAFournir, false);
+  assert.ok(vue.justificationProbleme.trim().length > 0);
+});
+
+test('aucun contenu technique affiché quand la justification manque', () => {
+  const vue = construireVueContrat({
+    tension: 'Une tension exploitable.',
+    problematique: 'Comment faire évoluer les usages ?',
+    justificationProbleme: null,
+  });
+  // Ce qui est réellement rendu à l'écran : la justification et le statut des
+  // sections secondaires. Aucun de ces textes ne doit exposer de valeur technique.
+  const affiche = [vue.justificationProbleme, ...vuesSecondaires(vue).map((s) => statutSection(s) || '')].join(' | ');
+  assert.strictEqual(vue.justificationProbleme, '');
+  assert.ok(!/undefined|null|\[object Object\]/.test(affiche), `fuite détectée : ${affiche}`);
+  assert.ok(!/champ manquant|manquant/i.test(affiche), `jargon détecté : ${affiche}`);
+  assert.ok(!/undefined|null|\[object Object\]/.test(JSON.stringify(vue)));
+});

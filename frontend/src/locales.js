@@ -268,6 +268,10 @@ export const FR = {
   'contrat.aCompleterEtapeSuivante': 'À compléter à l’étape suivante.',
   'contrat.nonGenere': 'Non généré — vous pourrez compléter ce point ensuite.',
   'contrat.aucunCas': 'Aucun cas d’entreprise pour le moment — non généré, à construire ensuite.',
+  // Justification facultative en Passe A : encadré d'invitation, jamais une erreur.
+  'contrat.justificationAFournir': 'Justification à approfondir',
+  'contrat.justificationAFournirDetail':
+    'La problématique est exploitable. Son importance sera consolidée avec le contexte, les enjeux et l’existant.',
 
   // ---- Score « logique du sujet » (StepSupport) ----
   'logique.title': 'Score « logique du sujet »',
@@ -653,6 +657,10 @@ export const EN = {
   'contrat.aCompleterEtapeSuivante': 'To complete at the next step.',
   'contrat.nonGenere': 'Not generated — you will be able to complete this later.',
   'contrat.aucunCas': 'No company case yet — not generated, to build later.',
+  // Justification optional in Pass A: an invitation panel, never an error.
+  'contrat.justificationAFournir': 'Justification to expand',
+  'contrat.justificationAFournirDetail':
+    'The problem statement is usable. Its importance will be consolidated with the context, the stakes and the existing situation.',
 
   // ---- “Topic logic” score (StepSupport) ----
   'logique.title': '“Topic logic” score',

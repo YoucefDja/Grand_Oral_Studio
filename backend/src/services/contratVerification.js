@@ -217,7 +217,11 @@ function contientMot(textePlat, tournure) {
 const REJETS_CORE = new Set([
   'contrat_question_absente',
   'contrat_tension_absente',
-  'contrat_justification_absente',
+  // `contrat_justification_absente` n'est PLUS bloquant en Passe A : une
+  // problématique concrète reliée à une tension suffit à lancer le Plan. Le
+  // contrôle strict de la justification est déplacé à la vérification
+  // pré-export (verificationExport.js), où l'ensemble contexte / enjeux /
+  // existant / conclusion est disponible.
   'contrat_pas_une_question',
   'contrat_question_courte',
   'contrat_question_longue',
@@ -271,14 +275,20 @@ function verifierContrat({ sujet, theme = '', contrat, mode = 'creation' }) {
   if (!tension) {
     rejeter('contrat_tension_absente', "La tension n'est pas renseignée : la question ne peut pas naître d'une friction d'entreprise.");
   }
+  // La justification est VISIBLE mais FACULTATIVE en Passe A : son absence
+  // devient un avertissement, jamais un rejet. Elle peut être complétée plus
+  // tard (contexte, enjeux, existant, sources) sans changer la question. Le
+  // contrôle strict est déplacé à la vérification pré-export.
   if (!justification) {
-    rejeter('contrat_justification_absente', "La justification du problème est absente : rien ne démontre que le problème se pose aujourd'hui.");
+    avertissements.push(
+      "La justification du problème reste à approfondir : son importance sera consolidée avec le contexte, les enjeux et l'existant."
+    );
   }
   if (motsCles.length < MIN_RECOUVREMENT_MOT_CLE) {
     // Élément SECONDAIRE : les mots-clés seront construits par la Passe B et
     // exigés à l'export. En création, leur absence ne bloque pas la validation
-    // de la problématique — seuls la question, la tension et la justification
-    // portent la logique du sujet.
+    // de la problématique — seuls la question et la tension portent la logique
+    // du sujet (la justification est facultative à cette étape).
     const message = 'Aucun mot clé défini : la question ne peut pas être bornée par le sujet.';
     if (stricts) rejeter('contrat_mots_cles_absents', message);
     else avertissements.push(message);
@@ -496,8 +506,9 @@ function verifierContrat({ sujet, theme = '', contrat, mode = 'creation' }) {
 }
 
 /**
- * Champs à régénérer après un rejet : UNIQUEMENT tension + problématique +
- * justification. Les mots-clés et le contexte déjà validés sont conservés.
+ * Champs à régénérer après un rejet : UNIQUEMENT tension + problématique. La
+ * justification n'est plus bloquante en Passe A, mais la table la conserve pour
+ * la régénération ciblée déclenchée plus tard (export, correction).
  */
 function ciblerRegeneration(rejets) {
   const codeParChamp = {
