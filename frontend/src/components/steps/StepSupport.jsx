@@ -169,6 +169,19 @@ function VerificationCard({ session, onSessionRefresh }) {
     return 'alert-info';
   };
 
+  // PHASE de vérification renvoyée par le serveur. Avant génération du support,
+  // les critères de slides (volume, notes…) n'ont aucune valeur bloquante : ils
+  // arrivent dans `pendingChecks` et s'affichent comme « à vérifier ».
+  const verification = rapport?.verification || null;
+  const phase = verification?.phase || (rapport ? 'pre_support' : null);
+  const blocking = Array.isArray(verification?.blocking) ? verification.blocking : [];
+  const warnings = Array.isArray(verification?.warnings) ? verification.warnings : [];
+  const pendingChecks = Array.isArray(verification?.pendingChecks) ? verification.pendingChecks : [];
+  const preparationConforme = verification ? verification.canExportMarkdown === true : rapport?.conforme === true;
+  const exportMarkdownAutorise = verification
+    ? verification.canExportMarkdown === true
+    : rapport?.conforme === true;
+
   return (
     <section className="card panel" style={{ marginTop: 20 }}>
       <h2 style={{ margin: '0 0 4px' }}>{t('steps.verifTitle')}</h2>
@@ -193,9 +206,68 @@ function VerificationCard({ session, onSessionRefresh }) {
             </button>
           </div>
 
-          <div className={`alert ${rapport.conforme ? 'alert-success' : 'alert-error'}`}>
-            {rapport.conforme ? t('steps.verifConforme') : t('steps.verifBloque')}
-          </div>
+          {/*
+            Le verdict dépend de la PHASE, jamais des slides quand elles
+            n'existent pas encore. Avant génération, seuls les intrants sont
+            jugés : « 0 slide » n'est pas une erreur, c'est un contrôle à venir.
+          */}
+          {phase === 'pre_support' ? (
+            <div className={`alert ${preparationConforme ? 'alert-success' : 'alert-error'}`}>
+              {preparationConforme ? t('steps.verifPreSupportOk') : t('steps.verifPreSupportKo')}
+            </div>
+          ) : (
+            <div className={`alert ${rapport.conforme ? 'alert-success' : 'alert-error'}`}>
+              {rapport.conforme ? t('steps.verifConforme') : t('steps.verifBloque')}
+            </div>
+          )}
+
+          {/* Avant génération : les critères de slides sont ANNONCÉS, pas jugés. */}
+          {phase === 'pre_support' && pendingChecks.length > 0 ? (
+            <>
+              <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifPendingTitle')}</h3>
+              <p className="muted" style={{ margin: '0 0 6px' }}>
+                {t('steps.verifPendingIntro')}
+              </p>
+              <ul className="ul-value" style={{ opacity: 0.85 }}>
+                {pendingChecks.map((c) => (
+                  <li key={c.code} className="muted">
+                    ⏳ {c.libelle}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {/* Bloquants de la phase courante : c'est la SEULE zone rouge. */}
+          {blocking.length > 0 ? (
+            <>
+              <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifBlockersTitle')}</h3>
+              <ul className="ul-value">
+                {blocking.map((b, i) => (
+                  <li key={`${b.code}-${i}`}>
+                    {b.message}
+                    {b.sectionPlan ? (
+                      <span className="muted">{` — section « ${b.sectionPlan} »`}</span>
+                    ) : null}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
+
+          {/* Avertissements : jamais rouges, jamais bloquants. */}
+          {warnings.length > 0 ? (
+            <>
+              <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifWarningsTitle')}</h3>
+              <ul className="ul-value">
+                {warnings.map((w, i) => (
+                  <li key={`${w.code}-${i}`} className="muted">
+                    {w.message}
+                  </li>
+                ))}
+              </ul>
+            </>
+          ) : null}
 
           <h3 style={{ fontSize: 14, margin: '14px 0 4px' }}>{t('steps.verifFilRougeTitle')}</h3>
           <p className="muted" style={{ margin: 0 }}>
@@ -449,7 +521,37 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
   const [importing, setImporting] = useState(false);
   const [msg, setMsg] = useState(null);
   const [error, setError] = useState(null);
+  // Les exports Markdown servent à DEMANDER la fabrication du support : ils
+  // dépendent des intrants (contrat validé + glossaire validé), jamais de
+  // critères visuels ni de slides qui n'existent pas encore.
+  const [phase, setPhase] = useState(null);
   const valide = etatEtape(session, 'glossaire') === 'validated';
+  const contratValide = etatEtape(session, 'probleme') === 'validated';
+  const planGenere = etatEtape(session, 'plan') === 'generated';
+
+  useEffect(() => {
+    let annule = false;
+    async function charger() {
+      if (!session?._id) return;
+      try {
+        const res = await api.get(`/api/sessions/${session._id}/conformite-rapport`);
+        if (!annule) setPhase(res?.verification || null);
+      } catch {
+        // Le rapport est informatif ici : son absence ne doit pas bloquer les
+        // exports, que le serveur revalide de toute façon côté route.
+        if (!annule) setPhase(null);
+      }
+    }
+    charger();
+    return () => {
+      annule = true;
+    };
+  }, [session?._id, session?.data?.support?.slides?.length]);
+
+  // Autorisé si le serveur le dit ; sinon on retombe sur les prérequis locaux.
+  const exportMarkdownAutorise = phase
+    ? phase.canExportMarkdown === true || phase.phase === 'post_support'
+    : contratValide && planGenere && valide;
 
   async function handleExportPptxPrompt() {
     setExportingPptx(true);
@@ -535,10 +637,23 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
         <li>{t('steps.claudeStep4')}</li>
       </ol>
 
-      {!valide ? (
-        <div className="alert alert-info">{t('steps.claudeNeedsGlossaire')}</div>
+      {!exportMarkdownAutorise ? (
+        <div className="alert alert-error">
+          {t('steps.claudeNeedsPreparation')}
+          {Array.isArray(phase?.blocking) && phase.blocking.length > 0 ? (
+            <ul className="ul-value" style={{ marginTop: 6 }}>
+              {phase.blocking.map((b, i) => (
+                <li key={`${b.code}-${i}`}>
+                  {b.message}
+                  {b.sectionPlan ? <span className="muted">{` — section « ${b.sectionPlan} »`}</span> : null}
+                </li>
+              ))}
+            </ul>
+          ) : null}
+        </div>
       ) : (
         <>
+          <div className="alert alert-success">{t('steps.claudePreparationOk')}</div>
           <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap' }}>
             <button type="button" className="btn-ghost" disabled={exportingPptx} onClick={handleExportPptxPrompt}>
               {exportingPptx ? t('steps.preparing') : t('steps.claudeExportPptxPrompt')}
@@ -556,6 +671,9 @@ function ClaudeModeCard({ session, onSessionRefresh }) {
             </button>
           </div>
           <p className="muted" style={{ marginTop: 8 }}>
+            {t('steps.claudePendingSlides')}
+          </p>
+          <p className="muted" style={{ marginTop: 4 }}>
             {t('steps.claudePptxHint')}
           </p>
           <p className="muted" style={{ marginTop: 4 }}>
@@ -669,7 +787,15 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
             ) : null}
             <div style={{ display: 'flex', gap: 10, flexWrap: 'wrap', alignItems: 'center', margin: '10px 0' }}>
               {pretPourSupport ? <span className="badge badge-done">{t('steps.glossaireOk')}</span> : null}
-              <span className="badge badge-progress">{slides.length} {t('steps.slidesUnit')}</span>
+              {slides.length > 0 ? (
+                <span className="badge badge-progress">
+                  {slides.length} {t('steps.slidesUnit')}
+                </span>
+              ) : (
+                // Avant génération, « 0 slide » n'est pas une erreur : c'est un
+                // contrôle qui ne s'appliquera qu'après la génération.
+                <span className="badge badge-progress">{t('steps.slidesPending')}</span>
+              )}
               <button type="button" className="btn-ghost" onClick={() => goStep(stepIndex('glossaire'))}>
                 {t('steps.reviewGlossaire')}
               </button>
@@ -678,6 +804,10 @@ export default function StepSupport({ session, busy, error, onGenerate, goStep, 
             {slides.map((slide, i) => (
               <SlideCard key={i} slide={slide} index={i} t={t} />
             ))}
+
+            {slides.length === 0 ? (
+              <div className="alert alert-info">{t('steps.supportPendingChecks')}</div>
+            ) : null}
 
             <div style={{ marginTop: 20 }}>
               <button type="button" className="btn-ok" disabled={downloading || slides.length === 0} onClick={handleExportPptx}>

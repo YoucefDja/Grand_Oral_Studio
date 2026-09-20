@@ -30,6 +30,9 @@ const { assertConformiteSupport } = require('../services/conformiteSupport');
 const {
   construireRapportVerification,
   assertVerificationExport,
+  assertExportMarkdownAutorise,
+  verifyPreparationInputs,
+  verifyGeneratedSupport,
   rendreRapportMarkdown,
   rendreEnteteVerification,
 } = require('../services/verificationExport');
@@ -1022,10 +1025,11 @@ router.get(
     assertContratValide(session, 'support');
     assertGlossaireValide(session, 'support');
 
-    // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT : parcourt les 14 critères de la
-    // grille du jury, bloque l'export si le support n'est pas conforme, et
-    // renvoie le rapport (joint au fichier exporté pour en garder la trace).
-    const rapport = await assertVerificationExport(session);
+    // PHASE 1 — PRÉ-SUPPORT : ce document sert à DEMANDER à Claude de fabriquer
+    // le .pptx. Seuls les intrants sont vérifiés ; les critères de slides
+    // (volume, notes, concision) ne sont pas encore applicables et restent dans
+    // `pendingChecks` au lieu de bloquer la génération.
+    const rapport = await assertExportMarkdownAutorise(session);
 
     const { system, user } = await buildStepPrompt(session, 'support', {
       pourPptxClaude: true,
@@ -1094,8 +1098,9 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
-    // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT (grille CESI complète).
-    const rapport = await assertVerificationExport(session);
+    // PHASE 1 — PRÉ-SUPPORT : le document Gamma est un INTRANT de génération.
+    // Les critères de slides restent à vérifier après génération du support.
+    const rapport = await assertExportMarkdownAutorise(session);
 
     const { system, user } = await buildStepPrompt(session, 'support');
     const md = [
@@ -1164,8 +1169,8 @@ router.get(
     if (!session) throw httpError(404, 'Session introuvable.');
     assertGlossaireValide(session, 'support');
 
-    // VÉRIFICATION SYSTÉMATIQUE AVANT EXPORT (grille CESI complète).
-    const rapport = await assertVerificationExport(session);
+    // PHASE 1 — PRÉ-SUPPORT : même régime que Gamma et Claude Desktop.
+    const rapport = await assertExportMarkdownAutorise(session);
 
     // Source de style et charte visuelle : sections en base, éditables en
     // admin, partagées avec les prompts système. Si elles sont absentes, c'est
@@ -1217,18 +1222,28 @@ router.get(
 );
 
 // GET /api/sessions/:id/conformite-rapport
-// Rapport de vérification avant export, en JSON : parcourt les 14 critères de
-// la grille CESI, donne pour chacun un statut et un score, liste les points
-// faibles (fil rouge : ligne directrice et problématique) et indique si
-// l'export est autorisé. Sert à l'affichage dans l'interface, AVANT toute
-// exportation de fichier Markdown.
+// Rapport de vérification en JSON, structuré par PHASE. Sert à l'affichage dans
+// l'interface, AVANT toute exportation de fichier Markdown.
+//
+//   - phase « pre_support » : le support n'existe pas encore. Seuls les INTRANTS
+//     sont jugés (`blocking`), les critères de slides sont dans `pendingChecks`
+//     (« à vérifier après génération ») et n'ont aucune valeur bloquante.
+//   - phase « post_support » : les slides existent, leurs critères sont jugés.
 router.get(
   '/:id/conformite-rapport',
   asyncHandler(async (req, res) => {
     const session = await findSessionOr404(req.params.id, req.userId);
     if (!session) throw httpError(404, 'Session introuvable.');
     const rapport = await construireRapportVerification(session);
-    res.json(rapport);
+    // Le support est-il DÉJÀ généré (ou importé) ? C'est ce qui fait basculer
+    // les critères de slides de « à vérifier » à « vérifiés ».
+    const slides = Array.isArray(session.data?.support?.slides) ? session.data.support.slides : [];
+    res.json({
+      ...rapport,
+      verification: slides.length > 0
+        ? verifyGeneratedSupport(session.data.support)
+        : await verifyPreparationInputs(session),
+    });
   })
 );
 
@@ -1417,6 +1432,19 @@ router.post(
     const slides = Array.isArray(session.data?.support?.slides) ? session.data.support.slides : [];
     if (slides.length === 0) {
       throw httpError(400, 'Le support de présentation n’a pas encore été généré (étape Support).');
+    }
+
+    // PHASE 2 — POST-SUPPORT : les slides existent, leurs critères structurels
+    // deviennent applicables (volume, plan en 2e, problématique sur sa slide,
+    // notes du présentateur). C'est ici, et seulement ici, qu'ils bloquent.
+    const phaseSupport = verifyGeneratedSupport(session.data.support);
+    if (!phaseSupport.canExportPptx) {
+      const detail = phaseSupport.blocking.map((b) => `• ${b.message}`).join('\n');
+      throw httpError(
+        400,
+        `Export .pptx bloqué : le support doit être amélioré.\n${detail}\n` +
+          'Corrige ces points dans l’étape Support, ou repasse par Gamma / Claude pour régénérer les slides.'
+      );
     }
 
     // Règle produit : le support exporté doit matérialiser les attendus

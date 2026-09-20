@@ -1426,6 +1426,23 @@ function rendreEnteteVerification(rapport) {
   const lignes = [];
   lignes.push('<!-- VÉRIFICATION AVANT EXPORT — générée automatiquement -->');
   lignes.push("<!-- Contrôle portant sur les intrants du Markdown (analyse, problématique, plan, glossaire, recherche) -->");
+
+  // Rapport de phase 1 (pré-support) : pas de score CESI, seulement des
+  // bloquants / avertissements et des critères annoncés pour plus tard.
+  if (rapport.phase === 'pre_support') {
+    lignes.push(
+      `<!-- Préparation : ${rapport.blocking.length} bloquant(s), ${rapport.warnings.length} avertissement(s) -->`
+    );
+    rapport.warnings.forEach((w) => lignes.push(`<!-- Avertissement : ${w.message} -->`));
+    if (rapport.pendingChecks.length > 0) {
+      lignes.push('<!-- À vérifier après génération du support :');
+      rapport.pendingChecks.forEach((c) => lignes.push(`     - ${c.libelle}`));
+      lignes.push('-->');
+    }
+    lignes.push('');
+    return lignes.join('\n');
+  }
+
   lignes.push(`<!-- Score de conformité à la grille CESI : ${rapport.scoreTotal}/${rapport.scoreMax} (${rapport.pourcentage} %) -->`);
   lignes.push(`<!-- ${rapport.criteres.length} critères parcourus, ${rapport.nonConformes.length} non conforme(s) -->`);
   if (rapport.pointsFaibles.length > 0) {
@@ -1465,6 +1482,395 @@ async function assertVerificationExport(session) {
   return rapport;
 }
 
+// ---------------------------------------------------------------------------
+// VÉRIFICATION EN TROIS PHASES
+//
+// Le rapport ci-dessus parcourt la grille CESI complète. Mais tous ses critères
+// ne sont pas applicables au même moment : certains portent sur les SLIDES, qui
+// n'existent qu'APRÈS la génération du support. Les appliquer avant revenait à
+// bloquer l'étudiant dans une boucle impossible :
+//
+//     Pas de support → 0 slide et 0 note → export bloqué → support impossible
+//
+// Les trois fonctions ci-dessous séparent strictement les moments :
+//
+//   1. verifyPreparationInputs(session)  — AVANT génération du support.
+//      Contrôle les INTRANTS : analyse, contrat validé, plan, glossaire,
+//      limites de l'existant, préconisations, sources des chiffres.
+//      C'est cette phase qui autorise les exports Markdown (Gamma, Claude).
+//
+//   2. verifyGeneratedSupport(support)   — SEULEMENT si le support est généré.
+//      Contrôle les slides : 20 slides, plan en 2e, problématique révélée sur
+//      sa seule slide, notes, concision, transitions, progression.
+//
+//   3. verifyPptxVisualReview(review)    — APRÈS création du .pptx.
+//      Contrôle la forme visuelle : charte CESI, fond clair, couleurs,
+//      lisibilité, surcharge, logos, mise en page.
+//
+// AVANT génération, les critères des phases 2 et 3 ne sont ni bloquants ni
+// rouges : ils sont listés dans `pendingChecks` (« à vérifier après génération
+// du support »).
+// ---------------------------------------------------------------------------
+
+/** Champs de préparation lus depuis la session, quelle que soit leur place. */
+function lireIntrantsPreparation(session) {
+  const data = session?.data || {};
+  const contrat = data.contrat || {};
+  const plan = data.plan || {};
+  const recherche = data.recherche || data.recherche_documentaire || {};
+  const filRouge = diagnostiquerFilRouge(session);
+  const obs = observer(session, filRouge);
+
+  return { data, contrat, plan, recherche, filRouge, obs };
+}
+
+/**
+ * PHASE 1 — Contrôles sur les données d'entrée, avant toute génération.
+ *
+ * Seuls les intrants exigés pour DEMANDER à Gamma ou Claude de fabriquer le
+ * support sont vérifiés. Les critères de slides, de notes et de charte
+ * visuelle sont renvoyés dans `pendingChecks`, jamais en `blocking`.
+ *
+ * @param {object} session Session Mongoose.
+ * @returns {Promise<object>} rapport de phase 1.
+ */
+async function verifyPreparationInputs(session) {
+  const { contrat, plan, recherche, obs } = lireIntrantsPreparation(session);
+  const workflow = session?.workflow || {};
+
+  const blocking = [];
+  const warnings = [];
+  const bloque = (code, message, sectionPlan) =>
+    blocking.push(sectionPlan ? { code, message, sectionPlan } : { code, message });
+  const avertit = (code, message) => warnings.push({ code, message });
+
+  // --- 1. Contrat Passe A validé -------------------------------------------
+  if (String(contrat.status || '') !== 'validated') {
+    bloque(
+      'prep_contrat_non_valide',
+      "Le contrat Passe A (problématique) doit être validé avant de générer le support.",
+      'Problématique'
+    );
+  }
+
+  // --- 2. Problématique présente et exploitable ----------------------------
+  if (!String(contrat.problematique || '').trim()) {
+    bloque(
+      'prep_problematique_absente',
+      "La problématique est absente : elle cadre toute la présentation.",
+      'Problématique'
+    );
+  }
+
+  // --- 3. Ligne directrice présente ----------------------------------------
+  if (!String(contrat.ligneDirectrice || session?.ligneDirectrice || '').trim()) {
+    bloque(
+      'prep_ligne_directrice_absente',
+      "La ligne directrice est absente : le fil rouge de la présentation ne peut pas être tenu.",
+      'Problématique'
+    );
+  }
+
+  // --- 4. Plan généré ------------------------------------------------------
+  if (workflow.plan !== 'generated') {
+    bloque('prep_plan_non_genere', 'Le plan détaillé doit être généré avant le support.', 'Plan');
+  }
+
+  // --- 5. Glossaire validé -------------------------------------------------
+  if (workflow.glossary !== 'validated') {
+    bloque(
+      'prep_glossaire_non_valide',
+      'Le glossaire et les sources doivent être validés avant le support.',
+      'Glossaire'
+    );
+  }
+
+  // --- 6. Au moins une limite de l'existant --------------------------------
+  const limites = Array.isArray(contrat.limitesExistant) ? contrat.limitesExistant : [];
+  const limitesObs = Array.isArray(obs.limitesExistant) ? obs.limitesExistant : [];
+  if (limites.length === 0 && limitesObs.length === 0) {
+    bloque(
+      'prep_limites_absentes',
+      "Ajoutez les limites de l'existant : sans diagnostic de ce qui ne fonctionne pas déjà, le support n'a pas de problème à résoudre.",
+      'Limites de l’existant'
+    );
+  }
+
+  // --- 7. Au moins une préconisation ---------------------------------------
+  const preconisations = Array.isArray(contrat.preconisations) ? contrat.preconisations : [];
+  const preconisationsObs = Array.isArray(obs.preconisations) ? obs.preconisations : [];
+  if (preconisations.length === 0 && preconisationsObs.length === 0) {
+    bloque(
+      'prep_preconisations_absentes',
+      'Aucune préconisation : le support doit proposer une réponse argumentée au problème posé.',
+      'Préconisations / Solutions'
+    );
+  }
+
+  // --- 8. Chaque chiffre du contrat porte une source ------------------------
+  const chiffresSansSource = (contrat.contexte || []).filter(
+    (c) => /\d/.test(String(c?.fait || '')) && !String(c?.source || '').trim()
+  );
+  if (chiffresSansSource.length > 0) {
+    bloque(
+      'prep_chiffre_sans_source',
+      `${chiffresSansSource.length} chiffre(s) sans source : le jury exige une source sous chaque chiffre.`,
+      'Contexte / Données chiffrées'
+    );
+  }
+
+  // --- Warnings : critères de forme et d'oral, jamais bloquants ------------
+  if (String(contrat.justificationProbleme || '').trim() === '') {
+    avertit(
+      'prep_justification_a_completer',
+      'Justification du problème à compléter : elle sera exigée avant l’export final.'
+    );
+  }
+  if (obs.casContrat.length === 0 && obs.exemplesEntreprises.length === 0) {
+    avertit('prep_cas_entreprises', 'Cas d’entreprise à ajouter pour nourrir le benchmark.');
+  }
+  if (!obs.aEchecOuLimite) {
+    avertit(
+      'prep_cas_echec',
+      'Cas d’échec à compléter : le jury sanctionne le plaidoyer à sens unique.'
+    );
+  }
+  if (!String(plan.ouverture?.question || '').trim()) {
+    avertit('prep_ouverture', 'Ouverture à compléter dans le plan.');
+  }
+  avertit('prep_communication', 'Communication orale : critère évalué à la soutenance, non mesurable sur fichier.');
+  avertit('prep_dynamisme', 'Dynamisme de l’argumentation : à défendre à l’oral.');
+  avertit('prep_maitrise_exercice', 'Maîtrise de l’exercice et gestion du temps : à valider en conditions réelles.');
+  avertit('prep_prise_de_recul', 'Prise de recul orale : à travailler à l’oral.');
+
+  return {
+    phase: 'pre_support',
+    canGenerateSupport: blocking.length === 0,
+    canExportMarkdown: blocking.length === 0,
+    canExportPptx: false,
+    blocking,
+    warnings,
+    pendingChecks: CHECKS_POST_SUPPORT,
+  };
+}
+
+/**
+ * Normalise un titre de slide pour les tests par expression régulière :
+ * minuscules + suppression des accents. Évite qu'un titre saisi avec des
+ * caractères Unicode composés (« Problématique ») échoue face à un motif
+ * ASCII (« problematique »).
+ *
+ * @param {*} valeur Titre brut.
+ * @returns {string} Titre minuscule sans diacritiques.
+ */
+function normaliserTitre(valeur) {
+  return String(valeur || '')
+    .normalize('NFD')
+    .replace(/[\u0300-\u036f]/g, '')
+    .toLowerCase();
+}
+
+/**
+ * Contrôles qui ne peuvent porter que sur un support DÉJÀ généré. Avant, ils
+ * sont annoncés comme « à vérifier après génération », jamais comme des échecs.
+ */
+const CHECKS_POST_SUPPORT = [
+  { code: 'slides_count', libelle: `${VOLUME_CIBLE_TOTAL} slides`, phase: 'post_support' },
+  { code: 'plan_slide_position', libelle: 'Plan de présentation en 2e slide', phase: 'post_support' },
+  { code: 'problematique_slide_position', libelle: 'Problématique révélée seulement sur sa slide', phase: 'post_support' },
+  { code: 'notes_presentateur', libelle: 'Notes du présentateur sur chaque slide', phase: 'post_support' },
+  { code: 'slides_concises', libelle: 'Slides concises (une idée par puce)', phase: 'post_support' },
+  { code: 'sources_sous_chiffres', libelle: 'Source sous chaque chiffre des slides', phase: 'post_support' },
+  { code: 'transitions', libelle: 'Transitions entre les slides', phase: 'post_support' },
+  { code: 'conclusion', libelle: 'Conclusion qui répond à la problématique', phase: 'post_support' },
+  { code: 'progression', libelle: 'Progression de l’entonnoir', phase: 'post_support' },
+];
+
+/** Contrôles qui ne peuvent porter que sur un .pptx DÉJÀ produit. */
+const CHECKS_POST_PPTX = [
+  { code: 'charte_cesi', libelle: 'Charte visuelle CESI' },
+  { code: 'fond_clair', libelle: 'Fond clair' },
+  { code: 'couleurs', libelle: 'Couleurs conformes' },
+  { code: 'lisibilite', libelle: 'Lisibilité' },
+  { code: 'surcharge', libelle: 'Absence de surcharge' },
+  { code: 'logos', libelle: 'Logos' },
+  { code: 'mise_en_page', libelle: 'Mise en page' },
+];
+
+/**
+ * PHASE 2 — Contrôles sur les slides, seulement si le support est généré.
+ *
+ * @param {object} support Donnée `session.data.support`.
+ * @returns {object} rapport de phase 2.
+ */
+function verifyGeneratedSupport(support) {
+  const slides = Array.isArray(support?.slides) ? support.slides : [];
+  const blocking = [];
+  const warnings = [];
+
+  if (slides.length === 0) {
+    return {
+      phase: 'post_support',
+      canGenerateSupport: false,
+      canExportMarkdown: false,
+      canExportPptx: false,
+      blocking: [
+        {
+          code: 'support_absent',
+          message: 'Aucune slide : le support doit être généré ou importé avant les contrôles de forme.',
+        },
+      ],
+      warnings,
+      pendingChecks: CHECKS_POST_SUPPORT,
+    };
+  }
+
+  const bloquant = (code, message) => blocking.push({ code, message });
+  const avertit = (code, message) => warnings.push({ code, message });
+
+  // 1. Volume cible.
+  if (slides.length !== VOLUME_CIBLE_TOTAL) {
+    bloquant(
+      'support_slides_count',
+      `${slides.length} slide(s) au lieu des ${VOLUME_CIBLE_TOTAL} attendues : ajuste le volume avant l’export .pptx.`
+    );
+  }
+
+  const titres = slides.map((s) => normaliserTitre(s?.titre));
+
+  // 2. Plan de présentation en 2e slide.
+  if (!/plan/i.test(titres[1] || '')) {
+    bloquant('support_plan_slide_position', 'La 2e slide doit être le plan de présentation.');
+  }
+
+  // 3. Problématique révélée seulement sur sa slide dédiée.
+  const idxPb = titres.findIndex((t) => /problematique/i.test(t));
+  const slidesPb = titres.filter((t) => /problematique/i.test(t)).length;
+  if (idxPb === -1) {
+    bloquant('support_problematique_slide_absente', 'Aucune slide dédiée à la problématique.');
+  } else if (slidesPb > 1) {
+    bloquant(
+      'support_problematique_slide_position',
+      'La problématique ne doit être révélée que sur sa propre slide, pas avant.'
+    );
+  }
+
+  // 4. Notes du présentateur.
+  const sansNotes = slides.filter((s) => String(s?.notes || s?.notes_orateur || '').trim() === '');
+  if (sansNotes.length > 0) {
+    bloquant(
+      'support_notes_absentes',
+      `${sansNotes.length} slide(s) sans notes du présentateur : chaque slide doit porter ses notes.`
+    );
+  }
+
+  // 5. Concision : le compresseur ne doit rien avoir laissé de bloquant.
+  const rapportCompression = support?.rapport_compression || null;
+  if (
+    rapportCompression &&
+    ((rapportCompression.phrases || 0) > 0 ||
+      (rapportCompression.formulesIA || []).length > 0 ||
+      (rapportCompression.deuxCamps || 0) > 0)
+  ) {
+    avertit(
+      'support_slides_concises',
+      'Des phrases complètes ou formules IA subsistent dans les slides : resserre la formulation.'
+    );
+  }
+
+  // 6. Transitions entre les slides.
+  const sansTransition = slides.filter((s) => String(s?.transition || '').trim() === '');
+  if (sansTransition.length > 0) {
+    avertit('support_transitions', `${sansTransition.length} slide(s) sans transition vers la suivante.`);
+  }
+
+  // 7. Conclusion qui répond à la problématique.
+  if (!titres.some((t) => /conclusion/i.test(t))) {
+    avertit('support_conclusion', 'Aucune slide de conclusion : elle doit refermer la problématique.');
+  }
+
+  return {
+    phase: 'post_support',
+    canGenerateSupport: true,
+    canExportMarkdown: true,
+    canExportPptx: blocking.length === 0,
+    blocking,
+    warnings,
+    pendingChecks: CHECKS_POST_PPTX,
+  };
+}
+
+/**
+ * PHASE 3 — Contrôles visuels, seulement APRÈS création du .pptx.
+ *
+ * Ces critères ne doivent JAMAIS bloquer l'export Markdown destiné à Gamma :
+ * ils ne s'appliquent qu'une fois le fichier PowerPoint produit.
+ *
+ * @param {object} review Observations visuelles du .pptx produit.
+ * @returns {object} rapport de phase 3.
+ */
+function verifyPptxVisualReview(review) {
+  const obs = review || {};
+  const blocking = [];
+  const avertit = (code, message) => blocking.push({ code, message });
+
+  if (obs.charteCesI === false || obs.charteCesi === false) {
+    avertit('pptx_charte_cesi', 'La charte visuelle CESI n’est pas appliquée au .pptx.');
+  }
+  if (obs.fondClair === false) {
+    avertit('pptx_fond_clair', 'Le fond du .pptx doit rester clair (lisibilité en projection).');
+  }
+  if (obs.couleursConformes === false) {
+    avertit('pptx_couleurs', 'Les couleurs du .pptx ne respectent pas la charte.');
+  }
+  if (obs.lisibilite === false) {
+    avertit('pptx_lisibilite', 'La lisibilité des slides est insuffisante.');
+  }
+  if (obs.surcharge === true) {
+    avertit('pptx_surcharge', 'Les slides sont surchargées : réduis le contenu par slide.');
+  }
+  if (obs.logos === false) {
+    avertit('pptx_logos', 'Les logos attendus sont absents du .pptx.');
+  }
+  if (obs.miseEnPage === false) {
+    avertit('pptx_mise_en_page', 'La mise en page du .pptx ne suit pas la charte.');
+  }
+
+  return {
+    phase: 'post_pptx',
+    canGenerateSupport: true,
+    canExportMarkdown: true,
+    canExportPptx: blocking.length === 0,
+    blocking,
+    warnings: [],
+    pendingChecks: [],
+    review: obs,
+  };
+}
+
+/**
+ * Point d'entrée des exports Markdown : vérifie la phase 1, en signalant
+ * clairement que les critères de slides restent à vérifier après génération.
+ *
+ * @param {object} session Session Mongoose.
+ * @returns {Promise<object>} rapport de phase 1.
+ */
+async function assertExportMarkdownAutorise(session) {
+  const rapport = await verifyPreparationInputs(session);
+  if (!rapport.canExportMarkdown) {
+    const detail = rapport.blocking
+      .map((b) => `• ${b.message}${b.sectionPlan ? ` (section « ${b.sectionPlan} »)` : ''}`)
+      .join('\n');
+    throw httpError(
+      400,
+      "Le contenu de préparation n'est pas encore suffisant pour générer le support.\n" +
+        `${detail}\n` +
+        'Corrige ces points puis relance l’export. Les critères propres aux slides (volume, notes, concision) seront vérifiés après génération du support.'
+    );
+  }
+  return rapport;
+}
+
 module.exports = {
   construireRapportVerification,
   assertVerificationExport,
@@ -1472,4 +1878,11 @@ module.exports = {
   rendreEnteteVerification,
   diagnostiquerFilRouge,
   LIBELLES_STATUT,
+  // Vérification en trois phases
+  verifyPreparationInputs,
+  verifyGeneratedSupport,
+  verifyPptxVisualReview,
+  assertExportMarkdownAutorise,
+  CHECKS_POST_SUPPORT,
+  CHECKS_POST_PPTX,
 };

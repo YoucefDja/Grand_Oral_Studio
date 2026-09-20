@@ -230,6 +230,24 @@ export const FR = {
   'steps.verifApres': 'Proposition de DeepSeek',
   'steps.verifValider': 'Valider et enregistrer',
   'steps.verifAnnuler': 'Annuler',
+  'steps.verifPreSupportOk':
+    'Le contenu de préparation est conforme. Les critères de slides seront vérifiés après génération/import du support.',
+  'steps.verifPreSupportKo':
+    'Le contenu de préparation est incomplet : complétez les points bloquants ci-dessous avant de générer le support.',
+  'steps.verifPendingTitle': 'À vérifier après génération du support',
+  'steps.verifPendingIntro':
+    'Ces critères portent sur les slides. Ils ne s’appliquent qu’une fois le support généré ou importé : ils ne bloquent ni la génération du support ni les exports Markdown.',
+  'steps.verifBlockersTitle': 'Bloquants pour la génération du support',
+  'steps.verifWarningsTitle': 'Avertissements (non bloquants)',
+  'steps.slidesPending': 'Support à générer',
+  'steps.supportPendingChecks':
+    'Aucun slide pour l’instant. Le contenu de préparation suffit pour lancer la génération du support ; les critères de slides (20 slides, concision, notes du présentateur, transitions, charte visuelle) seront vérifiés après génération.',
+  'steps.claudeNeedsPreparation':
+    'Export Markdown bloqué : le contenu de préparation doit être complété avant de demander la création du support.',
+  'steps.claudePreparationOk':
+    'Le contenu de préparation est conforme. Les exports Markdown (Gamma, Claude Design, PPTX) sont autorisés.',
+  'steps.claudePendingSlides':
+    'Les critères de slides seront vérifiés après génération ou import du support.',
 
   // ---- Passe A : contrat métier (StepProbleme) ----
   'contrat.title': 'Validation de la problématique (contrat métier)',
@@ -630,6 +648,24 @@ export const EN = {
   'steps.verifApres': 'DeepSeek proposal',
   'steps.verifValider': 'Approve and save',
   'steps.verifAnnuler': 'Cancel',
+  'steps.verifPreSupportOk':
+    'The preparation content is compliant. Slide criteria will be checked after the support is generated/imported.',
+  'steps.verifPreSupportKo':
+    'The preparation content is incomplete: fix the blocking points below before generating the support.',
+  'steps.verifPendingTitle': 'To be checked after support generation',
+  'steps.verifPendingIntro':
+    'These criteria apply to the slides. They only apply once the support is generated or imported: they block neither support generation nor Markdown exports.',
+  'steps.verifBlockersTitle': 'Blockers for support generation',
+  'steps.verifWarningsTitle': 'Warnings (non-blocking)',
+  'steps.slidesPending': 'Support to generate',
+  'steps.supportPendingChecks':
+    'No slide yet. The preparation content is sufficient to start generating the support; slide criteria (20 slides, concision, speaker notes, transitions, visual guidelines) will be checked after generation.',
+  'steps.claudeNeedsPreparation':
+    'Markdown export blocked: the preparation content must be completed before asking for support creation.',
+  'steps.claudePreparationOk':
+    'The preparation content is compliant. Markdown exports (Gamma, Claude Design, PPTX) are allowed.',
+  'steps.claudePendingSlides':
+    'Slide criteria will be checked after the support is generated or imported.',
 
   // ---- Pass A: business contract (StepProbleme) ----
   'contrat.title': 'Problem statement validation (business contract)',

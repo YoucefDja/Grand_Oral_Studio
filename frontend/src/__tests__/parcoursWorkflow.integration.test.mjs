@@ -688,3 +688,225 @@ test('Passe A — les contrôles stricts restent hors de l’écran : ils vivent
   assert.strictEqual(ecran.boutonValider, true, 'la Passe A n’est jamais bloquée par des contrôles détaillés');
   assert.strictEqual(session.data.contrat.completeness.passeAValid, true);
 });
+
+// ---------------------------------------------------------------------------
+// Vérification en trois phases — le support ne bloque plus les exports Markdown
+// ---------------------------------------------------------------------------
+
+/**
+ * Reproduit la décision d'écran de StepSupport à partir de la réponse de
+ * GET /api/sessions/:id/conformite-rapport, qui expose `verification`.
+ *
+ * L'écran ne doit JAMAIS transformer un contrôle de phase postérieure
+ * (slides, notes, charte visuelle) en erreur bloquante avant génération.
+ */
+function ecranSupportPhase(reponse) {
+  const verification = reponse?.verification || null;
+  const phase = verification?.phase || null;
+  const blocking = Array.isArray(verification?.blocking) ? verification.blocking : [];
+  const warnings = Array.isArray(verification?.warnings) ? verification.warnings : [];
+  const pendingChecks = Array.isArray(verification?.pendingChecks) ? verification.pendingChecks : [];
+  const exportMarkdownAutorise = phase ? verification.canExportMarkdown === true : false;
+  return {
+    phase,
+    blocking,
+    warnings,
+    pendingChecks,
+    exportMarkdownAutorise,
+    genererSupportAutorise: verification?.canGenerateSupport === true,
+    exportPptxAutorise: verification?.canExportPptx === true,
+    // Message affiché en pré-support conforme (exigé par le cahier des charges).
+    messagePreparationConforme:
+      pendingChecks.length > 0 && blocking.length === 0
+        ? 'Le contenu de préparation est conforme. Les critères de slides seront vérifiés après génération/import du support.'
+        : null,
+  };
+}
+
+/** Session PCA/PRA : Analyse + Problématique + Plan + Glossaire validés, support absent. */
+function sessionPcaPra() {
+  return sessionA({
+    data: {
+      contrat: contratCanonique({
+        status: 'validated',
+        validatedAt: '2026-01-05T11:00:00.000Z',
+        problematique:
+          'Comment une démarche de tests cyber réalistes permet-elle de concilier conformité des PCA/PRA et fiabilité en situation réelle ?',
+        ligneDirectrice:
+          "La fiabilité d'un PCA/PRA après une cyberattaque ne dépend pas de la conformité du classeur, mais de la capacité à tester des scénarios cyber réalistes.",
+        limitesExistant: [
+          "Les PCA/PRA sont validés sur dossier mais jamais éprouvés par un scénario d'attaque réel.",
+        ],
+        preconisations: [
+          { action: 'Tester le PCA/PRA par des scénarios cyber réalistes', cible: 'Direction des risques' },
+        ],
+      }),
+      plan: { parties: [{ titre: 'Contexte' }, { titre: "Limites de l'existant" }] },
+      glossaire: { termes: [{ mot: 'PCA/PRA' }], sources: [{ titre: 'ANSSI 2024' }] },
+      support: {},
+    },
+    workflow: {
+      analysis: 'generated',
+      contract: 'validated',
+      plan: 'generated',
+      glossary: 'validated',
+      support: 'empty',
+    },
+  });
+}
+
+/** Réponse pré-support conforme : aucun bloquant, critères de slides en attente. */
+function rapportPreSupport() {
+  return {
+    verification: {
+      phase: 'pre_support',
+      canGenerateSupport: true,
+      canExportMarkdown: true,
+      canExportPptx: false,
+      blocking: [],
+      warnings: [{ code: 'prep_ouverture', message: 'Ouverture à compléter dans le plan.' }],
+      pendingChecks: [
+        { code: 'slides_count', libelle: '20 slides', phase: 'post_support' },
+        { code: 'slides_concises', libelle: 'Slides concises (une idée par puce)', phase: 'post_support' },
+        { code: 'notes_presentateur', libelle: 'Notes du présentateur sur chaque slide', phase: 'post_support' },
+        { code: 'transitions', libelle: 'Transitions entre les slides', phase: 'post_support' },
+        { code: 'charte_cesi', libelle: 'Charte visuelle CESI' },
+      ],
+    },
+  };
+}
+
+test('PCA/PRA — pré-support : génération du support et exports Markdown autorisés', () => {
+  const session = sessionPcaPra();
+  const ecran = ecranSupportPhase(rapportPreSupport());
+
+  // La session est bien en pré-support : support jamais généré.
+  assert.strictEqual(etatEtape(session, 'support'), 'empty');
+  assert.strictEqual(ecran.phase, 'pre_support');
+  assert.deepStrictEqual(ecran.blocking, []);
+  assert.strictEqual(ecran.genererSupportAutorise, true, 'Générer : Support doit être actif');
+  assert.strictEqual(ecran.exportMarkdownAutorise, true, 'Gamma / Claude Design / PPTX Markdown autorisés');
+  // Les critères visuels ne bloquent JAMAIS l'export Markdown.
+  assert.strictEqual(ecran.exportPptxAutorise, false, 'le .pptx reste postérieur');
+  assert.ok(ecran.pendingChecks.length > 0, 'des critères sont annoncés pour plus tard');
+});
+
+test('PCA/PRA — 0 slide et 0 note : contrôles en attente, jamais des blocages', () => {
+  const session = sessionPcaPra();
+  const slides = Array.isArray(session?.data?.support?.slides) ? session.data.support.slides : [];
+  const ecran = ecranSupportPhase(rapportPreSupport());
+
+  assert.strictEqual(slides.length, 0, 'aucun slide généré');
+
+  const codesBloquants = ecran.blocking.map((b) => b.code);
+  assert.strictEqual(codesBloquants.includes('notes_presentateur'), false);
+  assert.strictEqual(codesBloquants.includes('slides_count'), false);
+  assert.strictEqual(codesBloquants.includes('slides_concises'), false);
+  assert.strictEqual(codesBloquants.includes('support_notes_absentes'), false);
+  assert.strictEqual(codesBloquants.includes('support_slides_count'), false);
+
+  // Ils sont bien présents, mais en « à vérifier après génération ».
+  const codesEnAttente = ecran.pendingChecks.map((c) => c.code);
+  assert.ok(codesEnAttente.includes('slides_count'));
+  assert.ok(codesEnAttente.includes('notes_presentateur'));
+  assert.ok(codesEnAttente.includes('slides_concises'));
+  assert.ok(codesEnAttente.includes('transitions'));
+  assert.ok(codesEnAttente.includes('charte_cesi'), 'la charte visuelle est aussi en attente');
+});
+
+test('PCA/PRA — pré-support conforme : message exact attendu à l’écran', () => {
+  const ecran = ecranSupportPhase(rapportPreSupport());
+  assert.strictEqual(
+    ecran.messagePreparationConforme,
+    'Le contenu de préparation est conforme. Les critères de slides seront vérifiés après génération/import du support.'
+  );
+  assert.strictEqual(ecran.exportMarkdownAutorise, true);
+});
+
+test('PCA/PRA — limites de l’existant absentes : export Markdown bloqué, section indiquée', () => {
+  const rapport = rapportPreSupport();
+  rapport.verification.canExportMarkdown = false;
+  rapport.verification.canGenerateSupport = false;
+  rapport.verification.blocking = [
+    {
+      code: 'prep_limites_absentes',
+      message:
+        "Ajoutez les limites de l'existant : sans diagnostic de ce qui ne fonctionne pas déjà, le support n'a pas de problème à résoudre.",
+      sectionPlan: 'Limites de l’existant',
+    },
+  ];
+  const ecran = ecranSupportPhase(rapport);
+
+  assert.strictEqual(ecran.exportMarkdownAutorise, false);
+  assert.strictEqual(ecran.genererSupportAutorise, false, 'Générer : Support doit être bloqué');
+  const blocage = ecran.blocking.find((b) => b.code === 'prep_limites_absentes');
+  assert.ok(blocage);
+  assert.match(blocage.message, /Ajoutez les limites de l'existant/);
+  assert.strictEqual(blocage.sectionPlan, 'Limites de l’existant', 'la section à compléter est nommée');
+});
+
+test('support généré — 20 slides avec notes : export PPTX autorisé, Markdown non concerné', () => {
+  const ecran = ecranSupportPhase({
+    verification: {
+      phase: 'post_support',
+      canGenerateSupport: true,
+      canExportMarkdown: true,
+      canExportPptx: true,
+      blocking: [],
+      warnings: [],
+      pendingChecks: [{ code: 'charte_cesi', libelle: 'Charte visuelle CESI' }],
+    },
+  });
+  assert.strictEqual(ecran.phase, 'post_support');
+  assert.strictEqual(ecran.exportPptxAutorise, true);
+});
+
+test('support généré — 19 slides ou notes absentes : export PPTX bloqué, Markdown non concerné', () => {
+  const base = {
+    phase: 'post_support',
+    canGenerateSupport: true,
+    canExportMarkdown: true,
+    canExportPptx: false,
+    warnings: [],
+    pendingChecks: [],
+  };
+
+  const dixNeuf = ecranSupportPhase({
+    verification: {
+      ...base,
+      blocking: [{ code: 'support_slides_count', message: '19 slide(s) au lieu des 20 attendues.' }],
+    },
+  });
+  assert.strictEqual(dixNeuf.exportPptxAutorise, false);
+  assert.ok(dixNeuf.blocking.some((b) => b.code === 'support_slides_count'));
+  assert.strictEqual(dixNeuf.exportMarkdownAutorise, true, 'l’export Markdown n’est pas concerné');
+
+  const sansNotes = ecranSupportPhase({
+    verification: {
+      ...base,
+      blocking: [{ code: 'support_notes_absentes', message: '3 slide(s) sans notes du présentateur.' }],
+    },
+  });
+  assert.strictEqual(sansNotes.exportPptxAutorise, false);
+  assert.match(sansNotes.blocking[0].message, /sans notes du présentateur/);
+  assert.strictEqual(sansNotes.exportMarkdownAutorise, true);
+});
+
+test('les critères visuels post-PPTX ne bloquent jamais l’export Markdown', () => {
+  const ecran = ecranSupportPhase({
+    verification: {
+      phase: 'post_pptx',
+      canGenerateSupport: true,
+      canExportMarkdown: true,
+      canExportPptx: false,
+      blocking: [
+        { code: 'pptx_charte_cesi', message: 'La charte visuelle CESI n’est pas appliquée au .pptx.' },
+        { code: 'pptx_surcharge', message: 'Les slides sont surchargées.' },
+      ],
+      warnings: [],
+      pendingChecks: [],
+    },
+  });
+  assert.strictEqual(ecran.exportPptxAutorise, false);
+  assert.strictEqual(ecran.exportMarkdownAutorise, true, 'le Markdown reste exportable');
+});
